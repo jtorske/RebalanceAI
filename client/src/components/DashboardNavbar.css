@@ -1,0 +1,84 @@
+.dashboard-navbar {
+  height: 5vh;
+  height: 5dvh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  margin-top: 10px;
+}
+
+.dashboard-navbar-brand {
+  font-size: 32px;
+  font-weight: 500;
+  color: #111;
+  text-decoration: none;
+}
+
+.dashboard-navbar-brand-accent {
+  color: #8a6ef0;
+}
+
+.dashboard-navbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  font-size: 22px;
+  color: #181818;
+  font-weight: 500;
+}
+
+.dashboard-navbar-link {
+  color: #181818;
+  text-decoration: none;
+}
+
+.dashboard-navbar-link.active {
+  text-decoration: underline;
+  text-underline-offset: 8px;
+}
+
+.dashboard-navbar-link-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #8a6ef0;
+  color: #ffffff !important;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(138, 110, 240, 0.3);
+  transition: all 0.2s ease;
+}
+
+.dashboard-navbar-link-primary:hover {
+  background: #7b5dd9;
+  box-shadow: 0 6px 20px rgba(138, 110, 240, 0.4);
+  transform: translateY(-2px);
+}
+
+.dashboard-navbar-link-primary.active {
+  text-decoration: none;
+  background: #6b4dbc;
+}
+
+.dashboard-navbar-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.dashboard-navbar-user-icon {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-navbar-nav {
+    gap: 24px;
+    font-size: 18px;
+  }
+}
