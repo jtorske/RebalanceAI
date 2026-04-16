@@ -191,7 +191,7 @@
 .import-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1060px;
+  min-width: 1180px;
   table-layout: fixed;
 }
 
@@ -229,6 +229,10 @@
 
 .import-col-total {
   width: 7%;
+}
+
+.import-col-total-amount {
+  width: 10%;
 }
 
 .import-table th,

@@ -42,7 +42,8 @@ type SortKey =
   | "market_value"
   | "market_value_currency"
   | "daily_change_percent"
-  | "total_change_percent";
+  | "total_change_percent"
+  | "total_change_amount";
 
 type SortDirection = "asc" | "desc";
 
@@ -57,6 +58,8 @@ type MarketComparisonResponse = {
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache-v2";
+const LEGACY_DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache";
 const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",
 );
@@ -168,6 +171,64 @@ function getTotalChangePercent(holding: ImportedHolding): number | null {
   return (holding.market_unrealized_returns / holding.book_value_market) * 100;
 }
 
+function loadCachedDailyChangeMap(): Record<string, number> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(DAILY_CHANGE_CACHE_KEY);
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+    const cachedMap: Record<string, number> = {};
+
+    Object.entries(parsed).forEach(([symbol, value]) => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        cachedMap[symbol] = value;
+      }
+    });
+
+    return cachedMap;
+  } catch {
+    return {};
+  }
+}
+
+function clearLegacyDailyChangeCache(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(LEGACY_DAILY_CHANGE_CACHE_KEY);
+  } catch {
+    // Ignore storage failures and keep the live view working.
+  }
+}
+
+function saveCachedDailyChangeMap(map: Record<string, number>): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(DAILY_CHANGE_CACHE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage failures and keep the live view working.
+  }
+}
+
+function getTotalChangeAmount(holding: ImportedHolding): number {
+  return holding.market_value - holding.book_value_market;
+}
+
+function isOptionHolding(holding: ImportedHolding): boolean {
+  return holding.security_type.trim().toUpperCase().includes("OPTION");
+}
+
 function parseHoldingsCsv(csvText: string): {
   holdings: ImportedHolding[];
   asOf: string | null;
@@ -236,7 +297,7 @@ function HoldingsPage() {
   const [showAllHoldings, setShowAllHoldings] = useState(false);
   const [dailyChangeBySymbol, setDailyChangeBySymbol] = useState<
     Record<string, number | null>
-  >({});
+  >(() => loadCachedDailyChangeMap());
 
   useEffect(() => {
     const loadPersistedHoldings = async () => {
@@ -260,6 +321,10 @@ function HoldingsPage() {
     };
 
     void loadPersistedHoldings();
+  }, []);
+
+  useEffect(() => {
+    clearLegacyDailyChangeCache();
   }, []);
 
   useEffect(() => {
@@ -303,8 +368,22 @@ function HoldingsPage() {
         });
 
         setDailyChangeBySymbol(normalizedMap);
+        saveCachedDailyChangeMap(
+          Object.fromEntries(
+            Object.entries(normalizedMap).filter(
+              (entry): entry is [string, number] =>
+                typeof entry[1] === "number",
+            ),
+          ),
+        );
       } catch {
-        setDailyChangeBySymbol({});
+        setDailyChangeBySymbol((current) => {
+          if (Object.keys(current).length > 0) {
+            return current;
+          }
+
+          return loadCachedDailyChangeMap();
+        });
       }
     };
 
@@ -385,6 +464,13 @@ function HoldingsPage() {
         }
 
         return sortDirection === "asc" ? aTotal - bTotal : bTotal - aTotal;
+      }
+
+      if (sortKey === "total_change_amount") {
+        const aAmount = getTotalChangeAmount(a);
+        const bAmount = getTotalChangeAmount(b);
+
+        return sortDirection === "asc" ? aAmount - bAmount : bAmount - aAmount;
       }
 
       const aValue = a[sortKey];
@@ -582,6 +668,10 @@ function HoldingsPage() {
           <p className="route-page-copy">
             Upload the broker CSV export and persist all values in the backend.
           </p>
+          <p className="route-page-copy">
+            This page reports unrealized performance for currently open
+            positions only.
+          </p>
 
           <div className="import-upload-row">
             <label
@@ -690,6 +780,7 @@ function HoldingsPage() {
                   <col className="import-col-currency" />
                   <col className="import-col-daily" />
                   <col className="import-col-total" />
+                  <col className="import-col-total-amount" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -739,13 +830,19 @@ function HoldingsPage() {
                       onClick={() => handleSort("daily_change_percent")}
                       className="import-sortable-header"
                     >
-                      Daily %{getSortIndicator("daily_change_percent")}
+                      Daily % (Open){getSortIndicator("daily_change_percent")}
                     </th>
                     <th
                       onClick={() => handleSort("total_change_percent")}
                       className="import-sortable-header"
                     >
-                      Total %{getSortIndicator("total_change_percent")}
+                      Unrealized %{getSortIndicator("total_change_percent")}
+                    </th>
+                    <th
+                      onClick={() => handleSort("total_change_amount")}
+                      className="import-sortable-header"
+                    >
+                      Unrealized ${getSortIndicator("total_change_amount")}
                     </th>
                   </tr>
                 </thead>
@@ -753,7 +850,9 @@ function HoldingsPage() {
                   {displayedHoldings.map((holding, index) => {
                     const dailyPercent =
                       dailyChangeBySymbol[holding.symbol.trim().toUpperCase()];
+                    const optionHolding = isOptionHolding(holding);
                     const totalPercent = getTotalChangePercent(holding);
+                    const totalAmount = getTotalChangeAmount(holding);
 
                     return (
                       <tr
@@ -768,16 +867,18 @@ function HoldingsPage() {
                         <td>{holding.market_value_currency}</td>
                         <td
                           className={
-                            dailyPercent == null
+                            optionHolding || dailyPercent == null
                               ? "import-daily-neutral"
                               : dailyPercent >= 0
                                 ? "import-daily-positive"
                                 : "import-daily-negative"
                           }
                         >
-                          {dailyPercent == null
-                            ? "--"
-                            : `${dailyPercent >= 0 ? "+" : ""}${dailyPercent.toFixed(2)}%`}
+                          {optionHolding
+                            ? "N/A"
+                            : dailyPercent == null
+                              ? "--"
+                              : `${dailyPercent >= 0 ? "+" : ""}${dailyPercent.toFixed(2)}%`}
                         </td>
                         <td
                           className={
@@ -791,6 +892,15 @@ function HoldingsPage() {
                           {totalPercent == null
                             ? "--"
                             : `${totalPercent >= 0 ? "+" : ""}${totalPercent.toFixed(2)}%`}
+                        </td>
+                        <td
+                          className={
+                            totalAmount >= 0
+                              ? "import-daily-positive"
+                              : "import-daily-negative"
+                          }
+                        >
+                          {`${totalAmount >= 0 ? "+" : ""}$${totalAmount.toFixed(2)} ${holding.market_value_currency}`}
                         </td>
                       </tr>
                     );

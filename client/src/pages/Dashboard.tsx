@@ -2,7 +2,7 @@ import { FiAlertCircle, FiBarChart2 } from "react-icons/fi";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import DashboardNavbar from "../components/DashboardNavbar.tsx";
+import DashboardNavbar from "../components/DashboardNavbar";
 import "./Dashboard.css";
 
 type ImportedHolding = {
@@ -11,6 +11,8 @@ type ImportedHolding = {
   security_type: string;
   market_value: number;
   market_value_currency: string;
+  book_value_market: number;
+  book_value_currency_market: string;
   market_unrealized_returns: number;
   market_unrealized_returns_currency: string;
   book_value_cad: number;
@@ -32,6 +34,10 @@ type MarketComparisonResponse = {
   marketDailyPercent: number | null;
   deltaPercent: number | null;
   benchmarks: BenchmarkQuote[];
+  perTicker?: Array<{
+    symbol: string;
+    dailyPercent: number | null;
+  }>;
 };
 
 type WeightedHolding = ImportedHolding & {
@@ -45,7 +51,20 @@ const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",
 );
 
-const DONUT_COLORS = ["#8a6ef0", "#f2c154", "#98e76f"];
+const DONUT_COLORS = [
+  "#45c8c1",
+  "#8e86f5",
+  "#f3c55b",
+  "#69d97a",
+  "#5fa8ff",
+  "#ff8d7a",
+  "#7ed7d1",
+  "#b18df3",
+  "#ffd36f",
+  "#75c4ff",
+  "#8ee07d",
+  "#f29ab8",
+];
 
 function convertToCad(amount: number, currency: string): number {
   const normalizedCurrency = currency.trim().toUpperCase();
@@ -59,10 +78,36 @@ function convertToCad(amount: number, currency: string): number {
   return amount;
 }
 
+const SYMBOL_TO_SECTOR: Record<string, string> = {
+  AMD: "Information Technology",
+  CEG: "Utilities",
+  ETN: "Industrials",
+  GOOG: "Communication Services",
+  MU: "Information Technology",
+  ONDS: "Information Technology",
+  SLS: "Health Care",
+  SNDK: "Information Technology",
+  VST: "Utilities",
+  WDC: "Information Technology",
+};
+
+function getHoldingSector(holding: ImportedHolding): string {
+  const symbol = holding.symbol.trim().toUpperCase();
+  const securityType = holding.security_type.trim().toUpperCase();
+
+  if (securityType.includes("OPTION")) {
+    return "Derivatives";
+  }
+
+  if (securityType.includes("ETF") || symbol === "XEQT") {
+    return "ETF / Diversified";
+  }
+
+  return SYMBOL_TO_SECTOR[symbol] ?? "Other";
+}
+
 function Dashboard() {
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
   const [marketComparison, setMarketComparison] =
@@ -70,9 +115,6 @@ function Dashboard() {
 
   useEffect(() => {
     const loadHoldings = async () => {
-      setIsLoading(true);
-      setError(null);
-
       try {
         const response = await fetch(`${API_BASE_URL}/holdings`);
         if (!response.ok) {
@@ -81,15 +123,8 @@ function Dashboard() {
 
         const data = (await response.json()) as HoldingsResponse;
         setHoldings(data.holdings ?? []);
-      } catch (loadError) {
-        const details =
-          loadError instanceof Error
-            ? loadError.message
-            : "Unknown dashboard loading error.";
-        setError(details);
+      } catch {
         setHoldings([]);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -108,10 +143,26 @@ function Dashboard() {
   useEffect(() => {
     const loadBenchmarks = async () => {
       setIsLoadingBenchmarks(true);
+      const controller = new AbortController();
+      const abortTimeoutId = window.setTimeout(() => {
+        controller.abort();
+      }, 8000);
+      const loadingWatchdogId = window.setTimeout(() => {
+        setIsLoadingBenchmarks(false);
+      }, 10000);
+
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/market/portfolio-vs-market`,
-        );
+        const response = (await Promise.race([
+          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, {
+            signal: controller.signal,
+          }),
+          new Promise<Response>((_, reject) => {
+            window.setTimeout(() => {
+              reject(new Error("Benchmark request timed out."));
+            }, 8500);
+          }),
+        ])) as Response;
+
         if (!response.ok) {
           throw new Error("Failed to load market comparison.");
         }
@@ -123,6 +174,8 @@ function Dashboard() {
         setBenchmarks([]);
         setMarketComparison(null);
       } finally {
+        window.clearTimeout(abortTimeoutId);
+        window.clearTimeout(loadingWatchdogId);
         setIsLoadingBenchmarks(false);
       }
     };
@@ -150,31 +203,31 @@ function Dashboard() {
     [holdings],
   );
 
-  const totalUnrealizedCad = useMemo(
+  const totalBookValueMarketCad = useMemo(
     () =>
       holdings.reduce(
         (sum, holding) =>
           sum +
           convertToCad(
-            holding.market_unrealized_returns,
-            holding.market_unrealized_returns_currency,
+            holding.book_value_market,
+            holding.book_value_currency_market,
           ),
         0,
       ),
     [holdings],
   );
 
-  const totalBookValueCad = useMemo(
-    () => holdings.reduce((sum, holding) => sum + holding.book_value_cad, 0),
-    [holdings],
+  const totalGainLossCad = useMemo(
+    () => totalMarketValueCad - totalBookValueMarketCad,
+    [totalBookValueMarketCad, totalMarketValueCad],
   );
 
   const performancePct = useMemo(() => {
-    if (totalBookValueCad <= 0) {
+    if (totalBookValueMarketCad <= 0) {
       return 0;
     }
-    return (totalUnrealizedCad / totalBookValueCad) * 100;
-  }, [totalBookValueCad, totalUnrealizedCad]);
+    return (totalGainLossCad / totalBookValueMarketCad) * 100;
+  }, [totalBookValueMarketCad, totalGainLossCad]);
 
   const weightedHoldings = useMemo<WeightedHolding[]>(() => {
     if (totalMarketValueCad <= 0) {
@@ -196,29 +249,74 @@ function Dashboard() {
       .sort((a, b) => b.marketValueCad - a.marketValueCad);
   }, [holdings, totalMarketValueCad]);
 
-  const chartRows = useMemo(
-    () => weightedHoldings.slice(0, 8),
-    [weightedHoldings],
-  );
-  const donutHoldings = useMemo(
+  const dailyChangeBySymbol = useMemo(() => {
+    const grouped = new Map<string, number[]>();
+
+    (marketComparison?.perTicker ?? []).forEach((item) => {
+      const symbol = item.symbol?.trim().toUpperCase();
+      if (!symbol) {
+        return;
+      }
+
+      if (typeof item.dailyPercent !== "number" || !Number.isFinite(item.dailyPercent)) {
+        return;
+      }
+
+      const existing = grouped.get(symbol) ?? [];
+      existing.push(item.dailyPercent);
+      grouped.set(symbol, existing);
+    });
+
+    const normalized: Record<string, number> = {};
+    grouped.forEach((values, symbol) => {
+      normalized[symbol] =
+        values.reduce((sum, value) => sum + value, 0) / values.length;
+    });
+
+    return normalized;
+  }, [marketComparison]);
+
+  const topThreeHoldings = useMemo(
     () => weightedHoldings.slice(0, 3),
     [weightedHoldings],
   );
 
+  const donutSegments = useMemo(() => {
+    const topEight = weightedHoldings.slice(0, 8).map((holding, index) => ({
+      symbol: holding.symbol,
+      weight: holding.weight,
+      color: DONUT_COLORS[index % DONUT_COLORS.length],
+    }));
+
+    const remainderWeight = weightedHoldings
+      .slice(8)
+      .reduce((sum, holding) => sum + holding.weight, 0);
+
+    if (remainderWeight > 0.01) {
+      topEight.push({
+        symbol: "OTHER",
+        weight: remainderWeight,
+        color: DONUT_COLORS[(topEight.length + 2) % DONUT_COLORS.length],
+      });
+    }
+
+    return topEight;
+  }, [weightedHoldings]);
+
   const donutGradient = useMemo(() => {
-    if (donutHoldings.length === 0) {
+    if (donutSegments.length === 0) {
       return "conic-gradient(#e7e7ef 0deg 360deg)";
     }
 
     let currentDegree = 0;
     const slices: string[] = [];
 
-    donutHoldings.forEach((holding, index) => {
-      const slice = Math.max(holding.weight, 3);
-      const nextDegree = Math.min(currentDegree + (slice / 100) * 360, 360);
-      slices.push(
-        `${DONUT_COLORS[index % DONUT_COLORS.length]} ${currentDegree}deg ${nextDegree}deg`,
+    donutSegments.forEach((segment) => {
+      const nextDegree = Math.min(
+        currentDegree + (Math.max(segment.weight, 0) / 100) * 360,
+        360,
       );
+      slices.push(`${segment.color} ${currentDegree}deg ${nextDegree}deg`);
       currentDegree = nextDegree;
     });
 
@@ -227,19 +325,40 @@ function Dashboard() {
     }
 
     return `conic-gradient(${slices.join(", ")})`;
-  }, [donutHoldings]);
+  }, [donutSegments]);
 
-  const allocationBySecurityType = useMemo(() => {
-    const byType = new Map<string, number>();
+  const donutLabels = useMemo(() => {
+    let cumulative = 0;
+
+    return donutSegments.map((segment) => {
+      const start = cumulative;
+      const end = cumulative + segment.weight;
+      cumulative = end;
+
+      const midpoint = (start + end) / 2;
+      const radians = (midpoint / 100) * Math.PI * 2 - Math.PI / 2;
+      const x = Math.cos(radians);
+      const y = Math.sin(radians);
+
+      return {
+        ...segment,
+        x,
+        y,
+      };
+    });
+  }, [donutSegments]);
+
+  const allocationBySector = useMemo(() => {
+    const bySector = new Map<string, number>();
 
     weightedHoldings.forEach((holding) => {
-      const key = holding.security_type || "UNKNOWN";
-      byType.set(key, (byType.get(key) ?? 0) + holding.marketValueCad);
+      const sector = getHoldingSector(holding);
+      bySector.set(sector, (bySector.get(sector) ?? 0) + holding.marketValueCad);
     });
 
-    return [...byType.entries()]
-      .map(([type, value]) => ({
-        type,
+    return [...bySector.entries()]
+      .map(([sector, value]) => ({
+        sector,
         value,
         weight:
           totalMarketValueCad > 0 ? (value / totalMarketValueCad) * 100 : 0,
@@ -261,7 +380,31 @@ function Dashboard() {
 
   const portfolioDailyPercent = marketComparison?.portfolioDailyPercent ?? null;
   const marketDailyPercent = marketComparison?.marketDailyPercent ?? null;
-  const portfolioVsMarketDelta = marketComparison?.deltaPercent ?? null;
+
+  const formatPercent = (value: number | null) =>
+    value === null ? "--" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  const formatSpread = (value: number | null) => {
+    if (value === null || portfolioDailyPercent === null) {
+      return "--";
+    }
+
+    const spread = value - portfolioDailyPercent;
+    return `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`;
+  };
+
+  const getVsPortfolioClass = (spread: number | null) => {
+    if (spread === null) {
+      return "dashboard-comparison-muted";
+    }
+
+    return spread > 0 ? "dashboard-negative" : "dashboard-positive";
+  };
+
+  const marketVsPortfolioDelta =
+    marketDailyPercent === null || portfolioDailyPercent === null
+      ? null
+      : marketDailyPercent - portfolioDailyPercent;
 
   return (
     <div className="dashboard-shell">
@@ -271,291 +414,284 @@ function Dashboard() {
         <main className="dashboard-main">
           <section className="dashboard-top-section">
             <div className="dashboard-left-column">
-              <div className="dashboard-balance">
-                CA${totalMarketValueCad.toFixed(2)}
-              </div>
-              <div
-                className={
-                  performancePct >= 0
-                    ? "dashboard-change"
-                    : "dashboard-change dashboard-change-negative"
-                }
-              >
-                {holdings.length === 0
-                  ? "No holdings imported yet"
-                  : `${performancePct >= 0 ? "+" : ""}${performancePct.toFixed(2)}% overall | ${holdings.length} positions`}
-              </div>
-
-              <div className="dashboard-chart-card">
-                {isLoading ? (
-                  <div className="dashboard-chart-placeholder dashboard-empty-state">
-                    <div className="dashboard-empty-state-heading">
-                      Loading portfolio data...
-                    </div>
+              <div className="dashboard-stats-grid">
+                <div className="dashboard-stat-card">
+                  <div className="dashboard-stat-label">Market value</div>
+                  <div className="dashboard-stat-value">
+                    CA$
+                    {totalMarketValueCad.toLocaleString("en-CA", {
+                      maximumFractionDigits: 0,
+                    })}
                   </div>
-                ) : null}
+                  <div className="dashboard-stat-sub">as of today</div>
+                </div>
 
-                {!isLoading && error ? (
-                  <div className="dashboard-chart-placeholder dashboard-empty-state">
-                    <div className="dashboard-empty-state-heading">
-                      Unable to load holdings
-                    </div>
-                    <div className="dashboard-empty-state-copy">{error}</div>
+                <div className="dashboard-stat-card">
+                  <div className="dashboard-stat-label">Book value</div>
+                  <div className="dashboard-stat-value">
+                    CA$
+                    {totalBookValueMarketCad.toLocaleString("en-CA", {
+                      maximumFractionDigits: 0,
+                    })}
                   </div>
-                ) : null}
+                  <div className="dashboard-stat-sub">avg cost basis</div>
+                </div>
 
-                {!isLoading && !error && holdings.length === 0 ? (
-                  <div className="dashboard-chart-placeholder dashboard-empty-state">
-                    <div className="dashboard-empty-state-heading">
-                      Upload your holdings to unlock the portfolio chart.
-                    </div>
-
-                    <div className="dashboard-empty-state-copy">
-                      Once positions are uploaded, this area shows top holdings
-                      by weight and concentration signals.
-                    </div>
+                <div className="dashboard-stat-card">
+                  <div className="dashboard-stat-label">Unrealized P&amp;L</div>
+                  <div
+                    className={`dashboard-stat-value ${totalGainLossCad >= 0 ? "dashboard-positive" : "dashboard-negative"}`}
+                  >
+                    {totalGainLossCad >= 0 ? "+" : ""}CA$
+                    {Math.abs(totalGainLossCad).toLocaleString("en-CA", {
+                      maximumFractionDigits: 0,
+                    })}
                   </div>
-                ) : null}
-
-                {!isLoading && !error && holdings.length > 0 ? (
-                  <div className="dashboard-chart-live">
-                    {chartRows.map((holding) => (
-                      <div
-                        className="dashboard-chart-row"
-                        key={`${holding.symbol}-${holding.marketValueCad.toString()}`}
-                      >
-                        <div className="dashboard-chart-row-head">
-                          <span className="dashboard-chart-symbol">
-                            {holding.symbol}
-                          </span>
-                          <span className="dashboard-chart-value">
-                            {holding.weight.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="dashboard-chart-track">
-                          <div
-                            className="dashboard-chart-fill"
-                            style={{ width: `${Math.max(holding.weight, 2)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="dashboard-stat-sub">
+                    {performancePct >= 0 ? "+" : ""}
+                    {performancePct.toFixed(2)}% total
                   </div>
-                ) : null}
-              </div>
-            </div>
+                </div>
 
-            <div className="dashboard-right-column">
-              <div className="dashboard-donut-wrap">
-                <div
-                  className="dashboard-donut-ring"
-                  style={{ background: donutGradient }}
-                >
-                  <div className="dashboard-donut-core">
-                    <div className="dashboard-donut-legend">
-                      {donutHoldings.length === 0 ? (
-                        <div className="dashboard-donut-empty">
-                          No allocation yet
-                        </div>
-                      ) : (
-                        donutHoldings.map((holding, index) => (
-                          <div
-                            className={`dashboard-donut-item${
-                              index === donutHoldings.length - 1
-                                ? " no-margin"
-                                : ""
-                            }`}
-                            key={`${holding.symbol}-${holding.weight.toString()}`}
-                          >
-                            <div
-                              className="dashboard-donut-bar"
-                              style={{
-                                background:
-                                  DONUT_COLORS[index % DONUT_COLORS.length],
-                              }}
-                            />
-                            <span className="dashboard-donut-label">
-                              {holding.symbol}
-                            </span>
-                            <span className="dashboard-positive">
-                              {holding.weight.toFixed(1)}%
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                <div className="dashboard-stat-card">
+                  <div className="dashboard-stat-label">Open positions</div>
+                  <div className="dashboard-stat-value">{holdings.length}</div>
+                  <div className="dashboard-stat-sub">
+                    {allocationBySector.length} sectors
                   </div>
                 </div>
               </div>
 
+              <section className="dashboard-cards-grid dashboard-cards-grid-inline">
+                <div className="dashboard-card">
+                  <div className="dashboard-card-header-row">
+                    <div className="dashboard-card-title-row">
+                      <FiBarChart2 size={30} />
+                      <span>Portfolio vs Market</span>
+                    </div>
+                  </div>
+
+                  <div className="dashboard-card-content dashboard-market-content">
+                    <div className="dashboard-empty-state-copy dashboard-comparison-copy">
+                      Daily moves use currently open holdings only. “Vs
+                      portfolio” means the benchmark’s daily move minus your
+                      portfolio’s daily move.
+                    </div>
+
+                    <div className="dashboard-comparison-table">
+                      <div className="dashboard-comparison-head">
+                        <span>Asset</span>
+                        <span>Daily</span>
+                        <span>Vs portfolio</span>
+                      </div>
+
+                      <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
+                        <span>Portfolio</span>
+                        <span
+                          className={
+                            portfolioDailyPercent === null
+                              ? "dashboard-comparison-muted"
+                              : "dashboard-positive"
+                          }
+                        >
+                          {formatPercent(portfolioDailyPercent)}
+                        </span>
+                        <span className="dashboard-comparison-muted">Base</span>
+                      </div>
+
+                      <div className="dashboard-comparison-row">
+                        <span>Benchmark average</span>
+                        <span
+                          className={
+                            marketDailyPercent === null
+                              ? "dashboard-comparison-muted"
+                              : marketDailyPercent >= 0
+                                ? "dashboard-positive"
+                                : "dashboard-negative"
+                          }
+                        >
+                          {formatPercent(marketDailyPercent)}
+                        </span>
+                        <span
+                          className={getVsPortfolioClass(
+                            marketVsPortfolioDelta,
+                          )}
+                        >
+                          {formatSpread(marketDailyPercent)}
+                        </span>
+                      </div>
+
+                      {isLoadingBenchmarks ? (
+                        <div className="dashboard-comparison-row dashboard-comparison-row-loading">
+                          <span>Loading benchmark daily changes...</span>
+                        </div>
+                      ) : benchmarks.length === 0 ? (
+                        <div className="dashboard-comparison-row dashboard-comparison-row-loading">
+                          <span>Benchmark data unavailable right now.</span>
+                        </div>
+                      ) : (
+                        benchmarks.map((item) => {
+                          const spread =
+                            item.changePercent === null ||
+                            portfolioDailyPercent === null
+                              ? null
+                              : item.changePercent - portfolioDailyPercent;
+
+                          return (
+                            <div
+                              className="dashboard-comparison-row"
+                              key={item.symbol}
+                            >
+                              <span>{item.symbol}</span>
+                              <span
+                                className={
+                                  item.changePercent === null
+                                    ? "dashboard-comparison-muted"
+                                    : item.changePercent >= 0
+                                      ? "dashboard-positive"
+                                      : "dashboard-negative"
+                                }
+                              >
+                                {formatPercent(item.changePercent)}
+                              </span>
+                              <span className={getVsPortfolioClass(spread)}>
+                                {spread === null
+                                  ? "--"
+                                  : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dashboard-card">
+                  <div className="dashboard-card-header-row">
+                    <div className="dashboard-card-title-row">
+                      <HiOutlineLightBulb size={31} />
+                      <span>AI Suggestion</span>
+                    </div>
+                    <Link
+                      className="dashboard-button dashboard-button-purple"
+                      to="/re-weight"
+                    >
+                      Rebalance Now
+                    </Link>
+                  </div>
+
+                  <div className="dashboard-card-content dashboard-lines-content">
+                    <div className="dashboard-line-placeholder" />
+                    <div className="dashboard-line-placeholder" />
+                    <div className="dashboard-line-placeholder dashboard-line-placeholder-short" />
+                  </div>
+                </div>
+
+                <div className="dashboard-card">
+                  <div className="dashboard-card-header-row">
+                    <div className="dashboard-card-title-row">
+                      <FiAlertCircle size={31} color="#18151f" />
+                      <span>Risk Alert</span>
+                    </div>
+                    <Link
+                      className="dashboard-button dashboard-button-gold"
+                      to="/risk-manager"
+                    >
+                      Risk Manager
+                    </Link>
+                  </div>
+
+                  <div className="dashboard-card-content dashboard-lines-content">
+                    <div className="dashboard-line-placeholder" />
+                    <div className="dashboard-line-placeholder" />
+                    <div className="dashboard-line-placeholder dashboard-line-placeholder-medium" />
+                    <div className="dashboard-risk-caption">
+                      {concentrationRisk}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="dashboard-right-column">
+              <div className="dashboard-donut-wrap">
+                <div className="dashboard-donut-stage">
+                  <div
+                    className="dashboard-donut-ring"
+                    style={{ background: donutGradient }}
+                  >
+                    <div className="dashboard-donut-core">
+                      {topThreeHoldings.length === 0 ? (
+                        <div className="dashboard-donut-empty">No allocation yet</div>
+                      ) : (
+                        <div className="dashboard-donut-center-list">
+                          {topThreeHoldings.map((holding) => {
+                            const daily =
+                              dailyChangeBySymbol[holding.symbol.trim().toUpperCase()];
+                            return (
+                              <div
+                                className="dashboard-donut-center-item"
+                                key={`${holding.symbol}-${holding.marketValueCad.toString()}`}
+                              >
+                                <span className="dashboard-donut-center-symbol">
+                                  {holding.symbol}
+                                </span>
+                                <span
+                                  className={
+                                    daily == null
+                                      ? "dashboard-comparison-muted"
+                                      : daily >= 0
+                                        ? "dashboard-positive"
+                                        : "dashboard-negative"
+                                  }
+                                >
+                                  {daily == null
+                                    ? "--"
+                                    : `${daily >= 0 ? "+" : ""}${daily.toFixed(2)}%`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {donutLabels.map((segment) => (
+                    <div
+                      className="dashboard-donut-segment-label"
+                      key={`${segment.symbol}-${segment.weight.toString()}`}
+                      style={{
+                        left: `${50 + segment.x * 38}%`,
+                        top: `${50 + segment.y * 38}%`,
+                      }}
+                    >
+                      {segment.symbol} {segment.weight.toFixed(1)}%
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="dashboard-allocation-card">
-                <h4 className="dashboard-allocation-title">
-                  Allocation Breakdown
-                </h4>
-                {allocationBySecurityType.length === 0 ? (
+                <h4 className="dashboard-allocation-title">Sector Breakdown</h4>
+                {allocationBySector.length === 0 ? (
                   <div className="dashboard-allocation-empty">
-                    Upload holdings to see sector, asset class, and cash
-                    allocation.
+                    Upload holdings to see portfolio sector allocation.
                   </div>
                 ) : (
                   <div className="dashboard-allocation-list">
-                    {allocationBySecurityType.map((entry) => (
+                    {allocationBySector.map((entry) => (
                       <div
                         className="dashboard-allocation-row"
-                        key={entry.type}
+                        key={entry.sector}
                       >
-                        <span>{entry.type}</span>
+                        <span>{entry.sector}</span>
                         <span>{entry.weight.toFixed(1)}%</span>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
-          </section>
-
-          <section className="dashboard-cards-grid">
-            <div className="dashboard-card">
-              <div className="dashboard-card-header-row">
-                <div className="dashboard-card-title-row">
-                  <FiBarChart2 size={30} />
-                  <span>Portfolio vs Market</span>
-                </div>
-              </div>
-
-              <div className="dashboard-card-content dashboard-market-content">
-                <div className="dashboard-market-row">
-                  <div className="dashboard-market-track">
-                    <div
-                      className="dashboard-market-fill"
-                      style={{
-                        width: `${Math.min(Math.max(Math.abs(portfolioDailyPercent ?? 0) * 4, 14), 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <div
-                    className={
-                      (portfolioDailyPercent ?? 0) >= 0
-                        ? "dashboard-positive"
-                        : "dashboard-negative"
-                    }
-                  >
-                    {portfolioDailyPercent === null
-                      ? "--"
-                      : `${portfolioDailyPercent >= 0 ? "+" : ""}${portfolioDailyPercent.toFixed(2)}%`}
-                  </div>
-                </div>
-
-                <div className="dashboard-market-row">
-                  <div className="dashboard-market-track">
-                    <div
-                      className="dashboard-market-fill dashboard-market-fill-alt"
-                      style={{
-                        width: `${Math.min(Math.max(Math.abs(marketDailyPercent ?? 0) * 5, 14), 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <div
-                    className={
-                      (marketDailyPercent ?? 0) >= 0
-                        ? "dashboard-positive"
-                        : "dashboard-negative"
-                    }
-                  >
-                    {marketDailyPercent === null
-                      ? "--"
-                      : `${marketDailyPercent >= 0 ? "+" : ""}${marketDailyPercent.toFixed(2)}%`}
-                  </div>
-                </div>
-
-                <div className="dashboard-market-row no-margin">
-                  <div className="dashboard-market-track">
-                    <div
-                      className="dashboard-market-fill dashboard-market-fill-muted"
-                      style={{
-                        width: `${Math.min(Math.max(Math.abs(portfolioVsMarketDelta ?? 0) * 8, 14), 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <div
-                    className={
-                      (portfolioVsMarketDelta ?? 0) >= 0
-                        ? "dashboard-positive"
-                        : "dashboard-negative"
-                    }
-                  >
-                    {portfolioVsMarketDelta === null
-                      ? "--"
-                      : `${portfolioVsMarketDelta >= 0 ? "+" : ""}${portfolioVsMarketDelta.toFixed(2)}%`}
-                  </div>
-                </div>
-
-                <div className="dashboard-benchmark-list">
-                  {isLoadingBenchmarks ? (
-                    <div className="dashboard-benchmark-item">
-                      Loading benchmark prices...
-                    </div>
-                  ) : (
-                    benchmarks.map((item) => (
-                      <div
-                        className="dashboard-benchmark-item"
-                        key={item.symbol}
-                      >
-                        <span>{item.symbol}</span>
-                        <span>
-                          {item.price === null
-                            ? "--"
-                            : `$${item.price.toFixed(2)}`}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="dashboard-card">
-              <div className="dashboard-card-header-row">
-                <div className="dashboard-card-title-row">
-                  <HiOutlineLightBulb size={31} />
-                  <span>AI Suggestion</span>
-                </div>
-                <Link
-                  className="dashboard-button dashboard-button-purple"
-                  to="/re-weight"
-                >
-                  Rebalance Now
-                </Link>
-              </div>
-
-              <div className="dashboard-card-content dashboard-lines-content">
-                <div className="dashboard-line-placeholder" />
-                <div className="dashboard-line-placeholder" />
-                <div className="dashboard-line-placeholder dashboard-line-placeholder-short" />
-              </div>
-            </div>
-
-            <div className="dashboard-card">
-              <div className="dashboard-card-header-row">
-                <div className="dashboard-card-title-row">
-                  <FiAlertCircle size={31} color="#18151f" />
-                  <span>Risk Alert</span>
-                </div>
-                <Link
-                  className="dashboard-button dashboard-button-gold"
-                  to="/risk-manager"
-                >
-                  Risk Manager
-                </Link>
-              </div>
-
-              <div className="dashboard-card-content dashboard-lines-content">
-                <div className="dashboard-line-placeholder" />
-                <div className="dashboard-line-placeholder" />
-                <div className="dashboard-line-placeholder dashboard-line-placeholder-medium" />
-                <div className="dashboard-risk-caption">
-                  {concentrationRisk}
-                </div>
               </div>
             </div>
           </section>

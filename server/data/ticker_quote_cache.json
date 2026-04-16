@@ -1,0 +1,101 @@
+{
+  "cursor": 0,
+  "quotes": {
+    "AMD": {
+      "price": 274.0633850097656,
+      "dailyPercent": 15.814479804667696,
+      "previousClose": 236.64,
+      "updatedAt": "2026-04-16T19:10:18.349911+00:00"
+    },
+    "CEG": {
+      "price": 297.6600036621094,
+      "dailyPercent": 6.212311743839206,
+      "previousClose": 280.25,
+      "updatedAt": "2026-04-16T19:10:21.335427+00:00"
+    },
+    "ETN": {
+      "price": 392.84991455078125,
+      "dailyPercent": -1.8954363822841744,
+      "previousClose": 400.44,
+      "updatedAt": "2026-04-16T19:10:25.999564+00:00"
+    },
+    "GOOG": {
+      "price": 332.0299987792969,
+      "dailyPercent": 4.9499000471905905,
+      "previousClose": 316.37,
+      "updatedAt": "2026-04-16T19:10:27.355607+00:00"
+    },
+    "MU": {
+      "price": 456.1300048828125,
+      "dailyPercent": 8.21332943057401,
+      "previousClose": 421.51,
+      "updatedAt": "2026-04-16T19:10:28.857830+00:00"
+    },
+    "ONDS": {
+      "price": 10.149700164794922,
+      "dailyPercent": 11.047047754867847,
+      "previousClose": 9.14,
+      "updatedAt": "2026-04-16T19:10:32.181319+00:00"
+    },
+    "SLS": {
+      "price": 5.010000228881836,
+      "dailyPercent": -0.7920746756072057,
+      "previousClose": 5.05,
+      "updatedAt": "2026-04-16T19:10:35.672097+00:00"
+    },
+    "SNDK": {
+      "price": 904.625,
+      "dailyPercent": 6.230257054616761,
+      "previousClose": 851.57,
+      "updatedAt": "2026-04-16T19:10:38.972283+00:00"
+    },
+    "VST": {
+      "price": 163.89999389648438,
+      "dailyPercent": 7.299505005881751,
+      "previousClose": 152.75,
+      "updatedAt": "2026-04-16T19:10:49.859707+00:00"
+    },
+    "WDC": {
+      "price": 360.885009765625,
+      "dailyPercent": 6.808633173204985,
+      "previousClose": 337.88,
+      "updatedAt": "2026-04-16T19:10:52.819297+00:00"
+    },
+    "QQQ": {
+      "price": 639.260009765625,
+      "dailyPercent": 4.764091474069543,
+      "previousClose": 610.19,
+      "updatedAt": "2026-04-16T19:10:55.741987+00:00"
+    },
+    "SPY": {
+      "price": 700.87451171875,
+      "dailyPercent": 3.0834245295333256,
+      "previousClose": 679.91,
+      "updatedAt": "2026-04-16T19:10:59.090771+00:00"
+    },
+    "VT": {
+      "price": 148.7100067138672,
+      "dailyPercent": 2.594002562171231,
+      "previousClose": 144.95,
+      "updatedAt": "2026-04-16T19:11:07.895781+00:00"
+    },
+    "VTI": {
+      "price": 345.739990234375,
+      "dailyPercent": 3.0675183289238372,
+      "previousClose": 335.45,
+      "updatedAt": "2026-04-16T19:11:10.827093+00:00"
+    },
+    "DIA": {
+      "price": 485.6549987792969,
+      "dailyPercent": 0.7792070511095451,
+      "previousClose": 481.9,
+      "updatedAt": "2026-04-16T19:11:15.375193+00:00"
+    },
+    "XEQT.TO": {
+      "price": 42.209999084472656,
+      "dailyPercent": 1.6129010218407729,
+      "previousClose": 41.54,
+      "updatedAt": "2026-04-16T19:16:02.861595+00:00"
+    }
+  }
+}
