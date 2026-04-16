@@ -3,6 +3,7 @@ import DashboardNavbar from "../components/DashboardNavbar.tsx";
 import "./RoutePage.css";
 import "./KeyInsights.css";
 import { API_BASE_URL } from "../lib/constants";
+import { useUserSettings } from "../lib/userSettings";
 
 type Insight = {
   title: string;
@@ -41,9 +42,13 @@ const formatCad = (value: number) =>
   }).format(value);
 
 function KeyInsights() {
+  const { settings } = useUserSettings();
   const [data, setData] = useState<KeyInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const maskDollar = (displayValue: string) =>
+    settings.hideDollarAmounts ? "..." : displayValue;
 
   const loadInsights = async () => {
     setIsLoading(true);
@@ -99,8 +104,8 @@ function KeyInsights() {
             <p>
               {isLoading
                 ? "Looking for portfolio patterns..."
-                : data?.summary ??
-                  "Import holdings to generate portfolio insights."}
+                : (data?.summary ??
+                  "Import holdings to generate portfolio insights.")}
             </p>
           </div>
 
@@ -156,12 +161,15 @@ function KeyInsights() {
                         +{item.returnPercent.toFixed(1)}%
                       </strong>
                       <small>
-                        {item.weight.toFixed(1)}% / {formatCad(item.marketValueCad)}
+                        {item.weight.toFixed(1)}% /{" "}
+                        {maskDollar(formatCad(item.marketValueCad))}
                       </small>
                     </div>
                   ))}
                   {!isLoading && (data?.topPerformers.length ?? 0) === 0 && (
-                    <p className="insights-muted">No positive performers found.</p>
+                    <p className="insights-muted">
+                      No positive performers found.
+                    </p>
                   )}
                 </div>
 
@@ -174,12 +182,15 @@ function KeyInsights() {
                         {item.returnPercent.toFixed(1)}%
                       </strong>
                       <small>
-                        {item.weight.toFixed(1)}% / {formatCad(item.marketValueCad)}
+                        {item.weight.toFixed(1)}% /{" "}
+                        {maskDollar(formatCad(item.marketValueCad))}
                       </small>
                     </div>
                   ))}
                   {!isLoading && (data?.laggards.length ?? 0) === 0 && (
-                    <p className="insights-muted">No unrealized laggards found.</p>
+                    <p className="insights-muted">
+                      No unrealized laggards found.
+                    </p>
                   )}
                 </div>
               </div>

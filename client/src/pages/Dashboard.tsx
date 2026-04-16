@@ -7,6 +7,7 @@ import "./Dashboard.css";
 import { API_BASE_URL } from "../lib/constants";
 import { DONUT_COLORS, OTHER_DONUT_COLOR } from "../lib/dashboardUtils";
 import { convertToCad } from "../lib/holdingsUtils";
+import { useUserSettings } from "../lib/userSettings";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -54,6 +55,7 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u0094", "-");
 
 function Dashboard() {
+  const { settings } = useUserSettings();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
@@ -413,6 +415,9 @@ function Dashboard() {
     return `${value >= 0 ? "+" : "-"}${formatCompactCad(Math.abs(value))}`;
   };
 
+  const maskDollar = (displayValue: string) =>
+    settings.hideDollarAmounts ? "..." : displayValue;
+
   const formatSpread = (value: number | null) => {
     if (value === null || portfolioDailyPercent === null) {
       return "--";
@@ -447,10 +452,11 @@ function Dashboard() {
                 <div className="dashboard-stat-card">
                   <div className="dashboard-stat-label">Market value</div>
                   <div className="dashboard-stat-value">
-                    CA$
-                    {totalMarketValueCad.toLocaleString("en-CA", {
-                      maximumFractionDigits: 0,
-                    })}
+                    {maskDollar(
+                      `CA$${totalMarketValueCad.toLocaleString("en-CA", {
+                        maximumFractionDigits: 0,
+                      })}`,
+                    )}
                   </div>
                   <div className="dashboard-stat-sub">as of today</div>
                 </div>
@@ -458,10 +464,11 @@ function Dashboard() {
                 <div className="dashboard-stat-card">
                   <div className="dashboard-stat-label">Book value</div>
                   <div className="dashboard-stat-value">
-                    CA$
-                    {totalBookValueMarketCad.toLocaleString("en-CA", {
-                      maximumFractionDigits: 0,
-                    })}
+                    {maskDollar(
+                      `CA$${totalBookValueMarketCad.toLocaleString("en-CA", {
+                        maximumFractionDigits: 0,
+                      })}`,
+                    )}
                   </div>
                   <div className="dashboard-stat-sub">avg cost basis</div>
                 </div>
@@ -471,10 +478,13 @@ function Dashboard() {
                   <div
                     className={`dashboard-stat-value ${totalGainLossCad >= 0 ? "dashboard-positive" : "dashboard-negative"}`}
                   >
-                    {totalGainLossCad >= 0 ? "+" : ""}CA$
-                    {Math.abs(totalGainLossCad).toLocaleString("en-CA", {
-                      maximumFractionDigits: 0,
-                    })}
+                    {maskDollar(
+                      `${totalGainLossCad >= 0 ? "+" : ""}CA$${Math.abs(
+                        totalGainLossCad,
+                      ).toLocaleString("en-CA", {
+                        maximumFractionDigits: 0,
+                      })}`,
+                    )}
                   </div>
                   <div className="dashboard-stat-sub">
                     {performancePct >= 0 ? "+" : ""}
@@ -716,7 +726,9 @@ function Dashboard() {
                               Portfolio
                             </span>
                             <span className="dashboard-donut-center-value">
-                              {formatCompactCad(totalMarketValueCad)}
+                              {maskDollar(
+                                formatCompactCad(totalMarketValueCad),
+                              )}
                             </span>
                             <span
                               className={
@@ -729,7 +741,7 @@ function Dashboard() {
                             >
                               {portfolioDailyAmountCad === null
                                 ? "--"
-                                : `${formatSignedCad(portfolioDailyAmountCad)} (${formatPercent(portfolioDailyPercent)})`}
+                                : `${maskDollar(formatSignedCad(portfolioDailyAmountCad))} (${formatPercent(portfolioDailyPercent)})`}
                             </span>
                             <span className="dashboard-donut-center-period">
                               Today

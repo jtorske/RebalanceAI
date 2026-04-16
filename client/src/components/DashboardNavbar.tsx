@@ -183,6 +183,25 @@ function DashboardNavbar() {
                 )}
               </div>
             </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title-row">
+                <h3>Privacy</h3>
+                <span>Mask sensitive totals</span>
+              </div>
+              <label className="settings-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={settings.hideDollarAmounts}
+                  onChange={(event) =>
+                    updateSettings({
+                      hideDollarAmounts: event.target.checked,
+                    })
+                  }
+                />
+                Hide dollar amounts
+              </label>
+            </div>
           </aside>
         </div>
       )}

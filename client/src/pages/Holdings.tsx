@@ -14,6 +14,7 @@ import {
   getTotalChangeAmount,
   isOptionHolding,
 } from "../lib/holdingsUtils";
+import { useUserSettings } from "../lib/userSettings";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -23,6 +24,7 @@ import type {
 } from "../lib/types";
 
 function HoldingsPage() {
+  const { settings } = useUserSettings();
   const [fileName, setFileName] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [parsedHoldings, setParsedHoldings] = useState<ImportedHolding[]>([]);
@@ -238,6 +240,9 @@ function HoldingsPage() {
 
     return sortedPreviewHoldings.slice(0, 10);
   }, [showAllHoldings, sortedPreviewHoldings]);
+
+  const maskDollar = (displayValue: string) =>
+    settings.hideDollarAmounts ? "..." : displayValue;
 
   const handleSort = (key: SortKey) => {
     if (sortKey !== key) {
@@ -460,7 +465,7 @@ function HoldingsPage() {
 
             <article className="import-metric-card">
               <h3>Uploaded Market Value</h3>
-              <p>${parsedMarketValue.toFixed(2)}</p>
+              <p>{maskDollar(`$${parsedMarketValue.toFixed(2)}`)}</p>
               <span>Computed from current file before save</span>
             </article>
 
@@ -480,7 +485,7 @@ function HoldingsPage() {
 
             <article className="import-metric-card">
               <h3>Persisted Market Value (CAD)</h3>
-              <p>CA${persistedMarketValueCad.toFixed(2)}</p>
+              <p>{maskDollar(`CA$${persistedMarketValueCad.toFixed(2)}`)}</p>
               <span>
                 Read from backend storage and converted to CAD using 1 USD =
                 {` ${USD_TO_CAD_RATE.toFixed(2)} CAD`}
@@ -595,8 +600,8 @@ function HoldingsPage() {
                         <td>{holding.symbol}</td>
                         <td>{holding.security_type}</td>
                         <td>{holding.quantity.toFixed(4)}</td>
-                        <td>{holding.market_price.toFixed(4)}</td>
-                        <td>{holding.market_value.toFixed(2)}</td>
+                        <td>{maskDollar(holding.market_price.toFixed(4))}</td>
+                        <td>{maskDollar(holding.market_value.toFixed(2))}</td>
                         <td>{holding.market_value_currency}</td>
                         <td
                           className={
@@ -633,7 +638,9 @@ function HoldingsPage() {
                               : "import-daily-negative"
                           }
                         >
-                          {`${totalAmount >= 0 ? "+" : ""}$${totalAmount.toFixed(2)} ${holding.market_value_currency}`}
+                          {maskDollar(
+                            `${totalAmount >= 0 ? "+" : ""}$${totalAmount.toFixed(2)} ${holding.market_value_currency}`,
+                          )}
                         </td>
                       </tr>
                     );

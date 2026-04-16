@@ -14,6 +14,7 @@ type UserSettings = {
   email: string;
   defaultCurrency: string;
   themePreference: ThemePreference;
+  hideDollarAmounts: boolean;
 };
 
 type UserSettingsContextValue = {
@@ -29,6 +30,7 @@ const defaultSettings: UserSettings = {
   email: "jordan@example.com",
   defaultCurrency: "CAD",
   themePreference: "system",
+  hideDollarAmounts: false,
 };
 
 const UserSettingsContext = createContext<UserSettingsContextValue | null>(

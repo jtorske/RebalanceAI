@@ -3,6 +3,7 @@ import DashboardNavbar from "../components/DashboardNavbar";
 import "./RoutePage.css";
 import "./Reweight.css";
 import { API_BASE_URL } from "../lib/constants";
+import { useUserSettings } from "../lib/userSettings";
 
 type TargetMode =
   | "capped_market_cap"
@@ -96,9 +97,9 @@ function getSortValue(
 }
 
 function Reweight() {
+  const { settings } = useUserSettings();
   const [data, setData] = useState<ReweightResponse | null>(null);
-  const [targetMode, setTargetMode] =
-    useState<TargetMode>("capped_market_cap");
+  const [targetMode, setTargetMode] = useState<TargetMode>("capped_market_cap");
   const [cashCad, setCashCad] = useState(0);
   const [driftThresholdPct, setDriftThresholdPct] = useState(2);
   const [minTradeCad, setMinTradeCad] = useState(50);
@@ -110,8 +111,9 @@ function Reweight() {
     {},
   );
   const [sortKey, setSortKey] = useState<ReweightSortKey | null>(null);
-  const [sortDirection, setSortDirection] =
-    useState<SortDirection | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -286,6 +288,9 @@ function Reweight() {
     }));
   };
 
+  const maskDollar = (displayValue: string) =>
+    settings.hideDollarAmounts ? "..." : displayValue;
+
   return (
     <div className="route-page">
       <DashboardNavbar />
@@ -412,19 +417,19 @@ function Reweight() {
               <div className="rw-summary-card">
                 <span className="rw-summary-label">Portfolio Value</span>
                 <span className="rw-summary-value">
-                  {formatCad(data.totalValueCad)}
+                  {maskDollar(formatCad(data.totalValueCad))}
                 </span>
               </div>
               <div className="rw-summary-card">
                 <span className="rw-summary-label">Cash Applied</span>
                 <span className="rw-summary-value">
-                  {formatCad(data.cashCad)}
+                  {maskDollar(formatCad(data.cashCad))}
                 </span>
               </div>
               <div className="rw-summary-card rw-summary-buy">
                 <span className="rw-summary-label">Buy Orders</span>
                 <span className="rw-summary-value rw-positive">
-                  {formatCad(data.totalBuyCad)}
+                  {maskDollar(formatCad(data.totalBuyCad))}
                 </span>
                 <span className="rw-summary-note">
                   {buyItems.length} trades
@@ -433,7 +438,7 @@ function Reweight() {
               <div className="rw-summary-card rw-summary-sell">
                 <span className="rw-summary-label">Sell Orders</span>
                 <span className="rw-summary-value rw-negative">
-                  {formatCad(Math.abs(data.totalSellCad))}
+                  {maskDollar(formatCad(Math.abs(data.totalSellCad)))}
                 </span>
                 <span className="rw-summary-note">
                   {sellItems.length} trades
@@ -598,7 +603,7 @@ function Reweight() {
                               {item.assetClass}
                             </span>
                           </td>
-                          <td>{formatCad(item.currentValueCad)}</td>
+                          <td>{maskDollar(formatCad(item.currentValueCad))}</td>
                           <td>{formatPct(item.currentWeight)}</td>
                           <td>
                             {targetMode === "manual" &&
@@ -640,18 +645,18 @@ function Reweight() {
                               <span className="rw-no-data">No target</span>
                             ) : item.action === "buy" ? (
                               <span className="rw-buy">
-                                Buy {formatCad(trade)}
+                                Buy {maskDollar(formatCad(trade))}
                               </span>
                             ) : item.action === "sell" ? (
                               <span className="rw-sell">
-                                Sell {formatCad(Math.abs(trade))}
+                                Sell {maskDollar(formatCad(Math.abs(trade)))}
                               </span>
                             ) : (
                               <span className="rw-neutral">Hold</span>
                             )}
                           </td>
                           <td>{formatShares(item.tradeShares)}</td>
-                          <td>{formatMarketCap(item.marketCap)}</td>
+                          <td>{maskDollar(formatMarketCap(item.marketCap))}</td>
                         </tr>
                       );
                     })}

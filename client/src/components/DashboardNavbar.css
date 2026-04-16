@@ -256,6 +256,22 @@
   color: var(--app-accent-strong, #5d46c7);
 }
 
+.settings-toggle-row {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  color: var(--app-text, #181818);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-toggle-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--app-accent, #8a6ef0);
+}
+
 @media (max-width: 1200px) {
   .dashboard-navbar-nav {
     gap: 20px;
