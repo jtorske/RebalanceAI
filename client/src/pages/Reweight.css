@@ -24,6 +24,7 @@
   margin: 6px 0 0;
   font-size: 14px;
   color: #666;
+  max-width: 720px;
 }
 
 .rw-refresh-btn {
@@ -42,6 +43,62 @@
 .rw-refresh-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.rw-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.rw-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rw-controls input,
+.rw-controls select,
+.rw-target-input {
+  width: 100%;
+  border: 1px solid #d9d9e3;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d1d22;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.rw-controls .rw-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.rw-checkbox input {
+  width: auto;
+}
+
+.rw-mode-note,
+.rw-notes {
+  border: 1px solid #e8e8ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #555;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rw-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 /* ── States ──────────────────────────────────────── */
@@ -151,14 +208,15 @@
   table-layout: fixed;
 }
 
-.rw-col-symbol      { width: 22%; }
-.rw-col-type        { width: 12%; }
+.rw-col-symbol      { width: 24%; }
+.rw-col-type        { width: 9%; }
 .rw-col-current-val { width: 11%; }
 .rw-col-current-wt  { width: 8%; }
-.rw-col-mktcap      { width: 10%; }
-.rw-col-target-wt   { width: 8%; }
-.rw-col-target-val  { width: 11%; }
-.rw-col-adjust      { width: 18%; }
+.rw-col-target-wt   { width: 10%; }
+.rw-col-drift       { width: 8%; }
+.rw-col-trade       { width: 13%; }
+.rw-col-shares      { width: 8%; }
+.rw-col-mktcap      { width: 9%; }
 
 .rw-table th,
 .rw-table td {
@@ -177,6 +235,23 @@
   font-weight: 600;
   position: sticky;
   top: 0;
+}
+
+.rw-sort-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.rw-sort-btn:hover {
+  color: #181818;
 }
 
 .rw-table tbody tr:last-child td {
@@ -237,6 +312,20 @@
 .rw-no-data {
   color: #bbb;
   font-size: 12px;
+}
+
+.rw-reason {
+  display: block;
+  color: #a0a0aa;
+  font-size: 10px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-target-input {
+  max-width: 92px;
+  padding: 5px 7px;
 }
 
 @media (max-width: 900px) {

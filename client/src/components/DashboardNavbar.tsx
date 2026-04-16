@@ -1,8 +1,9 @@
-import { FiUser } from "react-icons/fi";
+import { FiUser, FiX } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./DashboardNavbar.css";
 import { API_BASE_URL } from "../lib/constants";
+import { useUserSettings, type ThemePreference } from "../lib/userSettings";
 
 type HoldingsResponse = {
   holdings?: Array<unknown>;
@@ -10,6 +11,8 @@ type HoldingsResponse = {
 
 function DashboardNavbar() {
   const [hasPersistedHoldings, setHasPersistedHoldings] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { settings, resolvedTheme, updateSettings } = useUserSettings();
 
   useEffect(() => {
     const loadHoldingsState = async () => {
@@ -69,11 +72,120 @@ function DashboardNavbar() {
         </NavLink>
       </nav>
 
-      <FiUser
-        className="dashboard-navbar-user-icon"
-        size={34}
-        color="#232323"
-      />
+      <button
+        className="dashboard-navbar-user-button"
+        type="button"
+        aria-label="Open profile settings"
+        onClick={() => setIsSettingsOpen(true)}
+      >
+        <FiUser size={21} />
+      </button>
+
+      {isSettingsOpen && (
+        <div
+          className="settings-backdrop"
+          role="presentation"
+          onMouseDown={() => setIsSettingsOpen(false)}
+        >
+          <aside
+            className="settings-panel"
+            aria-label="Profile settings"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="settings-panel-header">
+              <div>
+                <p className="settings-eyebrow">Profile</p>
+                <h2>Settings</h2>
+              </div>
+              <button
+                className="settings-close-button"
+                type="button"
+                aria-label="Close settings"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="settings-profile-card">
+              <div className="settings-avatar">
+                {settings.displayName.trim().charAt(0).toUpperCase() || "U"}
+              </div>
+              <div>
+                <div className="settings-profile-name">
+                  {settings.displayName || "RebalanceAI User"}
+                </div>
+                <div className="settings-profile-email">
+                  {settings.email || "No email added"}
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <h3>Basics</h3>
+              <label>
+                Display name
+                <input
+                  type="text"
+                  value={settings.displayName}
+                  onChange={(event) =>
+                    updateSettings({ displayName: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={settings.email}
+                  onChange={(event) =>
+                    updateSettings({ email: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Default currency
+                <select
+                  value={settings.defaultCurrency}
+                  onChange={(event) =>
+                    updateSettings({ defaultCurrency: event.target.value })
+                  }
+                >
+                  <option value="CAD">CAD - Canadian dollar</option>
+                  <option value="USD">USD - US dollar</option>
+                  <option value="EUR">EUR - Euro</option>
+                  <option value="GBP">GBP - British pound</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title-row">
+                <h3>Appearance</h3>
+                <span>Using {resolvedTheme} mode</span>
+              </div>
+              <div className="settings-theme-options">
+                {(["light", "dark", "system"] as ThemePreference[]).map(
+                  (theme) => (
+                    <button
+                      className={
+                        settings.themePreference === theme
+                          ? "settings-theme-option settings-theme-option-active"
+                          : "settings-theme-option"
+                      }
+                      type="button"
+                      key={theme}
+                      onClick={() => updateSettings({ themePreference: theme })}
+                    >
+                      <span>{theme}</span>
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
     </header>
   );
 }

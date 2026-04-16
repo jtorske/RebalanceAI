@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
 import "./Dashboard.css";
 import { API_BASE_URL } from "../lib/constants";
-import { DONUT_COLORS, getHoldingSector } from "../lib/dashboardUtils";
+import { DONUT_COLORS, OTHER_DONUT_COLOR } from "../lib/dashboardUtils";
 import { convertToCad } from "../lib/holdingsUtils";
 import type {
   ImportedHolding,
@@ -15,14 +15,33 @@ import type {
   WeightedHolding,
 } from "../lib/types";
 
-type AiSummaryHeadline = {
-  title: string;
-  publisher?: string;
-};
-
 type AiSummaryResponse = {
   summary: string | null;
-  headlines?: AiSummaryHeadline[];
+};
+
+type RebalanceAiSummaryResponse = {
+  summary: string | null;
+  totalBuyCad?: number;
+  totalSellCad?: number;
+};
+
+type SectorBreakdownEntry = {
+  sector: string;
+  valueCad: number;
+  weight: number;
+};
+
+type SectorBreakdownResponse = {
+  sectors: SectorBreakdownEntry[];
+  totalValueCad: number;
+  generatedAt: string;
+};
+
+type RiskAnalysisResponse = {
+  dashboardSummary: string | null;
+  concerns: Array<{
+    severity: "high" | "medium" | "low";
+  }>;
 };
 
 const repairTextEncoding = (value: string) =>
@@ -41,10 +60,18 @@ function Dashboard() {
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiSummaryHeadlines, setAiSummaryHeadlines] = useState<
-    AiSummaryHeadline[]
-  >([]);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
+  const [rebalanceSummary, setRebalanceSummary] = useState<string | null>(null);
+  const [isLoadingRebalanceSummary, setIsLoadingRebalanceSummary] =
+    useState(true);
+  const [sectorBreakdown, setSectorBreakdown] = useState<
+    SectorBreakdownEntry[]
+  >([]);
+  const [isLoadingSectorBreakdown, setIsLoadingSectorBreakdown] =
+    useState(true);
+  const [riskSummary, setRiskSummary] = useState<string | null>(null);
+  const [riskConcernCount, setRiskConcernCount] = useState(0);
+  const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
 
   useEffect(() => {
     const loadHoldings = async () => {
@@ -127,28 +154,108 @@ function Dashboard() {
 
   useEffect(() => {
     const loadAiSummary = async () => {
+      setIsLoadingAiSummary(true);
       try {
         const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
         if (!res.ok) throw new Error("ai-summary fetch failed");
         const data = (await res.json()) as AiSummaryResponse;
         setAiSummary(data.summary ? repairTextEncoding(data.summary) : null);
-        setAiSummaryHeadlines(
-          (data.headlines ?? []).map((headline) => ({
-            ...headline,
-            title: repairTextEncoding(headline.title),
-            publisher: headline.publisher
-              ? repairTextEncoding(headline.publisher)
-              : headline.publisher,
-          })),
-        );
       } catch {
         setAiSummary(null);
-        setAiSummaryHeadlines([]);
       } finally {
         setIsLoadingAiSummary(false);
       }
     };
     void loadAiSummary();
+  }, []);
+
+  useEffect(() => {
+    const loadRebalanceSummary = async () => {
+      setIsLoadingRebalanceSummary(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`);
+        if (!res.ok) throw new Error("rebalance ai-summary fetch failed");
+        const data = (await res.json()) as RebalanceAiSummaryResponse;
+        setRebalanceSummary(
+          data.summary ? repairTextEncoding(data.summary) : null,
+        );
+      } catch {
+        setRebalanceSummary(null);
+      } finally {
+        setIsLoadingRebalanceSummary(false);
+      }
+    };
+
+    const refreshRebalanceSummary = () => {
+      void loadRebalanceSummary();
+    };
+
+    void loadRebalanceSummary();
+    window.addEventListener("holdings-changed", refreshRebalanceSummary);
+
+    return () => {
+      window.removeEventListener("holdings-changed", refreshRebalanceSummary);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadSectorBreakdown = async () => {
+      setIsLoadingSectorBreakdown(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`);
+        if (!res.ok) throw new Error("sector-breakdown fetch failed");
+        const data = (await res.json()) as SectorBreakdownResponse;
+        setSectorBreakdown(data.sectors ?? []);
+      } catch {
+        setSectorBreakdown([]);
+      } finally {
+        setIsLoadingSectorBreakdown(false);
+      }
+    };
+
+    const refreshSectorBreakdown = () => {
+      void loadSectorBreakdown();
+    };
+
+    void loadSectorBreakdown();
+    window.addEventListener("holdings-changed", refreshSectorBreakdown);
+
+    return () => {
+      window.removeEventListener("holdings-changed", refreshSectorBreakdown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadRiskSummary = async () => {
+      setIsLoadingRiskSummary(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/risk/analysis`);
+        if (!res.ok) throw new Error("risk analysis fetch failed");
+        const data = (await res.json()) as RiskAnalysisResponse;
+        setRiskSummary(
+          data.dashboardSummary
+            ? repairTextEncoding(data.dashboardSummary)
+            : null,
+        );
+        setRiskConcernCount(data.concerns?.length ?? 0);
+      } catch {
+        setRiskSummary(null);
+        setRiskConcernCount(0);
+      } finally {
+        setIsLoadingRiskSummary(false);
+      }
+    };
+
+    const refreshRiskSummary = () => {
+      void loadRiskSummary();
+    };
+
+    void loadRiskSummary();
+    window.addEventListener("holdings-changed", refreshRiskSummary);
+
+    return () => {
+      window.removeEventListener("holdings-changed", refreshRiskSummary);
+    };
   }, []);
 
   const totalMarketValueCad = useMemo(
@@ -208,146 +315,81 @@ function Dashboard() {
       .sort((a, b) => b.marketValueCad - a.marketValueCad);
   }, [holdings, totalMarketValueCad]);
 
-  const dailyChangeBySymbol = useMemo(() => {
-    const grouped = new Map<string, number[]>();
-
-    (marketComparison?.perTicker ?? []).forEach((item) => {
-      const symbol = item.symbol?.trim().toUpperCase();
-      if (!symbol) {
-        return;
-      }
-
-      if (
-        typeof item.dailyPercent !== "number" ||
-        !Number.isFinite(item.dailyPercent)
-      ) {
-        return;
-      }
-
-      const existing = grouped.get(symbol) ?? [];
-      existing.push(item.dailyPercent);
-      grouped.set(symbol, existing);
-    });
-
-    const normalized: Record<string, number> = {};
-    grouped.forEach((values, symbol) => {
-      normalized[symbol] =
-        values.reduce((sum, value) => sum + value, 0) / values.length;
-    });
-
-    return normalized;
-  }, [marketComparison]);
-
-  const topThreeHoldings = useMemo(
-    () => weightedHoldings.slice(0, 3),
-    [weightedHoldings],
-  );
-
   const donutSegments = useMemo(() => {
-    const topEight = weightedHoldings.slice(0, 8).map((holding, index) => ({
-      symbol: holding.symbol,
-      weight: holding.weight,
-      color: DONUT_COLORS[index % DONUT_COLORS.length],
-    }));
+    const visibleHoldings = weightedHoldings
+      .slice(0, 7)
+      .map((holding, index) => ({
+        symbol: holding.symbol,
+        weight: holding.weight,
+        valueCad: holding.marketValueCad,
+        color: DONUT_COLORS[index % DONUT_COLORS.length],
+      }));
 
     const remainderWeight = weightedHoldings
-      .slice(8)
+      .slice(7)
       .reduce((sum, holding) => sum + holding.weight, 0);
 
     if (remainderWeight > 0.01) {
-      topEight.push({
+      visibleHoldings.push({
         symbol: "OTHER",
         weight: remainderWeight,
-        color: DONUT_COLORS[(topEight.length + 2) % DONUT_COLORS.length],
+        valueCad: weightedHoldings
+          .slice(7)
+          .reduce((sum, holding) => sum + holding.marketValueCad, 0),
+        color: OTHER_DONUT_COLOR,
       });
     }
 
-    return topEight;
+    return visibleHoldings;
   }, [weightedHoldings]);
 
-  const donutGradient = useMemo(() => {
-    if (donutSegments.length === 0) {
-      return "conic-gradient(#e7e7ef 0deg 360deg)";
-    }
-
-    let currentDegree = 0;
-    const slices: string[] = [];
-
-    donutSegments.forEach((segment) => {
-      const nextDegree = Math.min(
-        currentDegree + (Math.max(segment.weight, 0) / 100) * 360,
-        360,
-      );
-      slices.push(`${segment.color} ${currentDegree}deg ${nextDegree}deg`);
-      currentDegree = nextDegree;
-    });
-
-    if (currentDegree < 360) {
-      slices.push(`#ececf2 ${currentDegree}deg 360deg`);
-    }
-
-    return `conic-gradient(${slices.join(", ")})`;
-  }, [donutSegments]);
-
-  const donutLabels = useMemo(() => {
-    let cumulative = 0;
+  const donutStrokeSegments = useMemo(() => {
+    const radius = 35;
+    const circumference = 2 * Math.PI * radius;
+    const gap = donutSegments.length > 1 ? 1.8 : 0;
+    let offset = 0;
 
     return donutSegments.map((segment) => {
-      const start = cumulative;
-      const end = cumulative + segment.weight;
-      cumulative = end;
-
-      const midpoint = (start + end) / 2;
-      const radians = (midpoint / 100) * Math.PI * 2 - Math.PI / 2;
-      const x = Math.cos(radians);
-      const y = Math.sin(radians);
-
-      return {
+      const startOffset = offset;
+      const rawLength = (Math.max(segment.weight, 0) / 100) * circumference;
+      const length = Math.max(0, rawLength - gap);
+      const midpoint = (startOffset + rawLength / 2) / circumference;
+      const angle = midpoint * 360 - 90;
+      const radians = (angle * Math.PI) / 180;
+      const labelX = 50 + Math.cos(radians) * 46;
+      const labelY = 50 + Math.sin(radians) * 46;
+      const stroke = {
         ...segment,
-        x,
-        y,
+        dasharray: `${length} ${circumference - length}`,
+        dashoffset: -offset,
+        labelSide: labelX >= 50 ? "right" : "left",
+        labelStyle: {
+          left: `${labelX}%`,
+          top: `${labelY}%`,
+        },
       };
+      offset += rawLength;
+      return stroke;
     });
   }, [donutSegments]);
 
-  const allocationBySector = useMemo(() => {
-    const bySector = new Map<string, number>();
-
-    weightedHoldings.forEach((holding) => {
-      const sector = getHoldingSector(holding);
-      bySector.set(
-        sector,
-        (bySector.get(sector) ?? 0) + holding.marketValueCad,
-      );
-    });
-
-    return [...bySector.entries()]
-      .map(([sector, value]) => ({
-        sector,
-        value,
-        weight:
-          totalMarketValueCad > 0 ? (value / totalMarketValueCad) * 100 : 0,
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 4);
-  }, [weightedHoldings, totalMarketValueCad]);
-
-  const concentrationRisk = useMemo(() => {
-    const topWeight = weightedHoldings[0]?.weight ?? 0;
-    if (topWeight >= 35) {
-      return "High concentration risk";
-    }
-    if (topWeight >= 20) {
-      return "Moderate concentration risk";
-    }
-    return "Diversification looks healthy";
-  }, [weightedHoldings]);
+  const allocationBySector = useMemo(
+    () => sectorBreakdown.slice(0, 6),
+    [sectorBreakdown],
+  );
 
   const portfolioDailyPercent = marketComparison?.portfolioDailyPercent ?? null;
   const marketDailyPercent = marketComparison?.marketDailyPercent ?? null;
 
   const formatPercent = (value: number | null) =>
     value === null ? "--" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  const formatCompactCad = (value: number) =>
+    new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: "CAD",
+      maximumFractionDigits: 0,
+    }).format(value);
 
   const formatSpread = (value: number | null) => {
     if (value === null || portfolioDailyPercent === null) {
@@ -422,7 +464,7 @@ function Dashboard() {
                   <div className="dashboard-stat-label">Open positions</div>
                   <div className="dashboard-stat-value">{holdings.length}</div>
                   <div className="dashboard-stat-sub">
-                    {allocationBySector.length} sectors
+                    {sectorBreakdown.length} sectors
                   </div>
                 </div>
               </div>
@@ -450,25 +492,6 @@ function Dashboard() {
                             <p className="dashboard-ai-summary-text">
                               {aiSummary}
                             </p>
-                            {aiSummaryHeadlines.length > 0 && (
-                              <div className="dashboard-ai-headlines">
-                                <div className="dashboard-ai-headlines-title">
-                                  Daily headlines
-                                </div>
-                                <ul className="dashboard-ai-headlines-list">
-                                  {aiSummaryHeadlines
-                                    .slice(0, 3)
-                                    .map((headline) => (
-                                      <li key={headline.title}>
-                                        {headline.title}
-                                        {headline.publisher
-                                          ? ` (${headline.publisher})`
-                                          : ""}
-                                      </li>
-                                    ))}
-                                </ul>
-                              </div>
-                            )}
                           </>
                         )}
                       </div>
@@ -577,17 +600,26 @@ function Dashboard() {
                     </Link>
                   </div>
 
-                  <div className="dashboard-card-content dashboard-lines-content">
-                    <div className="dashboard-line-placeholder" />
-                    <div className="dashboard-line-placeholder" />
-                    <div className="dashboard-line-placeholder dashboard-line-placeholder-short" />
+                  <div className="dashboard-card-content dashboard-suggestion-content">
+                    {isLoadingRebalanceSummary ? (
+                      <div className="dashboard-ai-summary-loading">
+                        <span className="dashboard-ai-summary-dot" />
+                        <span className="dashboard-ai-summary-dot" />
+                        <span className="dashboard-ai-summary-dot" />
+                      </div>
+                    ) : (
+                      <p className="dashboard-suggestion-text">
+                        {rebalanceSummary ??
+                          "Import holdings to get a rebalance suggestion based on your current weights."}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="dashboard-card">
                   <div className="dashboard-card-header-row">
                     <div className="dashboard-card-title-row">
-                      <FiAlertCircle size={31} color="#18151f" />
+                      <FiAlertCircle size={31} />
                       <span>Risk Alert</span>
                     </div>
                     <Link
@@ -598,13 +630,24 @@ function Dashboard() {
                     </Link>
                   </div>
 
-                  <div className="dashboard-card-content dashboard-lines-content">
-                    <div className="dashboard-line-placeholder" />
-                    <div className="dashboard-line-placeholder" />
-                    <div className="dashboard-line-placeholder dashboard-line-placeholder-medium" />
-                    <div className="dashboard-risk-caption">
-                      {concentrationRisk}
-                    </div>
+                  <div className="dashboard-card-content dashboard-risk-content">
+                    {isLoadingRiskSummary ? (
+                      <div className="dashboard-ai-summary-loading">
+                        <span className="dashboard-ai-summary-dot" />
+                        <span className="dashboard-ai-summary-dot" />
+                        <span className="dashboard-ai-summary-dot" />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="dashboard-risk-summary">
+                          {riskSummary ??
+                            "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
+                        </p>
+                        <div className="dashboard-risk-caption">
+                          {riskConcernCount} possible concerns
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </section>
@@ -613,69 +656,97 @@ function Dashboard() {
             <div className="dashboard-right-column">
               <div className="dashboard-donut-wrap">
                 <div className="dashboard-donut-stage">
-                  <div
-                    className="dashboard-donut-ring"
-                    style={{ background: donutGradient }}
-                  >
-                    <div className="dashboard-donut-core">
-                      {topThreeHoldings.length === 0 ? (
-                        <div className="dashboard-donut-empty">
-                          No allocation yet
-                        </div>
-                      ) : (
-                        <div className="dashboard-donut-center-list">
-                          {topThreeHoldings.map((holding) => {
-                            const daily =
-                              dailyChangeBySymbol[
-                                holding.symbol.trim().toUpperCase()
-                              ];
-                            return (
-                              <div
-                                className="dashboard-donut-center-item"
-                                key={`${holding.symbol}-${holding.marketValueCad.toString()}`}
-                              >
-                                <span className="dashboard-donut-center-symbol">
-                                  {holding.symbol}
-                                </span>
-                                <span
-                                  className={
-                                    daily == null
-                                      ? "dashboard-comparison-muted"
-                                      : daily >= 0
-                                        ? "dashboard-positive"
-                                        : "dashboard-negative"
-                                  }
-                                >
-                                  {daily == null
-                                    ? "--"
-                                    : `${daily >= 0 ? "+" : ""}${daily.toFixed(2)}%`}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                  <div className="dashboard-donut-panel">
+                    <div className="dashboard-donut-chart">
+                      <svg
+                        className="dashboard-donut-svg"
+                        viewBox="0 0 100 100"
+                        role="img"
+                        aria-label="Portfolio allocation by holding"
+                      >
+                        <circle
+                          className="dashboard-donut-track"
+                          cx="50"
+                          cy="50"
+                          r="35"
+                        />
+                        {donutStrokeSegments.map((segment) => (
+                          <circle
+                            className="dashboard-donut-slice"
+                            cx="50"
+                            cy="50"
+                            r="35"
+                            key={`${segment.symbol}-${segment.weight.toString()}`}
+                            stroke={segment.color}
+                            strokeDasharray={segment.dasharray}
+                            strokeDashoffset={segment.dashoffset}
+                          />
+                        ))}
+                      </svg>
+                      <div className="dashboard-donut-core">
+                        {donutSegments.length === 0 ? (
+                          <div className="dashboard-donut-empty">
+                            No allocation yet
+                          </div>
+                        ) : (
+                          <div className="dashboard-donut-center">
+                            <span className="dashboard-donut-center-label">
+                              Portfolio
+                            </span>
+                            <span className="dashboard-donut-center-value">
+                              {formatCompactCad(totalMarketValueCad)}
+                            </span>
+                            <span
+                              className={
+                                totalGainLossCad >= 0
+                                  ? "dashboard-donut-center-change dashboard-positive"
+                                  : "dashboard-donut-center-change dashboard-negative"
+                              }
+                            >
+                              {totalGainLossCad >= 0 ? "+" : "-"}
+                              {formatCompactCad(Math.abs(totalGainLossCad))} (
+                              {performancePct >= 0 ? "+" : ""}
+                              {performancePct.toFixed(2)}%)
+                            </span>
+                            <span className="dashboard-donut-center-period">
+                              Total
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {donutStrokeSegments.map((segment) => {
+                        return (
+                          <button
+                            className={`dashboard-donut-chip dashboard-donut-chip-${segment.labelSide}`}
+                            key={`${segment.symbol}-${segment.weight.toString()}-chip`}
+                            style={segment.labelStyle}
+                            type="button"
+                            title={`${segment.symbol}: ${segment.weight.toFixed(1)}%`}
+                          >
+                            <span
+                              className="dashboard-donut-chip-icon"
+                              style={{ backgroundColor: segment.color }}
+                            >
+                              {segment.symbol}
+                            </span>
+                            <span className="dashboard-donut-chip-weight">
+                              {Math.round(segment.weight)}%
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-
-                  {donutLabels.map((segment) => (
-                    <div
-                      className="dashboard-donut-segment-label"
-                      key={`${segment.symbol}-${segment.weight.toString()}`}
-                      style={{
-                        left: `${50 + segment.x * 38}%`,
-                        top: `${50 + segment.y * 38}%`,
-                      }}
-                    >
-                      {segment.symbol} {segment.weight.toFixed(1)}%
-                    </div>
-                  ))}
                 </div>
               </div>
 
               <div className="dashboard-allocation-card">
                 <h4 className="dashboard-allocation-title">Sector Breakdown</h4>
-                {allocationBySector.length === 0 ? (
+                {isLoadingSectorBreakdown ? (
+                  <div className="dashboard-allocation-empty">
+                    Loading sector data...
+                  </div>
+                ) : allocationBySector.length === 0 ? (
                   <div className="dashboard-allocation-empty">
                     Upload holdings to see portfolio sector allocation.
                   </div>

@@ -75,14 +75,194 @@
   display: inline-block;
 }
 
-.dashboard-navbar-user-icon {
+.dashboard-navbar-user-button {
   flex-shrink: 0;
   margin-left: 100px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--app-border, #dedee6);
+  border-radius: 8px;
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #232323);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.dashboard-navbar-user-button:hover {
+  border-color: var(--app-accent, #8a6ef0);
+  transform: translateY(-1px);
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(12, 12, 14, 0.34);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-panel {
+  width: min(420px, calc(100vw - 24px));
+  height: 100%;
+  background: var(--app-surface, #ffffff);
+  border-left: 1px solid var(--app-border, #e5e5ec);
+  box-shadow: -18px 0 50px rgba(0, 0, 0, 0.18);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--app-text, #181818);
+}
+
+.settings-panel-header,
+.settings-section-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-eyebrow {
+  margin: 0 0 4px;
+  color: var(--app-muted, #767680);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-panel h2,
+.settings-panel h3 {
+  margin: 0;
+  color: var(--app-text, #181818);
+}
+
+.settings-panel h2 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.settings-panel h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-close-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--app-border, #dedee6);
+  border-radius: 8px;
+  background: var(--app-soft-surface, #f7f7fb);
+  color: var(--app-text, #181818);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.settings-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--app-border, #e8e8ef);
+  border-radius: 8px;
+  background: var(--app-soft-surface, #f7f7fb);
+  padding: 14px;
+}
+
+.settings-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--app-accent, #8a6ef0);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.settings-profile-name {
+  color: var(--app-text, #181818);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-profile-email {
+  margin-top: 2px;
+  color: var(--app-muted, #767680);
+  font-size: 13px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--app-muted, #5c5c68);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-section input,
+.settings-section select {
+  width: 100%;
+  border: 1px solid var(--app-border, #d9d9e3);
+  border-radius: 8px;
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #181818);
+  font-size: 14px;
+  padding: 10px 12px;
+}
+
+.settings-section-title-row span {
+  color: var(--app-muted, #767680);
+  font-size: 12px;
+}
+
+.settings-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-theme-option {
+  border: 1px solid var(--app-border, #dedee6);
+  border-radius: 8px;
+  background: var(--app-soft-surface, #f7f7fb);
+  color: var(--app-text, #181818);
+  padding: 10px 8px;
+  text-transform: capitalize;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-theme-option-active {
+  border-color: var(--app-accent, #8a6ef0);
+  background: var(--app-accent-soft, #f0edff);
+  color: var(--app-accent-strong, #5d46c7);
 }
 
 @media (max-width: 1200px) {
   .dashboard-navbar-nav {
     gap: 20px;
     font-size: 14px;
+  }
+
+  .dashboard-navbar-user-button {
+    margin-left: 24px;
   }
 }

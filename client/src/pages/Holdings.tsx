@@ -2,10 +2,25 @@ import DashboardNavbar from "../components/DashboardNavbar";
 import "./RoutePage.css";
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE_URL, USD_TO_CAD_RATE } from "../lib/constants";
-import { loadCachedDailyChangeMap, clearLegacyDailyChangeCache, saveCachedDailyChangeMap } from "../lib/dailyChangeCache";
+import {
+  loadCachedDailyChangeMap,
+  clearLegacyDailyChangeCache,
+  saveCachedDailyChangeMap,
+} from "../lib/dailyChangeCache";
 import { parseHoldingsCsv } from "../lib/holdingsParser";
-import { convertToCad, getTotalChangePercent, getTotalChangeAmount, isOptionHolding } from "../lib/holdingsUtils";
-import type { ImportedHolding, HoldingsResponse, MarketComparisonResponse, SortKey, SortDirection } from "../lib/types";
+import {
+  convertToCad,
+  getTotalChangePercent,
+  getTotalChangeAmount,
+  isOptionHolding,
+} from "../lib/holdingsUtils";
+import type {
+  ImportedHolding,
+  HoldingsResponse,
+  MarketComparisonResponse,
+  SortKey,
+  SortDirection,
+} from "../lib/types";
 
 function HoldingsPage() {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -593,7 +608,9 @@ function HoldingsPage() {
                           }
                         >
                           {dailyPercent == null
-                            ? (optionHolding ? "N/A" : "--")
+                            ? optionHolding
+                              ? "N/A"
+                              : "--"
                             : `${dailyPercent >= 0 ? "+" : ""}${dailyPercent.toFixed(2)}%`}
                         </td>
                         <td

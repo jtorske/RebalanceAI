@@ -14,4 +14,205 @@ body,
 
 body {
   overflow: hidden;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+:root {
+  color-scheme: light;
+  --app-bg: #f3f3f4;
+  --app-surface: #ffffff;
+  --app-soft-surface: #f7f7fb;
+  --app-raised-surface: #ffffff;
+  --app-border: #e5e5ec;
+  --app-border-strong: #d9d9e3;
+  --app-text: #181818;
+  --app-text-soft: #303039;
+  --app-muted: #686872;
+  --app-muted-strong: #4a4a55;
+  --app-accent: #8a6ef0;
+  --app-accent-strong: #6f55dc;
+  --app-accent-soft: #f0edff;
+  --app-positive: #1a8a3a;
+  --app-negative: #c0392b;
+  --app-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #151516;
+  --app-surface: #1e1f21;
+  --app-soft-surface: #252629;
+  --app-raised-surface: #202124;
+  --app-border: #303238;
+  --app-border-strong: #3a3c42;
+  --app-text: #f2f2f0;
+  --app-text-soft: #d8d8d3;
+  --app-muted: #a4a5a8;
+  --app-muted-strong: #c2c2c4;
+  --app-accent: #9b8cff;
+  --app-accent-strong: #b8adff;
+  --app-accent-soft: #2a2840;
+  --app-positive: #55c978;
+  --app-negative: #ff6b6b;
+  --app-shadow: none;
+}
+
+.dashboard-page,
+.route-page {
+  background: var(--app-bg) !important;
+  color: var(--app-text);
+}
+
+.dashboard-navbar-brand,
+.dashboard-navbar-link,
+.dashboard-card-title-row,
+.dashboard-stat-value,
+.dashboard-allocation-title,
+.route-page-title,
+.rw-title,
+.rw-summary-value,
+.rw-table-title,
+.rw-symbol,
+.import-metric-card p,
+.import-section-title {
+  color: var(--app-text) !important;
+}
+
+.dashboard-stat-card,
+.dashboard-card,
+.dashboard-allocation-card,
+.route-page-card,
+.rw-summary-card,
+.rw-table-wrap,
+.rw-mode-note,
+.rw-notes,
+.rw-empty,
+.rw-loading,
+.import-table-wrap,
+.import-file-input-wrap,
+.import-metric-card {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: var(--app-shadow) !important;
+  color: var(--app-text);
+}
+
+.dashboard-stat-label,
+.dashboard-stat-sub,
+.dashboard-allocation-empty,
+.dashboard-comparison-head,
+.dashboard-comparison-muted,
+.dashboard-empty-state-copy,
+.dashboard-donut-empty,
+.dashboard-suggestion-text,
+.dashboard-risk-summary,
+.dashboard-risk-caption,
+.route-page-copy,
+.rw-subtitle,
+.rw-controls label,
+.rw-summary-label,
+.rw-summary-note,
+.rw-name,
+.rw-reason,
+.import-metric-card h3,
+.import-metric-card span,
+.import-table-empty {
+  color: var(--app-muted) !important;
+}
+
+.dashboard-comparison-row,
+.dashboard-allocation-row,
+.rw-table th,
+.import-table th,
+.rw-type-badge,
+.import-show-all-button {
+  background: var(--app-soft-surface) !important;
+  color: var(--app-text-soft) !important;
+  border-color: var(--app-border) !important;
+}
+
+.dashboard-comparison-row-portfolio,
+.dashboard-ai-summary {
+  background: var(--app-accent-soft) !important;
+  border-color: var(--app-border-strong) !important;
+}
+
+.dashboard-ai-summary-text {
+  color: var(--app-text-soft) !important;
+}
+
+.rw-controls input,
+.rw-controls select,
+.rw-target-input,
+.settings-section input,
+.settings-section select {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border-strong) !important;
+  color: var(--app-text) !important;
+}
+
+.rw-table td,
+.import-table td,
+.rw-table-header-row,
+.import-section-title-row {
+  border-color: var(--app-border) !important;
+}
+
+.rw-table tbody tr:hover td {
+  background: var(--app-soft-surface) !important;
+}
+
+.dashboard-positive,
+.rw-positive,
+.import-daily-positive,
+.rw-buy {
+  color: var(--app-positive) !important;
+}
+
+.dashboard-negative,
+.rw-negative,
+.import-daily-negative,
+.rw-sell {
+  color: var(--app-negative) !important;
+}
+
+.dashboard-navbar-link-primary,
+.dashboard-button-purple {
+  background: var(--app-accent) !important;
+}
+
+.dashboard-navbar-link-primary:hover,
+.dashboard-navbar-link-primary.active {
+  background: var(--app-accent-strong) !important;
+}
+
+:root[data-theme="dark"] .dashboard-button-gold {
+  background: #d4a53f;
+  color: #171717;
+}
+
+:root[data-theme="dark"] .import-status-success {
+  background: #17291c;
+  border-color: #295e37;
+  color: #8ce0a0;
+}
+
+:root[data-theme="dark"] .import-status-error,
+:root[data-theme="dark"] .rw-error {
+  background: #2d1b1b;
+  border-color: #673131;
+  color: #ffb0b0;
+}
+
+:root[data-theme="dark"] .holdings-delete-button {
+  background: #2d1b1b;
+  border-color: #673131;
+  color: #ffb0b0;
+}
+
+:root[data-theme="dark"] .import-save-button,
+:root[data-theme="dark"] .rw-refresh-btn {
+  background: #eeeeea;
+  color: #181818;
 }
