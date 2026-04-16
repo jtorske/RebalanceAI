@@ -64,6 +64,17 @@
   border-color: #8a6ef0;
 }
 
+:root[data-theme="dark"] .import-file-input-wrap {
+  border-color: #5f6475;
+  background: #2a2e3a;
+  color: #f3f5ff;
+}
+
+:root[data-theme="dark"] .import-file-input-wrap:hover {
+  border-color: #9f88ff;
+  background: #33394a;
+}
+
 .import-file-input {
   display: none;
 }
