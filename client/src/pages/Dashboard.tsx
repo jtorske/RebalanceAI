@@ -4,107 +4,10 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
 import "./Dashboard.css";
-
-type ImportedHolding = {
-  symbol: string;
-  name: string;
-  security_type: string;
-  market_value: number;
-  market_value_currency: string;
-  book_value_market: number;
-  book_value_currency_market: string;
-  market_unrealized_returns: number;
-  market_unrealized_returns_currency: string;
-  book_value_cad: number;
-};
-
-type HoldingsResponse = {
-  holdings: ImportedHolding[];
-};
-
-type BenchmarkQuote = {
-  symbol: string;
-  name: string;
-  price: number | null;
-  changePercent: number | null;
-};
-
-type MarketComparisonResponse = {
-  portfolioDailyPercent: number | null;
-  marketDailyPercent: number | null;
-  deltaPercent: number | null;
-  benchmarks: BenchmarkQuote[];
-  perTicker?: Array<{
-    symbol: string;
-    dailyPercent: number | null;
-  }>;
-};
-
-type WeightedHolding = ImportedHolding & {
-  marketValueCad: number;
-  weight: number;
-};
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-const USD_TO_CAD_RATE = Number.parseFloat(
-  import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",
-);
-
-const DONUT_COLORS = [
-  "#45c8c1",
-  "#8e86f5",
-  "#f3c55b",
-  "#69d97a",
-  "#5fa8ff",
-  "#ff8d7a",
-  "#7ed7d1",
-  "#b18df3",
-  "#ffd36f",
-  "#75c4ff",
-  "#8ee07d",
-  "#f29ab8",
-];
-
-function convertToCad(amount: number, currency: string): number {
-  const normalizedCurrency = currency.trim().toUpperCase();
-  if (normalizedCurrency === "CAD") {
-    return amount;
-  }
-  if (normalizedCurrency === "USD") {
-    return amount * USD_TO_CAD_RATE;
-  }
-
-  return amount;
-}
-
-const SYMBOL_TO_SECTOR: Record<string, string> = {
-  AMD: "Information Technology",
-  CEG: "Utilities",
-  ETN: "Industrials",
-  GOOG: "Communication Services",
-  MU: "Information Technology",
-  ONDS: "Information Technology",
-  SLS: "Health Care",
-  SNDK: "Information Technology",
-  VST: "Utilities",
-  WDC: "Information Technology",
-};
-
-function getHoldingSector(holding: ImportedHolding): string {
-  const symbol = holding.symbol.trim().toUpperCase();
-  const securityType = holding.security_type.trim().toUpperCase();
-
-  if (securityType.includes("OPTION")) {
-    return "Derivatives";
-  }
-
-  if (securityType.includes("ETF") || symbol === "XEQT") {
-    return "ETF / Diversified";
-  }
-
-  return SYMBOL_TO_SECTOR[symbol] ?? "Other";
-}
+import { API_BASE_URL } from "../lib/constants";
+import { DONUT_COLORS, getHoldingSector } from "../lib/dashboardUtils";
+import { convertToCad } from "../lib/holdingsUtils";
+import type { ImportedHolding, HoldingsResponse, BenchmarkQuote, MarketComparisonResponse, WeightedHolding } from "../lib/types";
 
 function Dashboard() {
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
@@ -112,6 +15,8 @@ function Dashboard() {
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
 
   useEffect(() => {
     const loadHoldings = async () => {
@@ -190,6 +95,22 @@ function Dashboard() {
     return () => {
       window.removeEventListener("holdings-changed", refreshMarketComparison);
     };
+  }, []);
+
+  useEffect(() => {
+    const loadAiSummary = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
+        if (!res.ok) throw new Error("ai-summary fetch failed");
+        const data = (await res.json()) as { summary: string | null };
+        setAiSummary(data.summary ?? null);
+      } catch {
+        setAiSummary(null);
+      } finally {
+        setIsLoadingAiSummary(false);
+      }
+    };
+    void loadAiSummary();
   }, []);
 
   const totalMarketValueCad = useMemo(
@@ -477,6 +398,20 @@ function Dashboard() {
                       portfolio” means the benchmark’s daily move minus your
                       portfolio’s daily move.
                     </div>
+
+                    {(isLoadingAiSummary || aiSummary) && (
+                      <div className="dashboard-ai-summary">
+                        {isLoadingAiSummary ? (
+                          <div className="dashboard-ai-summary-loading">
+                            <span className="dashboard-ai-summary-dot" />
+                            <span className="dashboard-ai-summary-dot" />
+                            <span className="dashboard-ai-summary-dot" />
+                          </div>
+                        ) : (
+                          <p className="dashboard-ai-summary-text">{aiSummary}</p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="dashboard-comparison-table">
                       <div className="dashboard-comparison-head">

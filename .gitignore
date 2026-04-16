@@ -1,0 +1,58 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Screenshots and loose images at repo root
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# Server runtime / local data
+server/.pytest_cache/
+server/data/*.json
+
+# Frontend (fallback at repo root)
+node_modules/
+client/node_modules/
+client/dist/
+client/.vite/
+
+# Logs
+*.log
+logs/
+
+# Local Ollama installation
+ollama/
+
+# Claude Code local session data
+.claude/
+
+# Local assistant notes
+CLAUDE.md

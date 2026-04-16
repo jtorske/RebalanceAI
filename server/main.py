@@ -5,8 +5,13 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime, timezone
 import json
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+import logging
+import requests
+import yfinance as yf
+
+logger = logging.getLogger("rebalanceai")
+
+_ai_summary_cache: Dict[str, str] = {}
 
 app = FastAPI()
 
@@ -148,10 +153,14 @@ def _normalize_symbol_for_quote(holding: Dict[str, Any]) -> Optional[str]:
     exchange = str(holding.get("exchange", "")).strip().upper()
     security_type = str(holding.get("security_type", "")).strip().upper()
 
-    if not _is_valid_quote_symbol(raw_symbol):
+    if "OPTION" in security_type:
+        # OCC format used by Yahoo Finance: "GDX 260515C00112000" → "GDX260515C00112000"
+        occ = raw_symbol.replace(" ", "")
+        if len(occ) > 10 and any(c.isdigit() for c in occ):
+            return occ
         return None
 
-    if "OPTION" in security_type:
+    if not _is_valid_quote_symbol(raw_symbol):
         return None
 
     if exchange in {"TSX", "XTSE"} and not raw_symbol.endswith(".TO"):
@@ -163,28 +172,79 @@ def _normalize_symbol_for_quote(holding: Dict[str, Any]) -> Optional[str]:
     return raw_symbol
 
 
-def _fetch_quotes_for_symbols(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-    deduped_symbols = sorted({symbol.strip().upper() for symbol in symbols if symbol})
-    if not deduped_symbols:
-        return {}
-
-    query = urlencode({"symbols": ",".join(deduped_symbols)})
-    request = Request(
-        url=f"https://query1.finance.yahoo.com/v7/finance/quote?{query}",
-        headers={"User-Agent": "Mozilla/5.0"},
-    )
-
+def _quote_from_series(symbol: str, series: Any) -> Optional[Dict[str, Any]]:
     try:
-        with urlopen(request, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-            results = payload.get("quoteResponse", {}).get("result", [])
-            return {
-                quote.get("symbol"): quote
-                for quote in results
-                if quote.get("symbol")
-            }
+        values = series.dropna()
+        if len(values) < 1:
+            return None
+        current_price = float(values.iloc[-1])
+        prev_close = float(values.iloc[-2]) if len(values) >= 2 else None
+        change_pct = (
+            float((current_price - prev_close) / prev_close * 100)
+            if prev_close is not None and prev_close > 0
+            else None
+        )
+        return {
+            "symbol": symbol,
+            "regularMarketPrice": current_price,
+            "regularMarketPreviousClose": prev_close,
+            "regularMarketChangePercent": change_pct,
+        }
     except Exception:
+        return None
+
+
+def _fetch_quotes_for_symbols(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+    deduped = sorted({s.strip().upper() for s in symbols if s})
+    if not deduped:
         return {}
+
+    # OCC option symbols contain digits; regular equity/ETF symbols do not
+    stock_syms = [s for s in deduped if not any(c.isdigit() for c in s)]
+    option_syms = [s for s in deduped if any(c.isdigit() for c in s)]
+
+    result: Dict[str, Dict[str, Any]] = {}
+
+    # ── Batch download for stocks/ETFs ──────────────────────────────────────
+    if stock_syms:
+        try:
+            ticker_arg = stock_syms[0] if len(stock_syms) == 1 else stock_syms
+            raw = yf.download(
+                ticker_arg,
+                period="5d",
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+            )
+            if not raw.empty:
+                close_col = raw["Close"]
+                is_multi = hasattr(close_col, "columns")
+                for sym in stock_syms:
+                    try:
+                        series = close_col[sym] if is_multi else close_col
+                        q = _quote_from_series(sym, series)
+                        if q:
+                            result[sym] = q
+                    except Exception as e:
+                        logger.debug("Stock quote skipped for %s: %s", sym, e)
+            else:
+                logger.warning("yfinance returned empty data for stocks: %s", stock_syms)
+        except Exception as e:
+            logger.error("Stock batch download failed: %s", e, exc_info=True)
+
+    # ── Individual history fetch for option contracts ────────────────────────
+    for sym in option_syms:
+        try:
+            hist = yf.Ticker(sym).history(period="5d", interval="1d")
+            if hist.empty or "Close" not in hist.columns:
+                continue
+            q = _quote_from_series(sym, hist["Close"])
+            if q:
+                result[sym] = q
+        except Exception as e:
+            logger.debug("Option quote skipped for %s: %s", sym, e)
+
+    return result
 
 
 def _fetch_benchmark_quotes() -> List[Dict[str, Any]]:
@@ -358,6 +418,25 @@ def root():
     return {"message": "Portfolio API running"}
 
 
+@app.get("/debug/quote-test")
+def debug_quote_test():
+    """Verify yfinance can reach Yahoo Finance. Hit this in your browser to diagnose -- issues."""
+    try:
+        raw = yf.download("SPY", period="5d", interval="1d", auto_adjust=True, progress=False)
+        if raw.empty:
+            return {"status": "empty", "detail": "yfinance returned no rows — possible auth or network block"}
+        closes = raw["Close"].dropna().tolist()
+        return {
+            "status": "ok",
+            "symbol": "SPY",
+            "rows_fetched": len(raw),
+            "last_3_closes": closes[-3:],
+            "daily_change_pct": round((closes[-1] - closes[-2]) / closes[-2] * 100, 4) if len(closes) >= 2 else None,
+        }
+    except Exception as err:
+        return {"status": "error", "detail": str(err)}
+
+
 @app.get("/holdings")
 def get_holdings():
     return _load_store()
@@ -401,6 +480,70 @@ def import_holdings(payload: HoldingsImportRequest):
 def clear_holdings():
     _save_store(_default_store())
     return {"message": "Saved holdings cleared."}
+
+def _fetch_market_headlines(symbols: List[str], max_total: int = 8) -> List[str]:
+    seen: set = set()
+    headlines: List[str] = []
+    cutoff = datetime.now(timezone.utc).timestamp() - 86400  # last 24 h
+    for symbol in symbols:
+        try:
+            news = yf.Ticker(symbol).news or []
+            for item in news:
+                title = (item.get("title") or "").strip()
+                ts = item.get("providerPublishTime", 0)
+                if title and title not in seen and ts >= cutoff:
+                    seen.add(title)
+                    headlines.append(title)
+                    if len(headlines) >= max_total:
+                        return headlines
+        except Exception:
+            pass
+    return headlines
+
+
+@app.get("/market/ai-summary")
+def get_ai_summary():
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    if today in _ai_summary_cache:
+        return {"summary": _ai_summary_cache[today], "cached": True, "date": today}
+
+    benchmarks = _fetch_benchmark_quotes()
+    benchmark_lines = []
+    for b in benchmarks:
+        pct = b.get("changePercent")
+        pct_str = f"{pct:+.2f}%" if pct is not None else "N/A"
+        benchmark_lines.append(f"- {b['name']} ({b['symbol']}): {pct_str}")
+
+    benchmark_symbols = [b["symbol"] for b in benchmarks]
+    headlines = _fetch_market_headlines(benchmark_symbols)
+    news_section = ""
+    if headlines:
+        news_section = "\n\nRecent market headlines:\n" + "\n".join(f"- {h}" for h in headlines)
+
+    prompt = (
+        f"Today's benchmark moves ({today}):\n"
+        + "\n".join(benchmark_lines)
+        + news_section
+        + "\n\nWrite exactly 2 sentences of market commentary for a portfolio dashboard, "
+        "referencing relevant headlines where they explain the moves. "
+        "Be factual, neutral, and concise. No headers or bullet points."
+    )
+
+    try:
+        resp = requests.post(
+            "http://localhost:11434/api/generate",
+            json={"model": "llama3.2", "prompt": prompt, "stream": False},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        summary = resp.json().get("response", "").strip()
+        _ai_summary_cache[today] = summary
+        return {"summary": summary, "cached": False, "date": today}
+    except Exception as err:
+        logger.error("AI summary failed: %s", err)
+        return {"summary": None, "error": str(err), "date": today}
+
 
 @app.post("/analyze")
 def analyze_portfolio(holdings: List[Holding]):

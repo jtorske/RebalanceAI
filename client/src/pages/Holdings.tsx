@@ -1,285 +1,11 @@
 import DashboardNavbar from "../components/DashboardNavbar";
 import "./RoutePage.css";
 import { useEffect, useMemo, useState } from "react";
-
-type ImportedHolding = {
-  account_name: string;
-  account_type: string;
-  account_classification: string;
-  account_number: string;
-  symbol: string;
-  exchange: string;
-  mic: string;
-  name: string;
-  security_type: string;
-  quantity: number;
-  position_direction: string;
-  market_price: number;
-  market_price_currency: string;
-  book_value_cad: number;
-  book_value_currency_cad: string;
-  book_value_market: number;
-  book_value_currency_market: string;
-  market_value: number;
-  market_value_currency: string;
-  market_unrealized_returns: number;
-  market_unrealized_returns_currency: string;
-};
-
-type HoldingsResponse = {
-  source_file_name: string | null;
-  as_of: string | null;
-  imported_at: string | null;
-  holdings: ImportedHolding[];
-};
-
-type SortKey =
-  | "account_name"
-  | "symbol"
-  | "security_type"
-  | "quantity"
-  | "market_price"
-  | "market_value"
-  | "market_value_currency"
-  | "daily_change_percent"
-  | "total_change_percent"
-  | "total_change_amount";
-
-type SortDirection = "asc" | "desc";
-
-type MarketComparisonTicker = {
-  symbol: string;
-  dailyPercent: number | null;
-};
-
-type MarketComparisonResponse = {
-  perTicker?: MarketComparisonTicker[];
-};
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-const DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache-v2";
-const LEGACY_DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache";
-const USD_TO_CAD_RATE = Number.parseFloat(
-  import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",
-);
-
-const EXPECTED_HEADERS = [
-  "Account Name",
-  "Account Type",
-  "Account Classification",
-  "Account Number",
-  "Symbol",
-  "Exchange",
-  "MIC",
-  "Name",
-  "Security Type",
-  "Quantity",
-  "Position Direction",
-  "Market Price",
-  "Market Price Currency",
-  "Book Value (CAD)",
-  "Book Value Currency (CAD)",
-  "Book Value (Market)",
-  "Book Value Currency (Market)",
-  "Market Value",
-  "Market Value Currency",
-  "Market Unrealized Returns",
-  "Market Unrealized Returns Currency",
-];
-
-function parseCsvLine(line: string): string[] {
-  const columns: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const character = line[i];
-
-    if (character === '"') {
-      const nextCharacter = line[i + 1];
-      if (inQuotes && nextCharacter === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (character === "," && !inQuotes) {
-      columns.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += character;
-  }
-
-  columns.push(current.trim());
-  return columns;
-}
-
-function parseNumber(raw: string): number {
-  const value = Number.parseFloat(raw.replace(/,/g, ""));
-  return Number.isFinite(value) ? value : 0;
-}
-
-function mapRowToHolding(columns: string[]): ImportedHolding {
-  return {
-    account_name: columns[0] ?? "",
-    account_type: columns[1] ?? "",
-    account_classification: columns[2] ?? "",
-    account_number: columns[3] ?? "",
-    symbol: columns[4] ?? "",
-    exchange: columns[5] ?? "",
-    mic: columns[6] ?? "",
-    name: columns[7] ?? "",
-    security_type: columns[8] ?? "",
-    quantity: parseNumber(columns[9] ?? "0"),
-    position_direction: columns[10] ?? "",
-    market_price: parseNumber(columns[11] ?? "0"),
-    market_price_currency: columns[12] ?? "",
-    book_value_cad: parseNumber(columns[13] ?? "0"),
-    book_value_currency_cad: columns[14] ?? "",
-    book_value_market: parseNumber(columns[15] ?? "0"),
-    book_value_currency_market: columns[16] ?? "",
-    market_value: parseNumber(columns[17] ?? "0"),
-    market_value_currency: columns[18] ?? "",
-    market_unrealized_returns: parseNumber(columns[19] ?? "0"),
-    market_unrealized_returns_currency: columns[20] ?? "",
-  };
-}
-
-function convertToCad(amount: number, currency: string): number {
-  const normalizedCurrency = currency.trim().toUpperCase();
-  if (normalizedCurrency === "CAD") {
-    return amount;
-  }
-  if (normalizedCurrency === "USD") {
-    return amount * USD_TO_CAD_RATE;
-  }
-
-  return amount;
-}
-
-function getTotalChangePercent(holding: ImportedHolding): number | null {
-  if (holding.book_value_market <= 0) {
-    return null;
-  }
-
-  return (holding.market_unrealized_returns / holding.book_value_market) * 100;
-}
-
-function loadCachedDailyChangeMap(): Record<string, number> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(DAILY_CHANGE_CACHE_KEY);
-    if (!rawValue) {
-      return {};
-    }
-
-    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
-    const cachedMap: Record<string, number> = {};
-
-    Object.entries(parsed).forEach(([symbol, value]) => {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        cachedMap[symbol] = value;
-      }
-    });
-
-    return cachedMap;
-  } catch {
-    return {};
-  }
-}
-
-function clearLegacyDailyChangeCache(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.removeItem(LEGACY_DAILY_CHANGE_CACHE_KEY);
-  } catch {
-    // Ignore storage failures and keep the live view working.
-  }
-}
-
-function saveCachedDailyChangeMap(map: Record<string, number>): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(DAILY_CHANGE_CACHE_KEY, JSON.stringify(map));
-  } catch {
-    // Ignore storage failures and keep the live view working.
-  }
-}
-
-function getTotalChangeAmount(holding: ImportedHolding): number {
-  return holding.market_value - holding.book_value_market;
-}
-
-function isOptionHolding(holding: ImportedHolding): boolean {
-  return holding.security_type.trim().toUpperCase().includes("OPTION");
-}
-
-function parseHoldingsCsv(csvText: string): {
-  holdings: ImportedHolding[];
-  asOf: string | null;
-} {
-  const lines = csvText
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  if (lines.length < 2) {
-    throw new Error(
-      "CSV appears empty. Please upload a file with a header and at least one holding.",
-    );
-  }
-
-  const headers = parseCsvLine(lines[0]);
-  const missingHeaders = EXPECTED_HEADERS.filter(
-    (header) => !headers.includes(header),
-  );
-  if (missingHeaders.length > 0) {
-    throw new Error(
-      `CSV format mismatch. Missing headers: ${missingHeaders.join(", ")}`,
-    );
-  }
-
-  const holdings: ImportedHolding[] = [];
-  let asOf: string | null = null;
-
-  for (let i = 1; i < lines.length; i += 1) {
-    const columns = parseCsvLine(lines[i]);
-    const firstCell = columns[0]?.replace(/^"|"$/g, "").trim() ?? "";
-
-    if (firstCell.toLowerCase().startsWith("as of")) {
-      asOf = firstCell;
-      continue;
-    }
-
-    if (columns.length < EXPECTED_HEADERS.length) {
-      continue;
-    }
-
-    holdings.push(mapRowToHolding(columns));
-  }
-
-  if (holdings.length === 0) {
-    throw new Error("No holdings rows were detected in the CSV.");
-  }
-
-  return { holdings, asOf };
-}
+import { API_BASE_URL } from "../lib/constants";
+import { loadCachedDailyChangeMap, clearLegacyDailyChangeCache, saveCachedDailyChangeMap } from "../lib/dailyChangeCache";
+import { parseHoldingsCsv } from "../lib/holdingsParser";
+import { convertToCad, getTotalChangePercent, getTotalChangeAmount, isOptionHolding } from "../lib/holdingsUtils";
+import type { ImportedHolding, HoldingsResponse, MarketComparisonResponse, SortKey, SortDirection } from "../lib/types";
 
 function HoldingsPage() {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -665,14 +391,6 @@ function HoldingsPage() {
       <main className="route-page-main">
         <section className="route-page-card holdings-card">
           <h1 className="route-page-title">Holdings</h1>
-          <p className="route-page-copy">
-            Upload the broker CSV export and persist all values in the backend.
-          </p>
-          <p className="route-page-copy">
-            This page reports unrealized performance for currently open
-            positions only.
-          </p>
-
           <div className="import-upload-row">
             <label
               className="import-file-input-wrap"
@@ -867,18 +585,16 @@ function HoldingsPage() {
                         <td>{holding.market_value_currency}</td>
                         <td
                           className={
-                            optionHolding || dailyPercent == null
+                            dailyPercent == null
                               ? "import-daily-neutral"
                               : dailyPercent >= 0
                                 ? "import-daily-positive"
                                 : "import-daily-negative"
                           }
                         >
-                          {optionHolding
-                            ? "N/A"
-                            : dailyPercent == null
-                              ? "--"
-                              : `${dailyPercent >= 0 ? "+" : ""}${dailyPercent.toFixed(2)}%`}
+                          {dailyPercent == null
+                            ? (optionHolding ? "N/A" : "--")
+                            : `${dailyPercent >= 0 ? "+" : ""}${dailyPercent.toFixed(2)}%`}
                         </td>
                         <td
                           className={
