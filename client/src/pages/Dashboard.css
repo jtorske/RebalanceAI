@@ -112,6 +112,10 @@
   color: #181818;
 }
 
+.dashboard-card-title-row span {
+  white-space: nowrap;
+}
+
 .dashboard-card-header-row {
   display: flex;
   align-items: center;
@@ -508,7 +512,7 @@
 .dashboard-suggestion-content {
   margin-top: 14px;
   min-height: 104px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .dashboard-suggestion-text {
@@ -521,7 +525,7 @@
 .dashboard-risk-content {
   margin-top: 14px;
   min-height: 104px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .dashboard-risk-summary {
@@ -535,6 +539,65 @@
   margin-top: 4px;
   font-size: 12px;
   color: #36363f;
+}
+
+.dashboard-risk-caption-strong {
+  margin-top: 0;
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dashboard-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-height: 100%;
+}
+
+.dashboard-mini-card {
+  border: 1px solid var(--app-border, #e7e7ef);
+  background: var(--app-soft-surface, #f8f8fc);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.dashboard-mini-card h4 {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-muted, #656572);
+}
+
+.dashboard-mini-card-wide {
+  grid-column: 1 / -1;
+}
+
+.dashboard-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dashboard-pill {
+  border-radius: 999px;
+  background: var(--app-accent-soft, #ece9ff);
+  color: var(--app-text-soft, #373748);
+  border: 1px solid var(--app-border, #dcdcea);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dashboard-pill-neutral {
+  background: var(--app-soft-surface, #f3f3f8);
+  color: var(--app-muted, #757584);
 }
 
 /* ── Color utilities ──────────────────────────────── */

@@ -3,6 +3,8 @@ import DashboardNavbar from "../components/DashboardNavbar.tsx";
 import "./RoutePage.css";
 import "./RiskManager.css";
 import { API_BASE_URL } from "../lib/constants";
+import { convertToCad } from "../lib/holdingsUtils";
+import type { HoldingsResponse, ImportedHolding } from "../lib/types";
 
 type RiskConcern = {
   symbol: string;
@@ -21,6 +23,162 @@ type RiskAnalysisResponse = {
   generatedAt: string;
 };
 
+type SectorBreakdownEntry = {
+  sector: string;
+  valueCad: number;
+  weight: number;
+};
+
+type SectorBreakdownResponse = {
+  sectors: SectorBreakdownEntry[];
+  totalValueCad: number;
+  generatedAt: string;
+};
+
+const normalizeTickerForSector = (symbol: string) =>
+  symbol.trim().toUpperCase().replace(/\s+/g, "");
+
+const inferSectorFromHolding = (holding: ImportedHolding): string => {
+  const securityType = holding.security_type.trim().toUpperCase();
+  const symbol = normalizeTickerForSector(holding.symbol);
+  const name = (holding.name ?? "").trim().toUpperCase();
+
+  if (securityType.includes("OPTION")) return "Derivatives";
+  if (securityType.includes("BOND")) return "Fixed Income";
+  if (securityType.includes("FUND") || securityType.includes("ETF")) {
+    return "ETF / Diversified";
+  }
+
+  const symbolSectorMap: Record<string, string> = {
+    AMD: "Technology",
+    GOOG: "Communication Services",
+    MU: "Technology",
+    WDC: "Technology",
+    SNDK: "Technology",
+    CEG: "Utilities",
+    ETN: "Industrials",
+    VST: "Utilities",
+    SLS: "Healthcare",
+    ONDS: "Technology",
+    HG: "Materials",
+    GDX: "Materials",
+    XEQT: "ETF / Diversified",
+  };
+
+  if (symbolSectorMap[symbol]) {
+    return symbolSectorMap[symbol];
+  }
+
+  if (name.includes("TECH") || name.includes("SEMICONDUCTOR")) {
+    return "Technology";
+  }
+  if (
+    name.includes("HEALTH") ||
+    name.includes("PHARMA") ||
+    name.includes("BIO")
+  ) {
+    return "Healthcare";
+  }
+  if (
+    name.includes("ENERGY") ||
+    name.includes("POWER") ||
+    name.includes("OIL")
+  ) {
+    return "Energy";
+  }
+  if (
+    name.includes("BANK") ||
+    name.includes("FINANC") ||
+    name.includes("INSURANCE")
+  ) {
+    return "Financials";
+  }
+  if (
+    name.includes("MINING") ||
+    name.includes("GOLD") ||
+    name.includes("METAL")
+  ) {
+    return "Materials";
+  }
+  if (name.includes("REIT") || name.includes("REAL ESTATE")) {
+    return "Real Estate";
+  }
+  if (name.includes("COMM") || name.includes("MEDIA")) {
+    return "Communication Services";
+  }
+
+  return "Other";
+};
+
+const buildSectorBreakdownFromHoldings = (
+  holdings: ImportedHolding[],
+): SectorBreakdownEntry[] => {
+  const bySector = new Map<string, number>();
+  let totalValueCad = 0;
+
+  for (const holding of holdings) {
+    const valueCad = convertToCad(
+      holding.market_value,
+      holding.market_value_currency,
+    );
+    if (valueCad <= 0) {
+      continue;
+    }
+
+    const sector = inferSectorFromHolding(holding);
+    totalValueCad += valueCad;
+    bySector.set(sector, (bySector.get(sector) ?? 0) + valueCad);
+  }
+
+  if (totalValueCad <= 0) {
+    return [];
+  }
+
+  return [...bySector.entries()]
+    .map(([sector, valueCad]) => ({
+      sector,
+      valueCad,
+      weight: (valueCad / totalValueCad) * 100,
+    }))
+    .sort((a, b) => b.valueCad - a.valueCad);
+};
+
+const buildSectorConcentrationConcerns = (
+  sectors: SectorBreakdownEntry[],
+): RiskConcern[] => {
+  return sectors
+    .filter((sector) => sector.weight >= 30)
+    .map((sector) => ({
+      symbol: "Portfolio",
+      title: `${sector.sector} concentration`,
+      detail: `${sector.sector} represents ${sector.weight.toFixed(1)}% of the portfolio.`,
+      severity: sector.weight >= 45 ? "high" : "medium",
+      category: "Sector concentration",
+      weight: sector.weight,
+    }));
+};
+
+const mergeUniqueConcerns = (
+  concerns: RiskConcern[],
+  extraConcerns: RiskConcern[],
+): RiskConcern[] => {
+  const existing = new Set(
+    concerns.map((item) => `${item.title}|${item.category}|${item.severity}`),
+  );
+
+  const merged = [...concerns];
+  for (const concern of extraConcerns) {
+    const key = `${concern.title}|${concern.category}|${concern.severity}`;
+    if (existing.has(key)) {
+      continue;
+    }
+    existing.add(key);
+    merged.push(concern);
+  }
+
+  return merged;
+};
+
 const severityLabel: Record<RiskConcern["severity"], string> = {
   high: "High",
   medium: "Medium",
@@ -35,18 +193,83 @@ function RiskManager() {
   const loadRiskAnalysis = async () => {
     setIsLoading(true);
     setError(null);
+
+    let holdingsCount = 0;
+    let sectorBreakdown: SectorBreakdownEntry[] = [];
+
+    try {
+      const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
+      if (holdingsRes.ok) {
+        const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
+        holdingsCount = holdingsData.holdings.length;
+
+        const sectorRes = await fetch(
+          `${API_BASE_URL}/portfolio/sector-breakdown`,
+        );
+        if (sectorRes.ok) {
+          const sectorData =
+            (await sectorRes.json()) as SectorBreakdownResponse;
+          if ((sectorData.sectors ?? []).length > 0) {
+            sectorBreakdown = sectorData.sectors;
+          }
+        }
+
+        if (sectorBreakdown.length === 0) {
+          sectorBreakdown = buildSectorBreakdownFromHoldings(
+            holdingsData.holdings,
+          );
+        }
+      }
+    } catch {
+      // Best-effort preload only; risk endpoint fetch below still proceeds.
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/risk/analysis`);
       if (!response.ok) {
         throw new Error("Failed to load risk analysis.");
       }
       const data = (await response.json()) as RiskAnalysisResponse;
-      setAnalysis(data);
+      const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
+      const mergedConcerns = mergeUniqueConcerns(data.concerns, sectorConcerns);
+
+      setAnalysis({
+        ...data,
+        concerns: mergedConcerns,
+        holdingsAnalyzed: data.holdingsAnalyzed || holdingsCount,
+      });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load risk analysis.",
-      );
-      setAnalysis(null);
+      const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
+      if (holdingsCount > 0) {
+        setAnalysis({
+          summary:
+            sectorConcerns.length > 0
+              ? `Sector concentration flags: ${sectorConcerns
+                  .map(
+                    (item) =>
+                      `${item.title.replace(" concentration", "")} (${item.weight?.toFixed(1)}%)`,
+                  )
+                  .join(", ")}.`
+              : "No major sector overweight was detected from the current holdings.",
+          dashboardSummary:
+            sectorConcerns.length > 0
+              ? `Sector concentration flags: ${sectorConcerns
+                  .map(
+                    (item) =>
+                      `${item.title.replace(" concentration", "")} (${item.weight?.toFixed(1)}%)`,
+                  )
+                  .join(", ")}.`
+              : "No major sector overweight was detected from the current holdings.",
+          concerns: sectorConcerns,
+          holdingsAnalyzed: holdingsCount,
+          generatedAt: new Date().toISOString(),
+        });
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Failed to load risk analysis.",
+        );
+        setAnalysis(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,11 +280,13 @@ function RiskManager() {
   }, []);
 
   const concernCounts = {
-    high: analysis?.concerns.filter((item) => item.severity === "high").length ?? 0,
+    high:
+      analysis?.concerns.filter((item) => item.severity === "high").length ?? 0,
     medium:
       analysis?.concerns.filter((item) => item.severity === "medium").length ??
       0,
-    low: analysis?.concerns.filter((item) => item.severity === "low").length ?? 0,
+    low:
+      analysis?.concerns.filter((item) => item.severity === "low").length ?? 0,
   };
 
   return (

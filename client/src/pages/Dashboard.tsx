@@ -54,6 +54,347 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u0093", "-")
     .replaceAll("\u00e2\u0080\u0094", "-");
 
+const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
+  if (holdings.length === 0) {
+    return "Import holdings to get a rebalance suggestion based on your current weights.";
+  }
+
+  const normalizeSymbol = (symbol: string) =>
+    symbol.trim().toUpperCase().replace(/\s+/g, "");
+
+  const isStockLike = (securityType: string) =>
+    !securityType.includes("OPTION") &&
+    !securityType.includes("ETF") &&
+    !securityType.includes("FUND") &&
+    !securityType.includes("BOND") &&
+    !securityType.includes("CASH");
+
+  const bySymbol = new Map<
+    string,
+    { symbol: string; valueCad: number; hasStockLike: boolean }
+  >();
+
+  for (const holding of holdings) {
+    const symbol = normalizeSymbol(holding.symbol);
+    if (!symbol) {
+      continue;
+    }
+
+    const valueCad = convertToCad(
+      holding.market_value,
+      holding.market_value_currency,
+    );
+    if (valueCad <= 0) {
+      continue;
+    }
+
+    const securityType = holding.security_type.trim().toUpperCase();
+    const existing = bySymbol.get(symbol);
+    if (existing) {
+      existing.valueCad += valueCad;
+      existing.hasStockLike =
+        existing.hasStockLike || isStockLike(securityType);
+      continue;
+    }
+
+    bySymbol.set(symbol, {
+      symbol,
+      valueCad,
+      hasStockLike: isStockLike(securityType),
+    });
+  }
+
+  const mergedHoldings = [...bySymbol.values()];
+  const totalValueCad = mergedHoldings.reduce(
+    (sum, item) => sum + item.valueCad,
+    0,
+  );
+  if (totalValueCad <= 0) {
+    return "The current holdings could not be valued for rebalance analysis yet.";
+  }
+
+  const weighted = mergedHoldings
+    .map((item) => ({
+      symbol: item.symbol,
+      weight: (item.valueCad / totalValueCad) * 100,
+      hasStockLike: item.hasStockLike,
+    }))
+    .sort((a, b) => b.weight - a.weight)
+    .filter((item) => item.weight > 0);
+
+  if (weighted.length === 0) {
+    return "The current holdings could not be valued for rebalance analysis yet.";
+  }
+
+  const estimatedMarketCapBillions: Record<string, number> = {
+    GOOG: 2050,
+    AMD: 285,
+    MU: 150,
+    WDC: 22,
+    SNDK: 18,
+    ETN: 140,
+    CEG: 80,
+    VST: 55,
+    SLS: 0.2,
+    ONDS: 0.2,
+    HG: 0.05,
+  };
+
+  const stockLike = weighted.filter((item) => item.hasStockLike);
+  const nonStockLike = weighted.filter((item) => !item.hasStockLike);
+
+  const stockWeightBudget = stockLike.reduce(
+    (sum, item) => sum + item.weight,
+    0,
+  );
+
+  const stockCapScores = stockLike.map((item) => ({
+    ...item,
+    // Unknown symbols default to current-weight proxy to avoid unstable guesses.
+    capScore:
+      estimatedMarketCapBillions[item.symbol] ?? Math.max(item.weight, 0.1),
+  }));
+  const totalCapScore = stockCapScores.reduce(
+    (sum, item) => sum + item.capScore,
+    0,
+  );
+
+  const targetBySymbol = new Map<string, number>();
+  for (const item of nonStockLike) {
+    targetBySymbol.set(item.symbol, item.weight);
+  }
+  if (totalCapScore > 0 && stockWeightBudget > 0) {
+    for (const item of stockCapScores) {
+      targetBySymbol.set(
+        item.symbol,
+        (item.capScore / totalCapScore) * stockWeightBudget,
+      );
+    }
+  } else {
+    for (const item of stockLike) {
+      targetBySymbol.set(item.symbol, item.weight);
+    }
+  }
+
+  const overweights = weighted
+    .map((item) => ({
+      symbol: item.symbol,
+      weight: item.weight,
+      targetWeight: targetBySymbol.get(item.symbol) ?? item.weight,
+    }))
+    .filter((item) => item.weight - item.targetWeight >= 1.5)
+    .sort((a, b) => b.weight - b.targetWeight - (a.weight - a.targetWeight));
+
+  const underweights = weighted
+    .map((item) => ({
+      symbol: item.symbol,
+      weight: item.weight,
+      targetWeight: targetBySymbol.get(item.symbol) ?? item.weight,
+    }))
+    .filter((item) => item.targetWeight - item.weight >= 1.5)
+    .sort((a, b) => b.targetWeight - b.weight - (a.targetWeight - a.weight));
+
+  if (overweights.length === 0 && underweights.length === 0) {
+    return "Your portfolio is relatively close to a market-cap-weighted target; no major allocation drift stands out.";
+  }
+
+  const topOver = overweights
+    .slice(0, 3)
+    .map((item) => `${item.symbol} (${item.weight.toFixed(1)}%)`)
+    .join(", ");
+  const topUnder = underweights
+    .slice(0, 3)
+    .map((item) => `${item.symbol} (${item.weight.toFixed(1)}%)`)
+    .join(", ");
+
+  return `Current weights suggest trimming ${topOver || "overweight names"} and adding to ${topUnder || "underweight names"} to improve balance.`;
+};
+
+const getFallbackRiskAnalysis = (
+  holdings: ImportedHolding[],
+): { summary: string; concerns: number } => {
+  if (holdings.length === 0) {
+    return {
+      summary:
+        "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.",
+      concerns: 0,
+    };
+  }
+
+  const totalValueCad = holdings.reduce(
+    (sum, holding) =>
+      sum + convertToCad(holding.market_value, holding.market_value_currency),
+    0,
+  );
+
+  if (totalValueCad <= 0) {
+    return {
+      summary:
+        "Risk scan is limited because portfolio values are not available.",
+      concerns: 1,
+    };
+  }
+
+  const weighted = holdings
+    .map((holding) => ({
+      symbol: holding.symbol,
+      securityType: holding.security_type,
+      weight:
+        (convertToCad(holding.market_value, holding.market_value_currency) /
+          totalValueCad) *
+        100,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+
+  const topWeight = weighted[0]?.weight ?? 0;
+  const topThreeWeight = weighted
+    .slice(0, 3)
+    .reduce((sum, item) => sum + item.weight, 0);
+  const optionWeight = weighted
+    .filter((item) => item.securityType.toUpperCase().includes("OPTION"))
+    .reduce((sum, item) => sum + item.weight, 0);
+
+  let concerns = 0;
+  const notes: string[] = [];
+
+  if (topWeight >= 25) {
+    concerns += 1;
+    notes.push(
+      `${weighted[0]?.symbol ?? "Top holding"} is ${topWeight.toFixed(1)}% of the portfolio`,
+    );
+  }
+  if (topThreeWeight >= 65) {
+    concerns += 1;
+    notes.push(`top 3 positions are ${topThreeWeight.toFixed(1)}% combined`);
+  }
+  if (optionWeight >= 10) {
+    concerns += 1;
+    notes.push(`options represent ${optionWeight.toFixed(1)}% of total value`);
+  }
+
+  if (notes.length === 0) {
+    return {
+      summary:
+        "No major concentration risk stands out from the current holdings snapshot, but continue monitoring position sizing and catalysts.",
+      concerns: 0,
+    };
+  }
+
+  return {
+    summary: `Risk flags detected: ${notes.join("; ")}.`,
+    concerns,
+  };
+};
+
+const normalizeTickerForSector = (symbol: string) =>
+  symbol.trim().toUpperCase().replace(/\s+/g, "");
+
+const inferSectorFromHolding = (holding: ImportedHolding): string => {
+  const securityType = holding.security_type.trim().toUpperCase();
+  const symbol = normalizeTickerForSector(holding.symbol);
+  const name = (holding.name ?? "").trim().toUpperCase();
+
+  if (securityType.includes("OPTION")) return "Derivatives";
+  if (securityType.includes("BOND")) return "Fixed Income";
+  if (securityType.includes("FUND") || securityType.includes("ETF")) {
+    return "ETF / Diversified";
+  }
+
+  const symbolSectorMap: Record<string, string> = {
+    AMD: "Technology",
+    GOOG: "Communication Services",
+    MU: "Technology",
+    WDC: "Technology",
+    SNDK: "Technology",
+    CEG: "Utilities",
+    ETN: "Industrials",
+    VST: "Utilities",
+    SLS: "Healthcare",
+    ONDS: "Technology",
+    HG: "Materials",
+    GDX: "Materials",
+    XEQT: "ETF / Diversified",
+  };
+
+  if (symbolSectorMap[symbol]) {
+    return symbolSectorMap[symbol];
+  }
+
+  if (name.includes("TECH") || name.includes("SEMICONDUCTOR")) {
+    return "Technology";
+  }
+  if (
+    name.includes("HEALTH") ||
+    name.includes("PHARMA") ||
+    name.includes("BIO")
+  ) {
+    return "Healthcare";
+  }
+  if (
+    name.includes("ENERGY") ||
+    name.includes("POWER") ||
+    name.includes("OIL")
+  ) {
+    return "Energy";
+  }
+  if (
+    name.includes("BANK") ||
+    name.includes("FINANC") ||
+    name.includes("INSURANCE")
+  ) {
+    return "Financials";
+  }
+  if (
+    name.includes("MINING") ||
+    name.includes("GOLD") ||
+    name.includes("METAL")
+  ) {
+    return "Materials";
+  }
+  if (name.includes("REIT") || name.includes("REAL ESTATE")) {
+    return "Real Estate";
+  }
+  if (name.includes("COMM") || name.includes("MEDIA")) {
+    return "Communication Services";
+  }
+
+  return "Other";
+};
+
+const buildSectorBreakdownFromHoldings = (
+  holdings: ImportedHolding[],
+): SectorBreakdownEntry[] => {
+  const bySector = new Map<string, number>();
+  let totalValueCad = 0;
+
+  for (const holding of holdings) {
+    const valueCad = convertToCad(
+      holding.market_value,
+      holding.market_value_currency,
+    );
+    if (valueCad <= 0) {
+      continue;
+    }
+
+    const sector = inferSectorFromHolding(holding);
+
+    totalValueCad += valueCad;
+    bySector.set(sector, (bySector.get(sector) ?? 0) + valueCad);
+  }
+
+  if (totalValueCad <= 0) {
+    return [];
+  }
+
+  return [...bySector.entries()]
+    .map(([sector, valueCad]) => ({
+      sector,
+      valueCad,
+      weight: (valueCad / totalValueCad) * 100,
+    }))
+    .sort((a, b) => b.valueCad - a.valueCad);
+};
+
 function Dashboard() {
   const { settings } = useUserSettings();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
@@ -182,7 +523,18 @@ function Dashboard() {
           data.summary ? repairTextEncoding(data.summary) : null,
         );
       } catch {
-        setRebalanceSummary(null);
+        try {
+          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
+          if (!holdingsRes.ok) {
+            throw new Error("holdings fetch failed");
+          }
+          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
+          setRebalanceSummary(
+            getFallbackRebalanceSummary(holdingsData.holdings ?? []),
+          );
+        } catch {
+          setRebalanceSummary(null);
+        }
       } finally {
         setIsLoadingRebalanceSummary(false);
       }
@@ -207,9 +559,27 @@ function Dashboard() {
         const res = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`);
         if (!res.ok) throw new Error("sector-breakdown fetch failed");
         const data = (await res.json()) as SectorBreakdownResponse;
-        setSectorBreakdown(data.sectors ?? []);
+        if ((data.sectors ?? []).length > 0) {
+          setSectorBreakdown(data.sectors ?? []);
+          return;
+        }
+
+        throw new Error("sector-breakdown returned empty sectors");
       } catch {
-        setSectorBreakdown([]);
+        try {
+          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
+          if (!holdingsRes.ok) {
+            throw new Error("holdings fetch failed");
+          }
+
+          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
+          const holdingsList = holdingsData.holdings ?? [];
+          const fallbackBreakdown =
+            buildSectorBreakdownFromHoldings(holdingsList);
+          setSectorBreakdown(fallbackBreakdown);
+        } catch {
+          setSectorBreakdown([]);
+        }
       } finally {
         setIsLoadingSectorBreakdown(false);
       }
@@ -241,8 +611,19 @@ function Dashboard() {
         );
         setRiskConcernCount(data.concerns?.length ?? 0);
       } catch {
-        setRiskSummary(null);
-        setRiskConcernCount(0);
+        try {
+          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
+          if (!holdingsRes.ok) {
+            throw new Error("holdings fetch failed");
+          }
+          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
+          const fallback = getFallbackRiskAnalysis(holdingsData.holdings ?? []);
+          setRiskSummary(fallback.summary);
+          setRiskConcernCount(fallback.concerns);
+        } catch {
+          setRiskSummary(null);
+          setRiskConcernCount(0);
+        }
       } finally {
         setIsLoadingRiskSummary(false);
       }
@@ -441,6 +822,31 @@ function Dashboard() {
       : marketDailyPercent - portfolioDailyPercent;
 
   const welcomeName = settings.displayName.trim() || "Investor";
+
+  const suggestionCards = useMemo(() => {
+    const fallbackSummary =
+      "Import holdings to get a rebalance suggestion based on your current weights.";
+    const text = (rebalanceSummary ?? fallbackSummary).trim();
+
+    const match = text.match(
+      /trimming\s+(.+?)\s+and\s+adding\s+to\s+(.+?)\s+to\s+improve\s+balance\.?/i,
+    );
+
+    const parseLeg = (value: string) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+
+    return {
+      summary: text,
+      trim: match ? parseLeg(match[1]) : [],
+      add: match ? parseLeg(match[2]) : [],
+    };
+  }, [rebalanceSummary]);
+
+  const riskStatus =
+    riskConcernCount >= 3 ? "Elevated" : riskConcernCount > 0 ? "Watch" : "Low";
 
   return (
     <div className="dashboard-shell">
@@ -645,10 +1051,54 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <p className="dashboard-suggestion-text">
-                        {rebalanceSummary ??
-                          "Import holdings to get a rebalance suggestion based on your current weights."}
-                      </p>
+                      <div className="dashboard-mini-grid">
+                        <article className="dashboard-mini-card dashboard-mini-card-wide">
+                          <h4>Plan Snapshot</h4>
+                          <p className="dashboard-suggestion-text">
+                            {suggestionCards.summary}
+                          </p>
+                        </article>
+
+                        <article className="dashboard-mini-card">
+                          <h4>Trim</h4>
+                          <div className="dashboard-pill-list">
+                            {suggestionCards.trim.length === 0 ? (
+                              <span className="dashboard-pill dashboard-pill-neutral">
+                                No trim targets
+                              </span>
+                            ) : (
+                              suggestionCards.trim.map((item) => (
+                                <span
+                                  className="dashboard-pill"
+                                  key={`trim-${item}`}
+                                >
+                                  {item}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </article>
+
+                        <article className="dashboard-mini-card">
+                          <h4>Add</h4>
+                          <div className="dashboard-pill-list">
+                            {suggestionCards.add.length === 0 ? (
+                              <span className="dashboard-pill dashboard-pill-neutral">
+                                No add targets
+                              </span>
+                            ) : (
+                              suggestionCards.add.map((item) => (
+                                <span
+                                  className="dashboard-pill"
+                                  key={`add-${item}`}
+                                >
+                                  {item}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </article>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -675,15 +1125,37 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <>
-                        <p className="dashboard-risk-summary">
-                          {riskSummary ??
-                            "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
-                        </p>
-                        <div className="dashboard-risk-caption">
-                          {riskConcernCount} possible concerns
-                        </div>
-                      </>
+                      <div className="dashboard-mini-grid">
+                        <article className="dashboard-mini-card dashboard-mini-card-wide">
+                          <h4>Risk Readout</h4>
+                          <p className="dashboard-risk-summary">
+                            {riskSummary ??
+                              "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
+                          </p>
+                        </article>
+
+                        <article className="dashboard-mini-card">
+                          <h4>Possible Concerns</h4>
+                          <div className="dashboard-risk-caption dashboard-risk-caption-strong">
+                            {riskConcernCount}
+                          </div>
+                        </article>
+
+                        <article className="dashboard-mini-card">
+                          <h4>Status</h4>
+                          <div
+                            className={`dashboard-risk-caption dashboard-risk-caption-strong ${
+                              riskStatus === "Low"
+                                ? "dashboard-positive"
+                                : riskStatus === "Watch"
+                                  ? "dashboard-comparison-muted"
+                                  : "dashboard-negative"
+                            }`}
+                          >
+                            {riskStatus}
+                          </div>
+                        </article>
+                      </div>
                     )}
                   </div>
                 </div>
