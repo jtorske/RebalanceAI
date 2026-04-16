@@ -142,6 +142,10 @@ body {
   color: var(--app-text-soft) !important;
 }
 
+.dashboard-ai-summary-title {
+  color: var(--app-text) !important;
+}
+
 .rw-controls input,
 .rw-controls select,
 .rw-target-input,

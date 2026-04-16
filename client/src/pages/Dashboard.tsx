@@ -440,6 +440,8 @@ function Dashboard() {
       ? null
       : marketDailyPercent - portfolioDailyPercent;
 
+  const welcomeName = settings.displayName.trim() || "Investor";
+
   return (
     <div className="dashboard-shell">
       <div className="dashboard-page">
@@ -520,11 +522,14 @@ function Dashboard() {
                             <span className="dashboard-ai-summary-dot" />
                           </div>
                         ) : (
-                          <>
+                          <div>
+                            <p className="dashboard-ai-summary-title">
+                              Welcome back {welcomeName}
+                            </p>
                             <p className="dashboard-ai-summary-text">
                               {aiSummary}
                             </p>
-                          </>
+                          </div>
                         )}
                       </div>
                     )}
