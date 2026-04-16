@@ -381,6 +381,21 @@ function Dashboard() {
   const portfolioDailyPercent = marketComparison?.portfolioDailyPercent ?? null;
   const marketDailyPercent = marketComparison?.marketDailyPercent ?? null;
 
+  const portfolioDailyAmountCad = useMemo(() => {
+    if (portfolioDailyPercent === null) {
+      return null;
+    }
+
+    const dailyRate = portfolioDailyPercent / 100;
+    if (dailyRate <= -0.999999) {
+      return null;
+    }
+
+    const priorCloseCad = totalMarketValueCad / (1 + dailyRate);
+    const dailyChangeCad = totalMarketValueCad - priorCloseCad;
+    return Number.isFinite(dailyChangeCad) ? dailyChangeCad : null;
+  }, [portfolioDailyPercent, totalMarketValueCad]);
+
   const formatPercent = (value: number | null) =>
     value === null ? "--" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
@@ -390,6 +405,13 @@ function Dashboard() {
       currency: "CAD",
       maximumFractionDigits: 0,
     }).format(value);
+
+  const formatSignedCad = (value: number | null) => {
+    if (value === null) {
+      return "--";
+    }
+    return `${value >= 0 ? "+" : "-"}${formatCompactCad(Math.abs(value))}`;
+  };
 
   const formatSpread = (value: number | null) => {
     if (value === null || portfolioDailyPercent === null) {
@@ -698,18 +720,19 @@ function Dashboard() {
                             </span>
                             <span
                               className={
-                                totalGainLossCad >= 0
-                                  ? "dashboard-donut-center-change dashboard-positive"
-                                  : "dashboard-donut-center-change dashboard-negative"
+                                portfolioDailyPercent === null
+                                  ? "dashboard-donut-center-change dashboard-comparison-muted"
+                                  : portfolioDailyPercent >= 0
+                                    ? "dashboard-donut-center-change dashboard-positive"
+                                    : "dashboard-donut-center-change dashboard-negative"
                               }
                             >
-                              {totalGainLossCad >= 0 ? "+" : "-"}
-                              {formatCompactCad(Math.abs(totalGainLossCad))} (
-                              {performancePct >= 0 ? "+" : ""}
-                              {performancePct.toFixed(2)}%)
+                              {portfolioDailyAmountCad === null
+                                ? "--"
+                                : `${formatSignedCad(portfolioDailyAmountCad)} (${formatPercent(portfolioDailyPercent)})`}
                             </span>
                             <span className="dashboard-donut-center-period">
-                              Total
+                              Today
                             </span>
                           </div>
                         )}
