@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
 
 export const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",

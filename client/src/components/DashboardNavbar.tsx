@@ -2,13 +2,11 @@ import { FiUser } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./DashboardNavbar.css";
+import { API_BASE_URL } from "../lib/constants";
 
 type HoldingsResponse = {
   holdings?: Array<unknown>;
 };
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 function DashboardNavbar() {
   const [hasPersistedHoldings, setHasPersistedHoldings] = useState(false);

@@ -1,7 +1,7 @@
 import DashboardNavbar from "../components/DashboardNavbar";
 import "./RoutePage.css";
 import { useEffect, useMemo, useState } from "react";
-import { API_BASE_URL } from "../lib/constants";
+import { API_BASE_URL, USD_TO_CAD_RATE } from "../lib/constants";
 import { loadCachedDailyChangeMap, clearLegacyDailyChangeCache, saveCachedDailyChangeMap } from "../lib/dailyChangeCache";
 import { parseHoldingsCsv } from "../lib/holdingsParser";
 import { convertToCad, getTotalChangePercent, getTotalChangeAmount, isOptionHolding } from "../lib/holdingsUtils";

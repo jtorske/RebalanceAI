@@ -1,0 +1,251 @@
+.rw-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Header ──────────────────────────────────────── */
+
+.rw-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rw-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #181818;
+}
+
+.rw-subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.rw-refresh-btn {
+  flex-shrink: 0;
+  background: #161616;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.rw-refresh-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── States ──────────────────────────────────────── */
+
+.rw-error {
+  background: #fdeeee;
+  border: 1px solid #e7b0b0;
+  color: #7a1f1f;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.rw-empty,
+.rw-loading {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  padding: 40px 24px;
+  text-align: center;
+  font-size: 15px;
+  color: #666;
+}
+
+/* ── Summary cards ───────────────────────────────── */
+
+.rw-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.rw-summary-card {
+  background: #fff;
+  border: 1px solid #e8e8ef;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rw-summary-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #888;
+}
+
+.rw-summary-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #181818;
+}
+
+.rw-summary-note {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.rw-positive {
+  color: #1a8a3a;
+}
+
+.rw-negative {
+  color: #c0392b;
+}
+
+/* ── Table ───────────────────────────────────────── */
+
+.rw-table-wrap {
+  background: #fff;
+  border: 1px solid #ededf2;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rw-table-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #ededf2;
+}
+
+.rw-table-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1d;
+}
+
+.rw-table-timestamp {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.rw-table-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.rw-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+  table-layout: fixed;
+}
+
+.rw-col-symbol      { width: 22%; }
+.rw-col-type        { width: 12%; }
+.rw-col-current-val { width: 11%; }
+.rw-col-current-wt  { width: 8%; }
+.rw-col-mktcap      { width: 10%; }
+.rw-col-target-wt   { width: 8%; }
+.rw-col-target-val  { width: 11%; }
+.rw-col-adjust      { width: 18%; }
+
+.rw-table th,
+.rw-table td {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-table th {
+  background: #f7f7fb;
+  color: #4a4a55;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.rw-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.rw-table tbody tr:hover td {
+  background: #fafafa;
+}
+
+.rw-row-dimmed td {
+  opacity: 0.5;
+}
+
+/* ── Cell content ────────────────────────────────── */
+
+.rw-symbol {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  color: #181818;
+}
+
+.rw-name {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-type-badge {
+  display: inline-block;
+  background: #f0f0f8;
+  color: #4a4a6a;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rw-buy {
+  color: #1a8a3a;
+  font-weight: 700;
+}
+
+.rw-sell {
+  color: #c0392b;
+  font-weight: 700;
+}
+
+.rw-neutral {
+  color: #888;
+  font-style: italic;
+}
+
+.rw-no-data {
+  color: #bbb;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .rw-header-row {
+    flex-direction: column;
+  }
+
+  .rw-refresh-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

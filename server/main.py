@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import requests
@@ -11,7 +11,9 @@ import yfinance as yf
 
 logger = logging.getLogger("rebalanceai")
 
-_ai_summary_cache: Dict[str, str] = {}
+_ai_summary_cache: Dict[str, Dict[str, Any]] = {}
+_market_cap_cache: Dict[str, Any] = {}  # keyed by date → {symbol: market_cap}
+AI_SUMMARY_PROMPT_VERSION = "headlines-v3"
 
 app = FastAPI()
 
@@ -192,6 +194,16 @@ def _quote_from_series(symbol: str, series: Any) -> Optional[Dict[str, Any]]:
         }
     except Exception:
         return None
+
+
+def _series_to_float_list(series: Any) -> List[float]:
+    try:
+        values = series.dropna()
+        if hasattr(values, "columns"):
+            values = values.iloc[:, 0]
+        return [float(value) for value in values.tolist()]
+    except Exception:
+        return []
 
 
 def _fetch_quotes_for_symbols(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -425,7 +437,7 @@ def debug_quote_test():
         raw = yf.download("SPY", period="5d", interval="1d", auto_adjust=True, progress=False)
         if raw.empty:
             return {"status": "empty", "detail": "yfinance returned no rows — possible auth or network block"}
-        closes = raw["Close"].dropna().tolist()
+        closes = _series_to_float_list(raw["Close"])
         return {
             "status": "ok",
             "symbol": "SPY",
@@ -435,6 +447,16 @@ def debug_quote_test():
         }
     except Exception as err:
         return {"status": "error", "detail": str(err)}
+
+
+@app.get("/debug/source-file")
+def debug_source_file():
+    sample = "When It Doesn" + chr(0x00E2) + chr(0x0080) + chr(0x0099) + "t"
+    return {
+        "file": __file__,
+        "promptVersion": AI_SUMMARY_PROMPT_VERSION,
+        "repairSample": _repair_text_encoding(sample),
+    }
 
 
 @app.get("/holdings")
@@ -481,32 +503,164 @@ def clear_holdings():
     _save_store(_default_store())
     return {"message": "Saved holdings cleared."}
 
-def _fetch_market_headlines(symbols: List[str], max_total: int = 8) -> List[str]:
+def _parse_news_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, timezone.utc)
+        except (OSError, ValueError):
+            return None
+
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+
+        if normalized.isdigit():
+            return _parse_news_datetime(int(normalized))
+
+        try:
+            parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    return None
+
+
+def _repair_text_encoding(value: str) -> str:
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x0099), "'")
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x0098), "'")
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x009C), '"')
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x009D), '"')
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x0093), "-")
+    value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x0094), "-")
+
+    replacements = {
+        "\u00e2\u0080\u0099": "'",
+        "\u00e2\u0080\u0098": "'",
+        "\u00e2\u0080\u009c": '"',
+        "\u00e2\u0080\u009d": '"',
+        "\u00e2\u0080\u0093": "-",
+        "\u00e2\u0080\u0094": "-",
+    }
+    for broken, repaired in replacements.items():
+        value = value.replace(broken, repaired)
+
+    if "â" not in value:
+        return value
+
+    try:
+        return value.encode("latin1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+
+
+def _extract_news_publisher(content: Dict[str, Any], item: Dict[str, Any]) -> str:
+    provider = content.get("provider") or item.get("provider") or {}
+    if isinstance(provider, dict):
+        return str(
+            provider.get("displayName")
+            or provider.get("name")
+            or content.get("publisher")
+            or item.get("publisher")
+            or ""
+        ).strip()
+
+    return str(
+        content.get("publisher")
+        or item.get("publisher")
+        or provider
+        or ""
+    ).strip()
+
+
+def _fetch_market_headlines(symbols: List[str], max_total: int = 8) -> List[Dict[str, str]]:
     seen: set = set()
-    headlines: List[str] = []
-    cutoff = datetime.now(timezone.utc).timestamp() - 86400  # last 24 h
+    headlines: List[Dict[str, str]] = []
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+
     for symbol in symbols:
         try:
             news = yf.Ticker(symbol).news or []
             for item in news:
-                title = (item.get("title") or "").strip()
-                ts = item.get("providerPublishTime", 0)
-                if title and title not in seen and ts >= cutoff:
-                    seen.add(title)
-                    headlines.append(title)
+                content = item.get("content") if isinstance(item.get("content"), dict) else item
+                title = _repair_text_encoding(
+                    str(content.get("title") or item.get("title") or "").strip()
+                )
+                if not title:
+                    continue
+
+                published_at = (
+                    _parse_news_datetime(content.get("pubDate"))
+                    or _parse_news_datetime(content.get("displayTime"))
+                    or _parse_news_datetime(content.get("providerPublishTime"))
+                    or _parse_news_datetime(item.get("pubDate"))
+                    or _parse_news_datetime(item.get("displayTime"))
+                    or _parse_news_datetime(item.get("providerPublishTime"))
+                )
+                if published_at and published_at < cutoff:
+                    continue
+
+                normalized_title = " ".join(title.lower().split())
+                if normalized_title not in seen:
+                    seen.add(normalized_title)
+                    headline = {
+                        "symbol": symbol,
+                        "title": title,
+                        "publisher": _extract_news_publisher(content, item),
+                    }
+                    if published_at:
+                        headline["publishedAt"] = published_at.isoformat()
+                    headlines.append(headline)
                     if len(headlines) >= max_total:
                         return headlines
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("Market headline fetch skipped for %s: %s", symbol, err)
+
     return headlines
 
 
-@app.get("/market/ai-summary")
-def get_ai_summary():
-    today = datetime.now(timezone.utc).date().isoformat()
+def _format_headline_for_prompt(headline: Dict[str, str]) -> str:
+    source = f" ({headline['publisher']})" if headline.get("publisher") else ""
+    return f"- {headline['title']}{source}"
 
-    if today in _ai_summary_cache:
-        return {"summary": _ai_summary_cache[today], "cached": True, "date": today}
+
+def _first_sentence(text: str) -> str:
+    cleaned = " ".join(text.split())
+    if not cleaned:
+        return ""
+
+    for marker in (". ", "! ", "? "):
+        if marker in cleaned:
+            return cleaned.split(marker, 1)[0].strip() + marker.strip()
+
+    return cleaned
+
+
+def _build_summary_with_headlines(commentary: str, headlines: List[Dict[str, str]]) -> str:
+    market_sentence = _first_sentence(commentary)
+    if not market_sentence:
+        market_sentence = "The benchmark moves were mixed across the major market ETFs today."
+
+    if not headlines:
+        return (
+            f"{market_sentence} Headlines: No recent market headlines were available "
+            "from the news feed."
+        )
+
+    headline_text = "; ".join(
+        _format_headline_for_prompt(headline).lstrip("- ")
+        for headline in headlines[:3]
+    )
+    return f"{market_sentence} Headlines: {headline_text}."
+
+
+@app.get("/market/ai-summary")
+def get_ai_summary(force: bool = False):
+    today = datetime.now(timezone.utc).date().isoformat()
 
     benchmarks = _fetch_benchmark_quotes()
     benchmark_lines = []
@@ -517,17 +671,39 @@ def get_ai_summary():
 
     benchmark_symbols = [b["symbol"] for b in benchmarks]
     headlines = _fetch_market_headlines(benchmark_symbols)
+    headlines = [
+        {
+            **headline,
+            "title": _repair_text_encoding(headline.get("title", "")),
+            "publisher": _repair_text_encoding(headline.get("publisher", "")),
+        }
+        for headline in headlines
+    ]
+    headline_titles = [headline["title"] for headline in headlines]
+    cache_key = f"{today}:{AI_SUMMARY_PROMPT_VERSION}:{json.dumps(headline_titles, sort_keys=True)}"
+
+    if not force and cache_key in _ai_summary_cache:
+        cached = _ai_summary_cache[cache_key]
+        return {
+            "summary": cached.get("summary"),
+            "cached": True,
+            "date": today,
+            "headlines": cached.get("headlines", []),
+        }
+
     news_section = ""
     if headlines:
-        news_section = "\n\nRecent market headlines:\n" + "\n".join(f"- {h}" for h in headlines)
+        news_section = "\n\nRecent market headlines:\n" + "\n".join(
+            _format_headline_for_prompt(headline) for headline in headlines
+        )
 
     prompt = (
         f"Today's benchmark moves ({today}):\n"
         + "\n".join(benchmark_lines)
         + news_section
-        + "\n\nWrite exactly 2 sentences of market commentary for a portfolio dashboard, "
-        "referencing relevant headlines where they explain the moves. "
-        "Be factual, neutral, and concise. No headers or bullet points."
+        + "\n\nWrite exactly 1 sentence of market commentary for a portfolio dashboard. "
+        "Summarize the benchmark moves only. Do not mention headlines, news, or causes. "
+        "Be factual, neutral, and concise."
     )
 
     try:
@@ -537,12 +713,114 @@ def get_ai_summary():
             timeout=30,
         )
         resp.raise_for_status()
-        summary = resp.json().get("response", "").strip()
-        _ai_summary_cache[today] = summary
-        return {"summary": summary, "cached": False, "date": today}
+        commentary = resp.json().get("response", "").strip()
+        summary = _build_summary_with_headlines(commentary, headlines)
+        _ai_summary_cache[cache_key] = {
+            "summary": summary,
+            "headlines": headlines,
+        }
+        return {
+            "summary": summary,
+            "cached": False,
+            "date": today,
+            "headlines": headlines,
+        }
     except Exception as err:
         logger.error("AI summary failed: %s", err)
         return {"summary": None, "error": str(err), "date": today}
+
+
+def _fetch_market_caps(symbols: List[str]) -> Dict[str, Optional[float]]:
+    today = datetime.now(timezone.utc).date().isoformat()
+    cached = _market_cap_cache.get(today, {})
+    result: Dict[str, Optional[float]] = {}
+
+    to_fetch = [s for s in symbols if s not in cached]
+    for symbol in to_fetch:
+        try:
+            info = yf.Ticker(symbol).info
+            mc = info.get("marketCap") or info.get("totalAssets")
+            cached[symbol] = float(mc) if mc else None
+        except Exception:
+            cached[symbol] = None
+
+    _market_cap_cache.clear()
+    _market_cap_cache[today] = cached
+
+    for symbol in symbols:
+        result[symbol] = cached.get(symbol)
+    return result
+
+
+@app.get("/reweight/market-cap")
+def get_market_cap_reweight():
+    store = _load_store()
+    holdings = store.get("holdings", [])
+
+    if not holdings:
+        return {"items": [], "totalValueCad": 0.0, "generatedAt": datetime.now(timezone.utc).isoformat()}
+
+    items = []
+    for holding in holdings:
+        security_type = str(holding.get("security_type", "")).strip().upper()
+        if "OPTION" in security_type:
+            continue
+        normalized = _normalize_symbol_for_quote(holding)
+        if not normalized:
+            continue
+        mv = _to_float(holding.get("market_value")) or 0.0
+        currency = str(holding.get("market_value_currency", "")).strip().upper()
+        items.append({
+            "holding": holding,
+            "normalizedSymbol": normalized,
+            "marketValueCad": _convert_to_cad(mv, currency),
+        })
+
+    if not items:
+        return {"items": [], "totalValueCad": 0.0, "generatedAt": datetime.now(timezone.utc).isoformat()}
+
+    symbols = [item["normalizedSymbol"] for item in items]
+    market_caps = _fetch_market_caps(symbols)
+
+    total_value_cad = sum(item["marketValueCad"] for item in items)
+
+    result_items = []
+    for item in items:
+        holding = item["holding"]
+        sym = item["normalizedSymbol"]
+        mc = market_caps.get(sym)
+        current_weight = (item["marketValueCad"] / total_value_cad * 100) if total_value_cad > 0 else 0.0
+        result_items.append({
+            "symbol": str(holding.get("symbol", "")).strip().upper(),
+            "name": holding.get("name", ""),
+            "security_type": holding.get("security_type", ""),
+            "currentValueCad": round(item["marketValueCad"], 2),
+            "currentWeight": round(current_weight, 4),
+            "marketCap": mc,
+            "targetWeight": None,
+            "targetValueCad": None,
+            "adjustCad": None,
+        })
+
+    total_mc = sum(item["marketCap"] for item in result_items if item["marketCap"] is not None)
+
+    if total_mc > 0:
+        for item in result_items:
+            mc = item["marketCap"]
+            if mc is not None:
+                tw = mc / total_mc
+                tv = total_value_cad * tw
+                item["targetWeight"] = round(tw * 100, 4)
+                item["targetValueCad"] = round(tv, 2)
+                item["adjustCad"] = round(tv - item["currentValueCad"], 2)
+
+    result_items.sort(key=lambda x: x["marketCap"] or 0, reverse=True)
+
+    return {
+        "items": result_items,
+        "totalValueCad": round(total_value_cad, 2),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.post("/analyze")

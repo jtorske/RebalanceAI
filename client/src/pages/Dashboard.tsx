@@ -7,7 +7,32 @@ import "./Dashboard.css";
 import { API_BASE_URL } from "../lib/constants";
 import { DONUT_COLORS, getHoldingSector } from "../lib/dashboardUtils";
 import { convertToCad } from "../lib/holdingsUtils";
-import type { ImportedHolding, HoldingsResponse, BenchmarkQuote, MarketComparisonResponse, WeightedHolding } from "../lib/types";
+import type {
+  ImportedHolding,
+  HoldingsResponse,
+  BenchmarkQuote,
+  MarketComparisonResponse,
+  WeightedHolding,
+} from "../lib/types";
+
+type AiSummaryHeadline = {
+  title: string;
+  publisher?: string;
+};
+
+type AiSummaryResponse = {
+  summary: string | null;
+  headlines?: AiSummaryHeadline[];
+};
+
+const repairTextEncoding = (value: string) =>
+  value
+    .replaceAll("\u00e2\u0080\u0099", "'")
+    .replaceAll("\u00e2\u0080\u0098", "'")
+    .replaceAll("\u00e2\u0080\u009c", '"')
+    .replaceAll("\u00e2\u0080\u009d", '"')
+    .replaceAll("\u00e2\u0080\u0093", "-")
+    .replaceAll("\u00e2\u0080\u0094", "-");
 
 function Dashboard() {
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
@@ -16,6 +41,9 @@ function Dashboard() {
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryHeadlines, setAiSummaryHeadlines] = useState<
+    AiSummaryHeadline[]
+  >([]);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
 
   useEffect(() => {
@@ -102,10 +130,20 @@ function Dashboard() {
       try {
         const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
         if (!res.ok) throw new Error("ai-summary fetch failed");
-        const data = (await res.json()) as { summary: string | null };
-        setAiSummary(data.summary ?? null);
+        const data = (await res.json()) as AiSummaryResponse;
+        setAiSummary(data.summary ? repairTextEncoding(data.summary) : null);
+        setAiSummaryHeadlines(
+          (data.headlines ?? []).map((headline) => ({
+            ...headline,
+            title: repairTextEncoding(headline.title),
+            publisher: headline.publisher
+              ? repairTextEncoding(headline.publisher)
+              : headline.publisher,
+          })),
+        );
       } catch {
         setAiSummary(null);
+        setAiSummaryHeadlines([]);
       } finally {
         setIsLoadingAiSummary(false);
       }
@@ -179,7 +217,10 @@ function Dashboard() {
         return;
       }
 
-      if (typeof item.dailyPercent !== "number" || !Number.isFinite(item.dailyPercent)) {
+      if (
+        typeof item.dailyPercent !== "number" ||
+        !Number.isFinite(item.dailyPercent)
+      ) {
         return;
       }
 
@@ -274,7 +315,10 @@ function Dashboard() {
 
     weightedHoldings.forEach((holding) => {
       const sector = getHoldingSector(holding);
-      bySector.set(sector, (bySector.get(sector) ?? 0) + holding.marketValueCad);
+      bySector.set(
+        sector,
+        (bySector.get(sector) ?? 0) + holding.marketValueCad,
+      );
     });
 
     return [...bySector.entries()]
@@ -393,12 +437,6 @@ function Dashboard() {
                   </div>
 
                   <div className="dashboard-card-content dashboard-market-content">
-                    <div className="dashboard-empty-state-copy dashboard-comparison-copy">
-                      Daily moves use currently open holdings only. “Vs
-                      portfolio” means the benchmark’s daily move minus your
-                      portfolio’s daily move.
-                    </div>
-
                     {(isLoadingAiSummary || aiSummary) && (
                       <div className="dashboard-ai-summary">
                         {isLoadingAiSummary ? (
@@ -408,7 +446,30 @@ function Dashboard() {
                             <span className="dashboard-ai-summary-dot" />
                           </div>
                         ) : (
-                          <p className="dashboard-ai-summary-text">{aiSummary}</p>
+                          <>
+                            <p className="dashboard-ai-summary-text">
+                              {aiSummary}
+                            </p>
+                            {aiSummaryHeadlines.length > 0 && (
+                              <div className="dashboard-ai-headlines">
+                                <div className="dashboard-ai-headlines-title">
+                                  Daily headlines
+                                </div>
+                                <ul className="dashboard-ai-headlines-list">
+                                  {aiSummaryHeadlines
+                                    .slice(0, 3)
+                                    .map((headline) => (
+                                      <li key={headline.title}>
+                                        {headline.title}
+                                        {headline.publisher
+                                          ? ` (${headline.publisher})`
+                                          : ""}
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -558,12 +619,16 @@ function Dashboard() {
                   >
                     <div className="dashboard-donut-core">
                       {topThreeHoldings.length === 0 ? (
-                        <div className="dashboard-donut-empty">No allocation yet</div>
+                        <div className="dashboard-donut-empty">
+                          No allocation yet
+                        </div>
                       ) : (
                         <div className="dashboard-donut-center-list">
                           {topThreeHoldings.map((holding) => {
                             const daily =
-                              dailyChangeBySymbol[holding.symbol.trim().toUpperCase()];
+                              dailyChangeBySymbol[
+                                holding.symbol.trim().toUpperCase()
+                              ];
                             return (
                               <div
                                 className="dashboard-donut-center-item"
