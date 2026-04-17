@@ -89,7 +89,7 @@ The USD → CAD rate defaults to `1.37` if the env var is not set. To update it,
 
 ## CSV Import Format
 
-The Holdings page accepts **Questrade portfolio exports**. The CSV must contain these 21 columns in order:
+The Holdings page accepts **Questrade/Wealthsimple portfolio exports**. The CSV must contain these 21 columns in order:
 
 | # | Column |
 |---|--------|
