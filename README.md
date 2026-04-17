@@ -1,0 +1,225 @@
+# RebalanceAI
+
+An AI-assisted portfolio tracking and rebalancing dashboard. Import broker CSV exports to get live P&L, daily performance vs. benchmarks, sector allocation, concentration risk, key insights, and algorithmic rebalancing plans.
+
+---
+
+## Features
+
+- **Dashboard** — Portfolio value in CAD, daily % vs. 5 benchmark indices, sector donut chart, top movers, concentration bar, and an LLM-generated daily market commentary
+- **Holdings** — CSV import from Questrade exports, sortable table with live prices and unrealized returns, per-position daily change
+- **Reweight** — Generate rebalancing plans across 5 strategies with configurable drift thresholds, trade sizing, and cash constraints
+- **Risk Manager** — Multi-tier concentration and volatility risk scoring with severity-ranked concerns
+- **Key Insights** — Auto-detected portfolio patterns: sector dominance, diversification gaps, top performers, laggards, and research ideas
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript, Vite |
+| Routing | React Router 7 |
+| Backend | Python, FastAPI, uvicorn |
+| Market data | yfinance |
+| AI commentary | Ollama (llama3.2) — optional |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- Python 3.10+
+- (Optional) [Ollama](https://ollama.com) with `llama3.2` for AI summaries
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/your-username/RebalanceAI.git
+cd RebalanceAI
+```
+
+### 2. Start the backend
+
+```bash
+cd server
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+The API runs on `http://localhost:8000`.
+
+### 3. Start the frontend
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+The app runs on `http://localhost:5173`.
+
+### 4. (Optional) Enable AI summaries
+
+Install Ollama and pull the model:
+
+```bash
+ollama pull llama3.2
+ollama serve
+```
+
+The backend auto-detects Ollama at `http://localhost:11434`. If unavailable, the app falls back to rule-based summaries — everything else still works.
+
+---
+
+## Environment Variables
+
+Create `client/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_USD_TO_CAD_RATE=1.37
+```
+
+The USD → CAD rate defaults to `1.37` if the env var is not set. To update it, change the constant in `client/src/lib/constants.ts`.
+
+---
+
+## CSV Import Format
+
+The Holdings page accepts **Questrade portfolio exports**. The CSV must contain these 21 columns in order:
+
+| # | Column |
+|---|--------|
+| 1 | Account Name |
+| 2 | Account Type |
+| 3 | Account Classification |
+| 4 | Account Number |
+| 5 | Symbol |
+| 6 | Exchange |
+| 7 | MIC |
+| 8 | Name |
+| 9 | Security Type |
+| 10 | Quantity |
+| 11 | Position Direction |
+| 12 | Market Price |
+| 13 | Market Price Currency |
+| 14 | Book Value (CAD) |
+| 15 | Book Value Currency (CAD) |
+| 16 | Book Value (Market) |
+| 17 | Book Value Currency (Market) |
+| 18 | Market Value |
+| 19 | Market Value Currency |
+| 20 | Market Unrealized Returns |
+| 21 | Market Unrealized Returns Currency |
+
+The parser handles quoted fields, comma-separated numbers, and extracts the "As Of" date from the first cell if present.
+
+---
+
+## Rebalancing Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| **Capped Market-Cap** (default) | Weight by market cap; caps any single position at `maxSingleStockPct` (default 20%) |
+| **Market-Cap** | Pure market-cap weighting with no cap |
+| **Square-Root Market-Cap** | `sqrt(market_cap)` weighting — compresses mega-cap dominance |
+| **Equal Weight** | All eligible positions receive equal allocation |
+| **Manual** | User specifies target weights directly |
+
+Options, cash, and positions with missing market-cap data are excluded from rebalancing automatically.
+
+### Configurable parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Max single stock % | 20% | Upper bound for any one position |
+| Drift threshold | 2% | Minimum drift before a trade is generated |
+| Minimum trade | CA$50 | Trades below this are suppressed |
+| Available cash | 0 | Extra cash to deploy in buys |
+| No-sell mode | off | Restricts plan to buys and holds only |
+| Fractional shares | on | Allow non-integer share quantities |
+
+---
+
+## Risk Analysis
+
+The risk engine scores each position and the portfolio as a whole across the following checks:
+
+| Check | Threshold | Severity |
+|-------|-----------|----------|
+| Sector concentration | ≥ 45% | High |
+| Sector concentration | ≥ 30% | Medium |
+| Single position weight | ≥ 30% | High |
+| Single position weight | ≥ 18% | Medium |
+| Micro-cap position (market cap < CA$300M) | weight ≥ 2% | High |
+| Small-cap position (market cap < CA$2B) | weight ≥ 5% | Medium |
+| High beta (β ≥ 1.8) | weight ≥ 5% | Medium |
+| Upcoming earnings catalyst | 0–21 days out | Medium |
+| Negative news sentiment | keyword match | Medium |
+
+Concerns are ranked high → medium → low, then by position weight. A 1–2 sentence summary is generated by Llama (or a rule-based fallback).
+
+---
+
+## Benchmark Indices
+
+Portfolio daily performance is compared against the average of 5 indices:
+
+| Symbol | Index |
+|--------|-------|
+| VT | Total World Stock Market |
+| VTI | Total US Stock Market |
+| QQQ | NASDAQ |
+| SPY | S&P 500 |
+| DIA | Dow Jones |
+
+Daily snapshots are retained for up to **120 trading days**.
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/holdings` | All persisted holdings |
+| POST | `/holdings/import` | Import broker CSV |
+| DELETE | `/holdings` | Clear all holdings |
+| GET | `/market/benchmarks` | Live benchmark quotes |
+| GET | `/market/portfolio-vs-market` | Daily portfolio vs. market comparison |
+| GET | `/market/portfolio-performance-history` | 120-day snapshot history |
+| GET | `/market/ai-summary` | LLM market commentary |
+| GET | `/portfolio/sector-breakdown` | Sector allocation |
+| GET | `/risk/analysis` | Risk concerns with severity scores |
+| GET | `/portfolio/key-insights` | Portfolio patterns and research ideas |
+| POST | `/reweight/plan` | Generate rebalancing plan |
+| GET | `/reweight/ai-summary` | LLM rebalancing summary |
+
+---
+
+## Project Structure
+
+```
+RebalanceAI/
+├── client/
+│   └── src/
+│       ├── pages/          # Dashboard, Holdings, Reweight, RiskManager, KeyInsights
+│       ├── components/     # DashboardNavbar
+│       └── lib/            # Constants, types, CSV parser, utilities, caching
+└── server/
+    ├── main.py             # All API endpoints and business logic
+    ├── requirements.txt
+    └── data/               # Auto-created; holds JSON stores and caches
+```
+
+---
+
+## Development Notes
+
+- Both the frontend and backend must run concurrently during development.
+- Cross-component state is propagated via `window.dispatchEvent(new Event("holdings-changed"))` — no global state library.
+- TSX tickers get `.TO` appended and CSE tickers get `.CN` before yfinance lookups.
+- Live quote → imported `market_price` → cached value is the pricing fallback chain.
+- The `server/data/` directory is created automatically on first run and is gitignored.
