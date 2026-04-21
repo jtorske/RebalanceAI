@@ -1,0 +1,17 @@
+Account Name,Account Type,Account Classification,Account Number,Symbol,Exchange,MIC,Name,Security Type,Quantity,Position Direction,Market Price,Market Price Currency,Book Value (CAD),Book Value Currency (CAD),Book Value (Market),Book Value Currency (Market),Market Value,Market Value Currency,Market Unrealized Returns,Market Unrealized Returns Currency
+As of 2026-04-21 09:30 GMT-06:00,,,,,,,,,,,,,,,,,,,,,
+Tech Growth Fund,RRSP,Individual,12345678,NVDA,NASDAQ,XNAS,NVIDIA Corporation,EQUITY,5.0000,Long,875.40,USD,4281.25,CAD,3125.00,USD,4377.00,USD,1252.00,USD
+Tech Growth Fund,RRSP,Individual,12345678,AAPL,NASDAQ,XNAS,Apple Inc.,EQUITY,12.0000,Long,194.50,USD,2301.60,CAD,1680.00,USD,2334.00,USD,654.00,USD
+Tech Growth Fund,RRSP,Individual,12345678,MSFT,NASDAQ,XNAS,Microsoft Corporation,EQUITY,6.0000,Long,413.20,USD,2466.00,CAD,1800.00,USD,2479.20,USD,679.20,USD
+Tech Growth Fund,RRSP,Individual,12345678,AMZN,NASDAQ,XNAS,Amazon.com Inc.,EQUITY,8.0000,Long,186.75,USD,1644.00,CAD,1200.00,USD,1494.00,USD,294.00,USD
+Tech Growth Fund,RRSP,Individual,12345678,INTC,NASDAQ,XNAS,Intel Corporation,EQUITY,20.0000,Long,21.50,USD,1370.00,CAD,1000.00,USD,430.00,USD,-570.00,USD
+Tech Growth Fund,RRSP,Individual,12345678,MU,NASDAQ,XNAS,Micron Technology Inc.,EQUITY,7.0000,Long,88.20,USD,575.40,CAD,420.00,USD,617.40,USD,197.40,USD
+Tech Growth Fund,RRSP,Individual,12345678,TSM,NYSE,XNYS,Taiwan Semiconductor Manufacturing,EQUITY,4.0000,Long,168.90,USD,924.96,CAD,675.00,USD,675.60,USD,0.60,USD
+Balanced Income Fund,TFSA,Individual,87654321,XEQT,TSX,XTSE,iShares Core Equity ETF Portfolio,EXCHANGE_TRADED_FUND,80.0000,Long,30.42,CAD,2000.00,CAD,2000.00,CAD,2433.60,CAD,433.60,CAD
+Balanced Income Fund,TFSA,Individual,87654321,VFV,TSX,XTSE,Vanguard S&P 500 Index ETF,EXCHANGE_TRADED_FUND,15.0000,Long,133.80,CAD,1500.00,CAD,1500.00,CAD,2007.00,CAD,507.00,CAD
+Balanced Income Fund,TFSA,Individual,87654321,META,NASDAQ,XNAS,Meta Platforms Inc.,EQUITY,3.0000,Long,518.90,USD,1438.50,CAD,1050.00,USD,1556.70,USD,506.70,USD
+Balanced Income Fund,TFSA,Individual,87654321,AMD,NASDAQ,XNAS,Advanced Micro Devices Inc.,EQUITY,10.0000,Long,162.35,USD,1370.00,CAD,1000.00,USD,1623.50,USD,623.50,USD
+Balanced Income Fund,TFSA,Individual,87654321,GOOG,NASDAQ,XNAS,Alphabet Inc.,EQUITY,5.0000,Long,172.80,USD,890.50,CAD,650.00,USD,864.00,USD,214.00,USD
+Balanced Income Fund,TFSA,Individual,87654321,CNR,TSX,XTSE,Canadian National Railway Co.,EQUITY,10.0000,Long,152.40,CAD,1400.00,CAD,1400.00,CAD,1524.00,CAD,124.00,CAD
+Balanced Income Fund,TFSA,Individual,87654321,ENB,TSX,XTSE,Enbridge Inc.,EQUITY,25.0000,Long,58.75,CAD,1250.00,CAD,1250.00,CAD,1468.75,CAD,218.75,CAD
+Balanced Income Fund,TFSA,Individual,87654321,SU,TSX,XTSE,Suncor Energy Inc.,EQUITY,18.0000,Long,52.30,CAD,1100.00,CAD,1100.00,CAD,941.40,CAD,-158.60,CAD

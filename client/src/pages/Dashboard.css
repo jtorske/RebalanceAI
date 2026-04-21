@@ -387,6 +387,22 @@
   color: #2f2654;
 }
 
+.dashboard-ai-drivers {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0dcf5;
+}
+
+.dashboard-ai-drivers-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7c6fcd;
+  margin-bottom: 4px;
+}
+
 .dashboard-ai-summary-loading {
   display: flex;
   gap: 5px;

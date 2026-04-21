@@ -932,9 +932,22 @@ function Dashboard() {
                             <p className="dashboard-ai-summary-title">
                               Welcome back {welcomeName}
                             </p>
-                            <p className="dashboard-ai-summary-text">
-                              {aiSummary}
-                            </p>
+                            {(() => {
+                              const parts = (aiSummary ?? "").split("Portfolio drivers:");
+                              const market = parts[0].trim();
+                              const drivers = parts[1]?.trim() ?? null;
+                              return (
+                                <>
+                                  {market && <p className="dashboard-ai-summary-text">{market}</p>}
+                                  {drivers && (
+                                    <div className="dashboard-ai-drivers">
+                                      <span className="dashboard-ai-drivers-label">Portfolio drivers</span>
+                                      <p className="dashboard-ai-summary-text">{drivers}</p>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
@@ -1113,7 +1126,7 @@ function Dashboard() {
                       className="dashboard-button dashboard-button-gold"
                       to="/risk-manager"
                     >
-                      Risk Manager
+                      View Risks
                     </Link>
                   </div>
 

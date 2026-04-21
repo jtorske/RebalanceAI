@@ -569,6 +569,20 @@ def _repair_text_encoding(value: str) -> str:
         return value
 
 
+_PREAMBLE_PATTERNS = [
+    r"^here (?:are|is) (?:two|2|a couple of|some) (?:concise )?sentences?[^:]*:\s*",
+    r"^here (?:are|is) (?:two|2|a couple of|some) (?:concise )?sentences?\s+",
+    r"^sure[,!]?\s+here (?:are|is)[^:]*:\s*",
+    r"^certainly[,!]?\s+",
+]
+
+def _strip_llm_preamble(text: str) -> str:
+    import re
+    for pattern in _PREAMBLE_PATTERNS:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
 def _format_percent(value: Optional[float]) -> str:
     if value is None:
         return "N/A"
@@ -1106,7 +1120,7 @@ def _ai_risk_summary(concerns: List[Dict[str, Any]], holdings_count: int) -> str
             timeout=12,
         )
         resp.raise_for_status()
-        text = _repair_text_encoding(resp.json().get("response", "").strip())
+        text = _strip_llm_preamble(_repair_text_encoding(resp.json().get("response", "").strip()))
         return text or fallback
     except Exception as err:
         logger.debug("AI risk summary fallback used: %s", err)
@@ -1351,7 +1365,7 @@ def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> str:
             timeout=12,
         )
         resp.raise_for_status()
-        text = _repair_text_encoding(resp.json().get("response", "").strip())
+        text = _strip_llm_preamble(_repair_text_encoding(resp.json().get("response", "").strip()))
         return text or fallback
     except Exception as err:
         logger.debug("AI key insights fallback used: %s", err)
