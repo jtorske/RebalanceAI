@@ -57,6 +57,9 @@ function DashboardNavbar() {
         <NavLink className="dashboard-navbar-link" to="/key-insights">
           Key Insights
         </NavLink>
+        <NavLink className="dashboard-navbar-link" to="/goal-planner">
+          Goals
+        </NavLink>
         <NavLink
           className="dashboard-navbar-link dashboard-navbar-link-primary"
           to="/holdings"

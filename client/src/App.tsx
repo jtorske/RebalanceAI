@@ -4,6 +4,7 @@ import Reweight from "./pages/Reweight";
 import HoldingsPage from "./pages/Holdings";
 import KeyInsights from "./pages/KeyInsights";
 import RiskManager from "./pages/RiskManager";
+import GoalPlanner from "./pages/GoalPlanner";
 import { UserSettingsProvider } from "./lib/userSettings";
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route path="/risk-manager" element={<RiskManager />} />
           <Route path="/key-insights" element={<KeyInsights />} />
           <Route path="/holdings" element={<HoldingsPage />} />
+          <Route path="/goal-planner" element={<GoalPlanner />} />
         </Routes>
       </BrowserRouter>
     </UserSettingsProvider>

@@ -1,4 +1,10 @@
 import { useEffect, useState } from "react";
+
+const stripPreamble = (text: string): string =>
+  text
+    .replace(/^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i, "")
+    .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
+    .trim();
 import DashboardNavbar from "../components/DashboardNavbar.tsx";
 import "./RoutePage.css";
 import "./RiskManager.css";
@@ -235,6 +241,8 @@ function RiskManager() {
 
       setAnalysis({
         ...data,
+        summary: stripPreamble(data.summary ?? ""),
+        dashboardSummary: stripPreamble(data.dashboardSummary ?? ""),
         concerns: mergedConcerns,
         holdingsAnalyzed: data.holdingsAnalyzed || holdingsCount,
       });

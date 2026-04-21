@@ -1975,6 +1975,8 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "summary": summary,
         "mode": plan.get("targetMode", "capped_market_cap"),
+        "trimSymbols": [item.get("symbol", "") for item in sells[:3]],
+        "addSymbols": [item.get("symbol", "") for item in buys[:3]],
         "overweights": overweights[:3],
         "underweights": underweights[:3],
         "totalBuyCad": round(total_buy, 2),

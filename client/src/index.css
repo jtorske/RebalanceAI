@@ -220,3 +220,45 @@ body {
   background: #eeeeea;
   color: #181818;
 }
+
+/* ── Goal Planner dark mode ── */
+.goal-card,
+.goal-outcome-card,
+.goal-portfolio-badge {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: var(--app-shadow) !important;
+}
+
+.goal-section-title,
+.goal-field label,
+.goal-field-hint,
+.goal-outcome-label,
+.goal-outcome-sub,
+.goal-legend-item,
+.goal-chart-title {
+  color: var(--app-muted) !important;
+}
+
+.goal-outcome-value,
+.goal-portfolio-badge {
+  color: var(--app-text) !important;
+}
+
+.goal-field input {
+  background: var(--app-soft-surface) !important;
+  border-color: var(--app-border-strong) !important;
+  color: var(--app-text) !important;
+}
+
+.goal-risk-btn {
+  border-color: var(--app-border-strong) !important;
+  color: var(--app-muted) !important;
+  background: transparent !important;
+}
+
+.goal-risk-btn-active {
+  background: var(--app-accent) !important;
+  border-color: var(--app-accent) !important;
+  color: #fff !important;
+}

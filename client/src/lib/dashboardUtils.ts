@@ -9,4 +9,4 @@ export const DONUT_COLORS = [
   "#C6B8FF",
 ];
 
-export const OTHER_DONUT_COLOR = "#C6B8FF";
+export const OTHER_DONUT_COLOR = "#6B7280";

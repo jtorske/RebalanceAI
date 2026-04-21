@@ -22,6 +22,10 @@ type AiSummaryResponse = {
 
 type RebalanceAiSummaryResponse = {
   summary: string | null;
+  trimSymbols?: string[];
+  addSymbols?: string[];
+  overweights?: Array<{ symbol: string }>;
+  underweights?: Array<{ symbol: string }>;
   totalBuyCad?: number;
   totalSellCad?: number;
 };
@@ -53,6 +57,11 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u009d", '"')
     .replaceAll("\u00e2\u0080\u0093", "-")
     .replaceAll("\u00e2\u0080\u0094", "-");
+
+const stripLlmPreamble = (text: string): string =>
+  text.replace(/^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i, "")
+      .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
+      .trim();
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
   if (holdings.length === 0) {
@@ -405,6 +414,8 @@ function Dashboard() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
   const [rebalanceSummary, setRebalanceSummary] = useState<string | null>(null);
+  const [trimSymbols, setTrimSymbols] = useState<string[]>([]);
+  const [addSymbols, setAddSymbols] = useState<string[]>([]);
   const [isLoadingRebalanceSummary, setIsLoadingRebalanceSummary] =
     useState(true);
   const [sectorBreakdown, setSectorBreakdown] = useState<
@@ -522,6 +533,8 @@ function Dashboard() {
         setRebalanceSummary(
           data.summary ? repairTextEncoding(data.summary) : null,
         );
+        setTrimSymbols(data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3));
+        setAddSymbols(data.addSymbols ?? (data.underweights ?? []).map((u) => u.symbol).slice(0, 3));
       } catch {
         try {
           const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
@@ -606,7 +619,7 @@ function Dashboard() {
         const data = (await res.json()) as RiskAnalysisResponse;
         setRiskSummary(
           data.dashboardSummary
-            ? repairTextEncoding(data.dashboardSummary)
+            ? stripLlmPreamble(repairTextEncoding(data.dashboardSummary))
             : null,
         );
         setRiskConcernCount(data.concerns?.length ?? 0);
@@ -803,9 +816,9 @@ function Dashboard() {
     if (value === null || portfolioDailyPercent === null) {
       return "--";
     }
-
     const spread = value - portfolioDailyPercent;
-    return `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`;
+    const arrow = spread >= 0 ? "▲" : "▼";
+    return `${arrow} ${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`;
   };
 
   const getVsPortfolioClass = (spread: number | null) => {
@@ -827,23 +840,8 @@ function Dashboard() {
     const fallbackSummary =
       "Import holdings to get a rebalance suggestion based on your current weights.";
     const text = (rebalanceSummary ?? fallbackSummary).trim();
-
-    const match = text.match(
-      /trimming\s+(.+?)\s+and\s+adding\s+to\s+(.+?)\s+to\s+improve\s+balance\.?/i,
-    );
-
-    const parseLeg = (value: string) =>
-      value
-        .split(",")
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-
-    return {
-      summary: text,
-      trim: match ? parseLeg(match[1]) : [],
-      add: match ? parseLeg(match[2]) : [],
-    };
-  }, [rebalanceSummary]);
+    return { summary: text, trim: trimSymbols, add: addSymbols };
+  }, [rebalanceSummary, trimSymbols, addSymbols]);
 
   const riskStatus =
     riskConcernCount >= 3 ? "Elevated" : riskConcernCount > 0 ? "Watch" : "Low";
@@ -857,9 +855,9 @@ function Dashboard() {
           <section className="dashboard-top-section">
             <div className="dashboard-left-column">
               <div className="dashboard-stats-grid">
-                <div className="dashboard-stat-card">
+                <div className="dashboard-stat-card dashboard-stat-card--blue">
                   <div className="dashboard-stat-label">Market value</div>
-                  <div className="dashboard-stat-value">
+                  <div className="dashboard-stat-value dashboard-stat-value--strong">
                     {maskDollar(
                       `CA$${totalMarketValueCad.toLocaleString("en-CA", {
                         maximumFractionDigits: 0,
@@ -869,9 +867,9 @@ function Dashboard() {
                   <div className="dashboard-stat-sub">as of today</div>
                 </div>
 
-                <div className="dashboard-stat-card">
+                <div className="dashboard-stat-card dashboard-stat-card--neutral">
                   <div className="dashboard-stat-label">Book value</div>
-                  <div className="dashboard-stat-value">
+                  <div className="dashboard-stat-value dashboard-stat-value--strong">
                     {maskDollar(
                       `CA$${totalBookValueMarketCad.toLocaleString("en-CA", {
                         maximumFractionDigits: 0,
@@ -881,10 +879,10 @@ function Dashboard() {
                   <div className="dashboard-stat-sub">avg cost basis</div>
                 </div>
 
-                <div className="dashboard-stat-card">
+                <div className={`dashboard-stat-card ${totalGainLossCad >= 0 ? "dashboard-stat-card--positive" : "dashboard-stat-card--negative"}`}>
                   <div className="dashboard-stat-label">Unrealized P&amp;L</div>
                   <div
-                    className={`dashboard-stat-value ${totalGainLossCad >= 0 ? "dashboard-positive" : "dashboard-negative"}`}
+                    className={`dashboard-stat-value dashboard-stat-value--strong ${totalGainLossCad >= 0 ? "dashboard-positive" : "dashboard-negative"}`}
                   >
                     {maskDollar(
                       `${totalGainLossCad >= 0 ? "+" : ""}CA$${Math.abs(
@@ -900,9 +898,9 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="dashboard-stat-card">
+                <div className="dashboard-stat-card dashboard-stat-card--purple">
                   <div className="dashboard-stat-label">Open positions</div>
-                  <div className="dashboard-stat-value">{holdings.length}</div>
+                  <div className="dashboard-stat-value dashboard-stat-value--strong">{holdings.length}</div>
                   <div className="dashboard-stat-sub">
                     {sectorBreakdown.length} sectors
                   </div>
@@ -1032,7 +1030,7 @@ function Dashboard() {
                               <span className={getVsPortfolioClass(spread)}>
                                 {spread === null
                                   ? "--"
-                                  : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
+                                  : `${spread >= 0 ? "▲" : "▼"} ${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
                               </span>
                             </div>
                           );
@@ -1281,9 +1279,12 @@ function Dashboard() {
                       <div
                         className="dashboard-allocation-row"
                         key={entry.sector}
+                        style={{
+                          background: `linear-gradient(to right, rgba(124,111,205,0.15) ${entry.weight}%, #f7f7fb ${entry.weight}%)`,
+                        }}
                       >
                         <span>{entry.sector}</span>
-                        <span>{entry.weight.toFixed(1)}%</span>
+                        <span className="dashboard-allocation-pct">{entry.weight.toFixed(1)}%</span>
                       </div>
                     ))}
                   </div>

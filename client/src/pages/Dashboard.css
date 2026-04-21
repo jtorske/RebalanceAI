@@ -60,7 +60,16 @@
   border: 0.5px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   padding: clamp(8px, 0.9vw, 14px);
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: transparent;
 }
+
+.dashboard-stat-card--blue   { border-left-color: #6366f1; }
+.dashboard-stat-card--neutral { border-left-color: #94a3b8; }
+.dashboard-stat-card--positive { border-left-color: #22c55e; }
+.dashboard-stat-card--negative { border-left-color: #ef4444; }
+.dashboard-stat-card--purple  { border-left-color: #a78bfa; }
 
 .dashboard-stat-label {
   font-size: clamp(10px, 0.75vw, 11px);
@@ -71,6 +80,11 @@
 .dashboard-stat-value {
   font-size: clamp(13px, 1.1vw, 16px);
   font-weight: 500;
+}
+
+.dashboard-stat-value--strong {
+  font-weight: 700;
+  font-size: clamp(14px, 1.2vw, 18px);
 }
 
 .dashboard-stat-sub {
@@ -207,6 +221,13 @@
   padding: 6px 10px;
   font-size: 12px;
   color: #2f2f36;
+  overflow: hidden;
+}
+
+.dashboard-allocation-pct {
+  font-weight: 600;
+  color: #4c3f9a;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Donut ring ───────────────────────────────────── */
