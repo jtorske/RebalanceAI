@@ -1,46 +1,13 @@
 import { FiUser, FiX } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import "./DashboardNavbar.css";
-import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings, type ThemePreference } from "../lib/userSettings";
 
-type HoldingsResponse = {
-  holdings?: Array<unknown>;
-};
-
 function DashboardNavbar() {
-  const [hasPersistedHoldings, setHasPersistedHoldings] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { settings, resolvedTheme, updateSettings } = useUserSettings();
-
-  useEffect(() => {
-    const loadHoldingsState = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/holdings`);
-        if (!response.ok) {
-          return;
-        }
-
-        const data = (await response.json()) as HoldingsResponse;
-        setHasPersistedHoldings((data.holdings?.length ?? 0) > 0);
-      } catch {
-        setHasPersistedHoldings(false);
-      }
-    };
-
-    const refreshHoldingsState = () => {
-      void loadHoldingsState();
-    };
-
-    void loadHoldingsState();
-    window.addEventListener("holdings-changed", refreshHoldingsState);
-
-    return () => {
-      window.removeEventListener("holdings-changed", refreshHoldingsState);
-    };
-  }, []);
 
   return (
     <header className="dashboard-navbar">

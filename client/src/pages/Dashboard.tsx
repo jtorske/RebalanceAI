@@ -226,12 +226,12 @@ const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
 
 const getFallbackRiskAnalysis = (
   holdings: ImportedHolding[],
-): { summary: string; concerns: number } => {
+): { summary: string; severityCounts: { high: number; medium: number; low: number } } => {
   if (holdings.length === 0) {
     return {
       summary:
         "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.",
-      concerns: 0,
+      severityCounts: { high: 0, medium: 0, low: 0 },
     };
   }
 
@@ -245,7 +245,7 @@ const getFallbackRiskAnalysis = (
     return {
       summary:
         "Risk scan is limited because portfolio values are not available.",
-      concerns: 1,
+      severityCounts: { high: 0, medium: 0, low: 1 },
     };
   }
 
@@ -268,21 +268,21 @@ const getFallbackRiskAnalysis = (
     .filter((item) => item.securityType.toUpperCase().includes("OPTION"))
     .reduce((sum, item) => sum + item.weight, 0);
 
-  let concerns = 0;
+  const severityCounts = { high: 0, medium: 0, low: 0 };
   const notes: string[] = [];
 
   if (topWeight >= 25) {
-    concerns += 1;
+    severityCounts.high += 1;
     notes.push(
       `${weighted[0]?.symbol ?? "Top holding"} is ${topWeight.toFixed(1)}% of the portfolio`,
     );
   }
   if (topThreeWeight >= 65) {
-    concerns += 1;
+    severityCounts.medium += 1;
     notes.push(`top 3 positions are ${topThreeWeight.toFixed(1)}% combined`);
   }
   if (optionWeight >= 10) {
-    concerns += 1;
+    severityCounts.high += 1;
     notes.push(`options represent ${optionWeight.toFixed(1)}% of total value`);
   }
 
@@ -290,13 +290,13 @@ const getFallbackRiskAnalysis = (
     return {
       summary:
         "No major concentration risk stands out from the current holdings snapshot, but continue monitoring position sizing and catalysts.",
-      concerns: 0,
+      severityCounts,
     };
   }
 
   return {
     summary: `Risk flags detected: ${notes.join("; ")}.`,
-    concerns,
+    severityCounts,
   };
 };
 
@@ -431,7 +431,6 @@ function Dashboard() {
   const [totalBuyCad, setTotalBuyCad] = useState<number | null>(null);
   const [totalSellCad, setTotalSellCad] = useState<number | null>(null);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
-  const [riskConcernCount, setRiskConcernCount] = useState(0);
   const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
   const [riskSeverityCounts, setRiskSeverityCounts] = useState({ high: 0, medium: 0, low: 0 });
   const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
@@ -635,7 +634,6 @@ function Dashboard() {
             : null,
         );
         const allConcerns = data.concerns ?? [];
-        setRiskConcernCount(allConcerns.length);
         setRiskConcerns(allConcerns.slice(0, 3));
         setRiskSeverityCounts({
           high: allConcerns.filter((c) => c.severity === "high").length,
@@ -651,10 +649,10 @@ function Dashboard() {
           const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
           const fallback = getFallbackRiskAnalysis(holdingsData.holdings ?? []);
           setRiskSummary(fallback.summary);
-          setRiskConcernCount(fallback.concerns);
+          setRiskSeverityCounts(fallback.severityCounts);
         } catch {
           setRiskSummary(null);
-          setRiskConcernCount(0);
+          setRiskSeverityCounts({ high: 0, medium: 0, low: 0 });
         }
       } finally {
         setIsLoadingRiskSummary(false);
@@ -866,9 +864,6 @@ function Dashboard() {
     return { summary: text, trim: trimSymbols, add: addSymbols };
   }, [rebalanceSummary, trimSymbols, addSymbols]);
 
-  const riskStatus =
-    riskConcernCount >= 3 ? "Elevated" : riskConcernCount > 0 ? "Watch" : "Low";
-
   const riskScore = useMemo(
     () =>
       Math.min(
@@ -890,13 +885,6 @@ function Dashboard() {
         : riskScore >= 26
           ? "Moderate"
           : "Low";
-
-  const GAUGE_R = 40;
-  const GAUGE_CX = 50;
-  const GAUGE_CY = 56;
-  const GAUGE_CIRC = 2 * Math.PI * GAUGE_R;
-  const GAUGE_ARC = GAUGE_CIRC * 0.75;
-  const gaugeFill = GAUGE_ARC * (riskScore / 100);
 
   return (
     <div className="dashboard-shell">
@@ -1197,7 +1185,7 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="dashboard-card">
+                <div className="dashboard-card dashboard-risk-card">
                   <div className="dashboard-card-header-row">
                     <div className="dashboard-card-title-row">
                       <FiAlertCircle size={31} />
@@ -1245,7 +1233,7 @@ function Dashboard() {
                           )}
                         </div>
 
-                        {/* Middle: gauge */}
+                        {/* Middle: risk score */}
                         <div className="dashboard-gauge-wrap">
                           <span
                             className="dashboard-gauge-status-label"
@@ -1253,48 +1241,18 @@ function Dashboard() {
                           >
                             {gaugeLabel}
                           </span>
-                          <svg
-                            viewBox="0 0 100 62"
-                            className="dashboard-gauge-svg"
+                          <div
+                            className="dashboard-risk-score"
                             aria-label={`Risk score ${riskScore} out of 100`}
                           >
-                            <circle
-                              className="dashboard-gauge-track"
-                              cx={GAUGE_CX}
-                              cy={GAUGE_CY}
-                              r={GAUGE_R}
-                              strokeDasharray={`${GAUGE_ARC} ${GAUGE_CIRC}`}
-                              transform={`rotate(135, ${GAUGE_CX}, ${GAUGE_CY})`}
-                            />
-                            <circle
-                              cx={GAUGE_CX}
-                              cy={GAUGE_CY}
-                              r={GAUGE_R}
-                              fill="none"
-                              stroke={gaugeColor}
-                              strokeWidth="9"
-                              strokeLinecap="round"
-                              strokeDasharray={`${gaugeFill} ${GAUGE_CIRC}`}
-                              transform={`rotate(135, ${GAUGE_CX}, ${GAUGE_CY})`}
-                              className="dashboard-gauge-fill"
-                            />
-                            <text
-                              x={GAUGE_CX}
-                              y={GAUGE_CY - 8}
-                              textAnchor="middle"
-                              className="dashboard-gauge-score-text"
+                            <span
+                              className="dashboard-risk-score-value"
+                              style={{ color: gaugeColor }}
                             >
                               {riskScore}
-                            </text>
-                            <text
-                              x={GAUGE_CX}
-                              y={GAUGE_CY + 5}
-                              textAnchor="middle"
-                              className="dashboard-gauge-denom-text"
-                            >
-                              / 100
-                            </text>
-                          </svg>
+                            </span>
+                            <span className="dashboard-risk-score-denom">/100</span>
+                          </div>
                         </div>
 
                         {/* Bottom: severity mix */}
