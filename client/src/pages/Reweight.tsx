@@ -52,9 +52,7 @@ type ReweightResponse = {
   totalBuyCad: number;
   totalSellCad: number;
   excludedCount: number;
-  settings: {
-    maxSingleStockPct: number;
-  };
+  settings: { maxSingleStockPct: number };
   notes: string[];
   generatedAt: string;
 };
@@ -64,8 +62,8 @@ function formatCad(value: number | null): string {
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -87,14 +85,19 @@ function formatShares(value: number | null): string {
   return Math.abs(value) >= 1 ? value.toFixed(2) : value.toFixed(4);
 }
 
-function getSortValue(
-  item: ReweightItem,
-  key: ReweightSortKey,
-): string | number | null {
+function getSortValue(item: ReweightItem, key: ReweightSortKey): string | number | null {
   if (key === "symbol") return item.symbol;
   if (key === "assetClass") return item.assetClass;
   return item[key];
 }
+
+const MODE_LABELS: Record<TargetMode, string> = {
+  capped_market_cap: "Capped Market Cap",
+  market_cap: "Market Cap",
+  equal: "Equal Weight",
+  sqrt_market_cap: "Sqrt Market Cap",
+  manual: "Custom Targets",
+};
 
 function Reweight() {
   const { settings } = useUserSettings();
@@ -107,23 +110,16 @@ function Reweight() {
   const [fractionalShares, setFractionalShares] = useState(true);
   const [cashFirst, setCashFirst] = useState(true);
   const [noSell, setNoSell] = useState(false);
-  const [manualTargets, setManualTargets] = useState<Record<string, number>>(
-    {},
-  );
+  const [manualTargets, setManualTargets] = useState<Record<string, number>>({});
   const [sortKey, setSortKey] = useState<ReweightSortKey | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection | null>(
-    null,
-  );
+  const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const manualTargetList = useMemo(
     () =>
       Object.entries(manualTargets)
-        .filter(
-          ([, targetWeight]) =>
-            Number.isFinite(targetWeight) && targetWeight >= 0,
-        )
+        .filter(([, w]) => Number.isFinite(w) && w >= 0)
         .map(([symbol, targetWeight]) => ({ symbol, targetWeight })),
     [manualTargets],
   );
@@ -151,9 +147,7 @@ function Reweight() {
       const json = (await res.json()) as ReweightResponse;
       setData(json);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load reweight data",
-      );
+      setError(err instanceof Error ? err.message : "Failed to load reweight data");
     } finally {
       setIsLoading(false);
     }
@@ -165,312 +159,260 @@ function Reweight() {
   }, []);
 
   const hasNoHoldings = data && data.items.length === 0;
-  const buyItems = data?.items.filter((item) => item.action === "buy") ?? [];
-  const sellItems = data?.items.filter((item) => item.action === "sell") ?? [];
+  const buyItems = data?.items.filter((i) => i.action === "buy") ?? [];
+  const sellItems = data?.items.filter((i) => i.action === "sell") ?? [];
   const atomicItems =
     data?.items.filter(
-      (item) =>
-        item.includedInRebalance &&
-        !item.targetEligible &&
-        ["etf", "mutual_fund", "bond"].includes(item.assetClass),
+      (i) =>
+        i.includedInRebalance &&
+        !i.targetEligible &&
+        ["etf", "mutual_fund", "bond"].includes(i.assetClass),
     ) ?? [];
+
   const sortedItems = useMemo(() => {
     const items = data?.items ?? [];
-    if (sortKey === null || sortDirection === null) {
-      return items;
-    }
-
-    const direction = sortDirection === "asc" ? 1 : -1;
-
+    if (!sortKey || !sortDirection) return items;
+    const dir = sortDirection === "asc" ? 1 : -1;
     return [...items].sort((a, b) => {
-      const aValue = getSortValue(a, sortKey);
-      const bValue = getSortValue(b, sortKey);
-
-      if (aValue === null && bValue === null) return 0;
-      if (aValue === null) return 1;
-      if (bValue === null) return -1;
-
-      if (typeof aValue === "number" && typeof bValue === "number") {
-        return (aValue - bValue) * direction;
-      }
-
-      return String(aValue).localeCompare(String(bValue)) * direction;
+      const av = getSortValue(a, sortKey);
+      const bv = getSortValue(b, sortKey);
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
     });
   }, [data, sortDirection, sortKey]);
 
+  const topHoldingAfter = useMemo(() => {
+    if (!data) return null;
+    return (
+      data.items
+        .filter((i) => i.targetWeight !== null && i.includedInRebalance)
+        .sort((a, b) => (b.targetWeight ?? 0) - (a.targetWeight ?? 0))[0] ?? null
+    );
+  }, [data]);
+
   const handleSort = (key: ReweightSortKey) => {
-    if (sortKey !== key || sortDirection === null) {
-      setSortKey(key);
-      setSortDirection("desc");
-      return;
-    }
-
-    if (sortDirection === "desc") {
-      setSortDirection("asc");
-      return;
-    }
-
-    setSortKey(null);
-    setSortDirection(null);
+    if (sortKey !== key || !sortDirection) { setSortKey(key); setSortDirection("desc"); return; }
+    if (sortDirection === "desc") { setSortDirection("asc"); return; }
+    setSortKey(null); setSortDirection(null);
   };
 
   const getSortLabel = (key: ReweightSortKey) => {
-    if (sortKey !== key || sortDirection === null) return "";
-    return sortDirection === "asc" ? " ^" : " v";
+    if (sortKey !== key || !sortDirection) return "";
+    return sortDirection === "asc" ? " ↑" : " ↓";
   };
-
-  const getSortTitle = (key: ReweightSortKey) => {
-    if (sortKey !== key || sortDirection === null) {
-      return "Sort descending";
-    }
-
-    if (sortDirection === "desc") {
-      return "Sort ascending";
-    }
-
-    return "Turn sorting off";
-  };
-
-  const modeNote = (() => {
-    if (targetMode === "capped_market_cap") {
-      return (
-        <>
-          Capped Market Cap limits any single stock to{" "}
-          {maxSingleStockPct.toFixed(0)}% and redistributes the excess across
-          the rest of the direct-stock basket. ETFs and funds stay atomic, so
-          broad index funds like VFV, XEQT, VTI, and SPY are not decomposed.
-        </>
-      );
-    }
-
-    if (targetMode === "market_cap") {
-      return (
-        <>
-          Market Cap weights direct stocks by company size without a
-          single-stock cap. ETFs and funds stay atomic and are not decomposed
-          into underlying holdings.
-        </>
-      );
-    }
-
-    if (targetMode === "sqrt_market_cap") {
-      return (
-        <>
-          Square Root Market Cap keeps larger companies heavier, but compresses
-          mega-cap dominance so smaller holdings still get meaningful targets.
-          ETFs and funds stay atomic.
-        </>
-      );
-    }
-
-    if (targetMode === "equal") {
-      return (
-        <>
-          Equal weight gives each included holding the same target allocation,
-          regardless of market cap or current portfolio size.
-        </>
-      );
-    }
-
-    return (
-      <>
-        Custom Targets lets you enter target percentages directly in the table.
-        The plan normalizes entered targets before calculating drift and trades.
-      </>
-    );
-  })();
 
   const setManualTarget = (symbol: string, value: string) => {
     const parsed = Number.parseFloat(value);
-    setManualTargets((current) => ({
-      ...current,
-      [symbol]: Number.isFinite(parsed) ? parsed : 0,
-    }));
+    setManualTargets((cur) => ({ ...cur, [symbol]: Number.isFinite(parsed) ? parsed : 0 }));
   };
 
-  const maskDollar = (displayValue: string) =>
-    settings.hideDollarAmounts ? "..." : displayValue;
+  const maskDollar = (v: string) => (settings.hideDollarAmounts ? "..." : v);
 
   return (
     <div className="route-page">
       <DashboardNavbar />
       <main className="route-page-main">
         <div className="rw-layout">
+
+          {/* ── Header ── */}
           <div className="rw-header-row">
             <div>
               <h1 className="rw-title">Reweight</h1>
               <p className="rw-subtitle">
-                Capped market cap is the default for small baskets, keeping size
-                awareness without letting one mega-cap dominate the plan.
+                Build a rebalance plan from your live holdings using market-cap
+                targets, equal weight, or custom allocations.
               </p>
             </div>
             <button
-              className="rw-refresh-btn"
+              className="rw-generate-btn"
               onClick={fetchReweight}
               disabled={isLoading}
             >
-              {isLoading ? "Generating..." : "Generate plan"}
+              {isLoading ? "Generating…" : "Generate Plan"}
             </button>
           </div>
 
-          <section className="rw-controls">
-            <label>
-              Target method
-              <select
-                value={targetMode}
-                onChange={(event) =>
-                  setTargetMode(event.target.value as TargetMode)
-                }
-              >
-                <option value="capped_market_cap">Capped Market Cap</option>
-                <option value="market_cap">Market Cap</option>
-                <option value="equal">Equal weight</option>
-                <option value="sqrt_market_cap">Square Root Market Cap</option>
-                <option value="manual">Custom Targets</option>
-              </select>
-            </label>
-            <label>
-              Cash available
-              <input
-                type="number"
-                min="0"
-                value={cashCad}
-                onChange={(event) => setCashCad(Number(event.target.value))}
-              />
-            </label>
-            <label>
-              Drift threshold %
-              <input
-                type="number"
-                min="0"
-                step="0.25"
-                value={driftThresholdPct}
-                onChange={(event) =>
-                  setDriftThresholdPct(Number(event.target.value))
-                }
-              />
-            </label>
-            <label>
-              Min trade CAD
-              <input
-                type="number"
-                min="0"
-                step="5"
-                value={minTradeCad}
-                onChange={(event) => setMinTradeCad(Number(event.target.value))}
-              />
-            </label>
-            {targetMode === "capped_market_cap" && (
-              <label>
-                Max stock %
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  value={maxSingleStockPct}
-                  onChange={(event) =>
-                    setMaxSingleStockPct(Number(event.target.value))
-                  }
-                />
+          {/* ── Controls ── */}
+          <section className="rw-controls-wrap">
+            <div className="rw-controls-group">
+              <span className="rw-controls-group-label">Strategy</span>
+              <label className="rw-field">
+                Target method
+                <select
+                  value={targetMode}
+                  onChange={(e) => setTargetMode(e.target.value as TargetMode)}
+                >
+                  <option value="capped_market_cap">Capped Market Cap</option>
+                  <option value="market_cap">Market Cap</option>
+                  <option value="equal">Equal weight</option>
+                  <option value="sqrt_market_cap">Square Root Market Cap</option>
+                  <option value="manual">Custom Targets</option>
+                </select>
               </label>
-            )}
-            <label className="rw-checkbox">
-              <input
-                type="checkbox"
-                checked={fractionalShares}
-                onChange={(event) => setFractionalShares(event.target.checked)}
-              />
-              Fractional shares
-            </label>
-            <label className="rw-checkbox">
-              <input
-                type="checkbox"
-                checked={cashFirst}
-                onChange={(event) => setCashFirst(event.target.checked)}
-              />
-              Cash-first
-            </label>
-            <label className="rw-checkbox">
-              <input
-                type="checkbox"
-                checked={noSell}
-                onChange={(event) => setNoSell(event.target.checked)}
-              />
-              No-sell mode
-            </label>
+            </div>
+
+            <div className="rw-controls-group">
+              <span className="rw-controls-group-label">Parameters</span>
+              <div className="rw-controls-params">
+                <label className="rw-field">
+                  Cash (CA$)
+                  <input type="number" min="0" value={cashCad}
+                    onChange={(e) => setCashCad(Number(e.target.value))} />
+                </label>
+                <label className="rw-field">
+                  Drift %
+                  <input type="number" min="0" step="0.25" value={driftThresholdPct}
+                    onChange={(e) => setDriftThresholdPct(Number(e.target.value))} />
+                </label>
+                <label className="rw-field">
+                  Min trade
+                  <input type="number" min="0" step="5" value={minTradeCad}
+                    onChange={(e) => setMinTradeCad(Number(e.target.value))} />
+                </label>
+                {targetMode === "capped_market_cap" && (
+                  <label className="rw-field">
+                    Max stock %
+                    <input type="number" min="1" max="100" step="1" value={maxSingleStockPct}
+                      onChange={(e) => setMaxSingleStockPct(Number(e.target.value))} />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div className="rw-controls-group">
+              <span className="rw-controls-group-label">Rules</span>
+              <div className="rw-controls-toggles">
+                <label className="rw-toggle">
+                  <input type="checkbox" checked={fractionalShares}
+                    onChange={(e) => setFractionalShares(e.target.checked)} />
+                  Fractional shares
+                </label>
+                <label className="rw-toggle">
+                  <input type="checkbox" checked={cashFirst}
+                    onChange={(e) => setCashFirst(e.target.checked)} />
+                  Cash-first
+                </label>
+                <label className="rw-toggle">
+                  <input type="checkbox" checked={noSell}
+                    onChange={(e) => setNoSell(e.target.checked)} />
+                  No-sell mode
+                </label>
+              </div>
+            </div>
           </section>
 
-          <div className="rw-mode-note">{modeNote}</div>
+          {/* ── Rules Applied badges ── */}
+          <div className="rw-rules-applied">
+            <span className="rw-rules-label">Rules Applied</span>
+            <div className="rw-rules-badges">
+              <span className="rw-rule-badge">✓ {MODE_LABELS[targetMode]}</span>
+              {targetMode === "capped_market_cap" && (
+                <span className="rw-rule-badge">✓ Max stock {maxSingleStockPct}%</span>
+              )}
+              {atomicItems.length > 0 && (
+                <span className="rw-rule-badge">✓ ETFs preserved</span>
+              )}
+              {fractionalShares && (
+                <span className="rw-rule-badge">✓ Fractional shares</span>
+              )}
+              {cashFirst && <span className="rw-rule-badge">✓ Cash-first</span>}
+              {noSell && (
+                <span className="rw-rule-badge rw-rule-badge-warn">⚠ No-sell mode</span>
+              )}
+              <span className="rw-rule-badge">✓ Drift ≥ {driftThresholdPct}%</span>
+              <span className="rw-rule-badge">✓ Min trade CA${minTradeCad}</span>
+              {data?.notes.map((note) => (
+                <span className="rw-rule-badge rw-rule-badge-info" key={note}>
+                  ↳ {note}
+                </span>
+              ))}
+            </div>
+          </div>
 
           {error && <div className="rw-error">{error}</div>}
 
           {hasNoHoldings && !isLoading && (
             <div className="rw-empty">
-              No holdings found. Import your portfolio on the Holdings page
-              first.
+              No holdings found. Import your portfolio on the Holdings page first.
             </div>
           )}
 
+          {/* ── KPI Summary ── */}
           {data && !hasNoHoldings && (
             <div className="rw-summary-grid">
-              <div className="rw-summary-card">
+              <div className="rw-summary-card rw-summary-card--blue">
                 <span className="rw-summary-label">Portfolio Value</span>
                 <span className="rw-summary-value">
                   {maskDollar(formatCad(data.totalValueCad))}
                 </span>
+                <span className="rw-summary-note">{data.items.length} positions</span>
               </div>
-              <div className="rw-summary-card">
+              <div className="rw-summary-card rw-summary-card--neutral">
                 <span className="rw-summary-label">Cash Applied</span>
                 <span className="rw-summary-value">
                   {maskDollar(formatCad(data.cashCad))}
                 </span>
+                <span className="rw-summary-note">available capital</span>
               </div>
-              <div className="rw-summary-card rw-summary-buy">
+              <div className="rw-summary-card rw-summary-card--green">
                 <span className="rw-summary-label">Buy Orders</span>
                 <span className="rw-summary-value rw-positive">
                   {maskDollar(formatCad(data.totalBuyCad))}
                 </span>
-                <span className="rw-summary-note">
-                  {buyItems.length} trades
-                </span>
+                <span className="rw-summary-note">{buyItems.length} trades</span>
               </div>
-              <div className="rw-summary-card rw-summary-sell">
+              <div className="rw-summary-card rw-summary-card--red">
                 <span className="rw-summary-label">Sell Orders</span>
                 <span className="rw-summary-value rw-negative">
                   {maskDollar(formatCad(Math.abs(data.totalSellCad)))}
                 </span>
-                <span className="rw-summary-note">
-                  {sellItems.length} trades
-                </span>
+                <span className="rw-summary-note">{sellItems.length} trades</span>
               </div>
             </div>
           )}
 
-          {data && data.notes.length > 0 && (
-            <div className="rw-notes">
-              {data.notes.map((note) => (
-                <span key={note}>{note}</span>
-              ))}
+          {/* ── Post-Rebalance Snapshot ── */}
+          {data && !hasNoHoldings && topHoldingAfter && (
+            <div className="rw-snapshot-card">
+              <span className="rw-snapshot-eyebrow">Post-Rebalance Snapshot</span>
+              <div className="rw-snapshot-grid">
+                <div className="rw-snapshot-item">
+                  <strong>{topHoldingAfter.symbol}</strong>
+                  <span>
+                    {topHoldingAfter.targetWeight?.toFixed(1)}% top position
+                  </span>
+                </div>
+                <div className="rw-snapshot-item">
+                  <strong>{buyItems.length + sellItems.length}</strong>
+                  <span>total trades</span>
+                </div>
+                <div className="rw-snapshot-item">
+                  <strong>{data.excludedCount}</strong>
+                  <span>excluded holdings</span>
+                </div>
+                <div className="rw-snapshot-item">
+                  <strong>
+                    {maskDollar(
+                      formatCad(Math.abs(data.totalBuyCad - Math.abs(data.totalSellCad))),
+                    )}
+                  </strong>
+                  <span>net cash drift</span>
+                </div>
+              </div>
             </div>
           )}
 
-          {atomicItems.length > 0 && (
-            <div className="rw-notes">
-              <span>
-                Atomic holdings preserved:{" "}
-                {atomicItems.map((item) => item.symbol).join(", ")}
-              </span>
-            </div>
-          )}
-
+          {/* ── Table ── */}
           {data && !hasNoHoldings && (
             <div className="rw-table-wrap">
               <div className="rw-table-header-row">
                 <h2 className="rw-table-title">Rebalance Plan</h2>
                 {data.generatedAt && (
                   <span className="rw-table-timestamp">
-                    Data as of {new Date(data.generatedAt).toLocaleTimeString()}
+                    as of {new Date(data.generatedAt).toLocaleTimeString()}
                   </span>
                 )}
               </div>
@@ -489,96 +431,30 @@ function Reweight() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("symbol")}
-                          onClick={() => handleSort("symbol")}
-                        >
-                          Asset{getSortLabel("symbol")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("assetClass")}
-                          onClick={() => handleSort("assetClass")}
-                        >
-                          Class{getSortLabel("assetClass")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("currentValueCad")}
-                          onClick={() => handleSort("currentValueCad")}
-                        >
-                          Current Value{getSortLabel("currentValueCad")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("currentWeight")}
-                          onClick={() => handleSort("currentWeight")}
-                        >
-                          Current %{getSortLabel("currentWeight")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("targetWeight")}
-                          onClick={() => handleSort("targetWeight")}
-                        >
-                          Target %{getSortLabel("targetWeight")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("driftPct")}
-                          onClick={() => handleSort("driftPct")}
-                        >
-                          Drift{getSortLabel("driftPct")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("tradeCad")}
-                          onClick={() => handleSort("tradeCad")}
-                        >
-                          Trade{getSortLabel("tradeCad")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("tradeShares")}
-                          onClick={() => handleSort("tradeShares")}
-                        >
-                          Shares{getSortLabel("tradeShares")}
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          className="rw-sort-btn"
-                          type="button"
-                          title={getSortTitle("marketCap")}
-                          onClick={() => handleSort("marketCap")}
-                        >
-                          Market Cap{getSortLabel("marketCap")}
-                        </button>
-                      </th>
+                      {(
+                        [
+                          ["symbol", "Asset"],
+                          ["assetClass", "Class"],
+                          ["currentValueCad", "Current Value"],
+                          ["currentWeight", "Current %"],
+                          ["targetWeight", "Target %"],
+                          ["driftPct", "Drift"],
+                          ["tradeCad", "Trade"],
+                          ["tradeShares", "Shares"],
+                          ["marketCap", "Market Cap"],
+                        ] as [ReweightSortKey, string][]
+                      ).map(([key, label]) => (
+                        <th key={key}>
+                          <button
+                            className="rw-sort-btn"
+                            type="button"
+                            title="Toggle sort"
+                            onClick={() => handleSort(key)}
+                          >
+                            {label}{getSortLabel(key)}
+                          </button>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -587,9 +463,7 @@ function Reweight() {
                       return (
                         <tr
                           key={item.symbol}
-                          className={
-                            !item.includedInRebalance ? "rw-row-dimmed" : ""
-                          }
+                          className={!item.includedInRebalance ? "rw-row-dimmed" : ""}
                         >
                           <td title={item.name}>
                             <span className="rw-symbol">{item.symbol}</span>
@@ -599,15 +473,12 @@ function Reweight() {
                             )}
                           </td>
                           <td>
-                            <span className="rw-type-badge">
-                              {item.assetClass}
-                            </span>
+                            <span className="rw-type-badge">{item.assetClass}</span>
                           </td>
                           <td>{maskDollar(formatCad(item.currentValueCad))}</td>
                           <td>{formatPct(item.currentWeight)}</td>
                           <td>
-                            {targetMode === "manual" &&
-                            item.includedInRebalance ? (
+                            {targetMode === "manual" && item.includedInRebalance ? (
                               <input
                                 className="rw-target-input"
                                 type="number"
@@ -618,12 +489,7 @@ function Reweight() {
                                   item.targetWeight ??
                                   item.currentWeight
                                 }
-                                onChange={(event) =>
-                                  setManualTarget(
-                                    item.symbol,
-                                    event.target.value,
-                                  )
-                                }
+                                onChange={(e) => setManualTarget(item.symbol, e.target.value)}
                               />
                             ) : (
                               formatPct(item.targetWeight)
@@ -644,15 +510,17 @@ function Reweight() {
                             {trade === null ? (
                               <span className="rw-no-data">No target</span>
                             ) : item.action === "buy" ? (
-                              <span className="rw-buy">
+                              <span className="rw-action-pill rw-action-pill-buy">
                                 Buy {maskDollar(formatCad(trade))}
                               </span>
                             ) : item.action === "sell" ? (
-                              <span className="rw-sell">
+                              <span className="rw-action-pill rw-action-pill-sell">
                                 Sell {maskDollar(formatCad(Math.abs(trade)))}
                               </span>
                             ) : (
-                              <span className="rw-neutral">Hold</span>
+                              <span className="rw-action-pill rw-action-pill-hold">
+                                Hold
+                              </span>
                             )}
                           </td>
                           <td>{formatShares(item.tradeShares)}</td>
@@ -667,7 +535,7 @@ function Reweight() {
           )}
 
           {isLoading && !data && (
-            <div className="rw-loading">Generating rebalance plan...</div>
+            <div className="rw-loading">Generating rebalance plan…</div>
           )}
         </div>
       </main>
