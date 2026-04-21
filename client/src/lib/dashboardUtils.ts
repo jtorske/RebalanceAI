@@ -1,12 +1,12 @@
 export const DONUT_COLORS = [
-  "#9074FF",
-  "#FCC860",
-  "#A7F782",
-  "#5ED3F3",
-  "#FF8FA3",
-  "#6E7FF3",
-  "#7DE0C4",
-  "#C6B8FF",
+  "#8B7CFF", // purple
+  "#5CB8FF", // blue
+  "#62D5C8", // teal
+  "#9BE37A", // green
+  "#F3C969", // gold
+  "#F28AA5", // coral
+  "#7F8CFF", // indigo
+  "#A6B0C3", // slate
 ];
 
 export const OTHER_DONUT_COLOR = "#6B7280";

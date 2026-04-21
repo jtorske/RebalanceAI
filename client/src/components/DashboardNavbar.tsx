@@ -1,6 +1,7 @@
 import { FiUser, FiX } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import "./DashboardNavbar.css";
 import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings, type ThemePreference } from "../lib/userSettings";
@@ -60,18 +61,8 @@ function DashboardNavbar() {
         <NavLink className="dashboard-navbar-link" to="/goal-planner">
           Goals
         </NavLink>
-        <NavLink
-          className="dashboard-navbar-link dashboard-navbar-link-primary"
-          to="/holdings"
-        >
-          {hasPersistedHoldings ? (
-            "Holdings"
-          ) : (
-            <>
-              <span className="dashboard-navbar-badge">START HERE</span>
-              Holdings
-            </>
-          )}
+        <NavLink className="dashboard-navbar-link" to="/holdings">
+          Holdings
         </NavLink>
       </nav>
 
@@ -84,7 +75,7 @@ function DashboardNavbar() {
         <FiUser size={21} />
       </button>
 
-      {isSettingsOpen && (
+      {isSettingsOpen && createPortal(
         <div
           className="settings-backdrop"
           role="presentation"
@@ -206,7 +197,8 @@ function DashboardNavbar() {
               </label>
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body,
       )}
     </header>
   );

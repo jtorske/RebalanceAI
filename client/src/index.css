@@ -221,6 +221,55 @@ body {
   color: #181818;
 }
 
+/* ── Navbar dark mode ── */
+:root[data-theme="dark"] .dashboard-navbar {
+  background: rgba(21, 21, 22, 0.85);
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .dashboard-navbar-link {
+  color: var(--app-text) !important;
+}
+
+:root[data-theme="dark"] .dashboard-navbar-link:hover,
+:root[data-theme="dark"] .dashboard-navbar-link.active {
+  color: var(--app-accent) !important;
+}
+
+/* ── Action list dark mode ── */
+:root[data-theme="dark"] .dashboard-action-symbol {
+  color: var(--app-text) !important;
+}
+
+:root[data-theme="dark"] .dashboard-action-sell {
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+:root[data-theme="dark"] .dashboard-action-buy {
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+
+/* ── Risk flags dark mode ── */
+:root[data-theme="dark"] .dashboard-risk-flag-high {
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+:root[data-theme="dark"] .dashboard-risk-flag-medium {
+  background: rgba(251, 146, 60, 0.12) !important;
+}
+
+:root[data-theme="dark"] .dashboard-risk-flag-low {
+  background: rgba(100, 100, 116, 0.1) !important;
+}
+
+:root[data-theme="dark"] .dashboard-allocation-cad {
+  color: var(--app-muted) !important;
+}
+
+:root[data-theme="dark"] .dashboard-allocation-pct {
+  color: var(--app-accent-strong) !important;
+}
+
 /* ── Goal Planner dark mode ── */
 .goal-card,
 .goal-outcome-card,

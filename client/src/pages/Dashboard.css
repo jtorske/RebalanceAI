@@ -26,6 +26,18 @@
   padding: clamp(10px, 1.4vw, 24px) clamp(14px, 2.5vw, 48px)
     clamp(10px, 1.4vw, 20px);
   overflow: hidden;
+  animation: page-fade-in 0.32s ease forwards;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dashboard-top-section {
@@ -59,11 +71,12 @@
   background: var(--color-background-primary, #fff);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  padding: clamp(8px, 0.9vw, 14px);
+  padding: clamp(10px, 1vw, 16px);
   border-left-width: 3px;
   border-left-style: solid;
   border-left-color: transparent;
 }
+
 
 .dashboard-stat-card--blue   { border-left-color: #6366f1; }
 .dashboard-stat-card--neutral { border-left-color: #94a3b8; }
@@ -73,7 +86,10 @@
 
 .dashboard-stat-label {
   font-size: clamp(10px, 0.75vw, 11px);
-  color: #888;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9999a8;
   margin-bottom: 4px;
 }
 
@@ -83,8 +99,8 @@
 }
 
 .dashboard-stat-value--strong {
-  font-weight: 700;
-  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 800;
+  font-size: clamp(16px, 1.5vw, 22px);
 }
 
 .dashboard-stat-sub {
@@ -110,19 +126,20 @@
 .dashboard-card {
   background: #ffffff;
   border-radius: 12px;
-  padding: clamp(12px, 1.4vw, 20px);
+  padding: clamp(14px, 1.6vw, 22px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
+
 .dashboard-card-title-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: clamp(15px, 1.3vw, 20px);
-  font-weight: 500;
+  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 600;
   color: #181818;
 }
 
@@ -224,10 +241,25 @@
   overflow: hidden;
 }
 
+.dashboard-allocation-row-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.dashboard-allocation-cad {
+  font-size: 11px;
+  color: var(--app-muted, #8a8a98);
+  font-variant-numeric: tabular-nums;
+}
+
 .dashboard-allocation-pct {
-  font-weight: 600;
+  font-weight: 700;
   color: #4c3f9a;
   font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: right;
 }
 
 /* ── Donut ring ───────────────────────────────────── */
@@ -246,6 +278,18 @@
   max-width: min(100%, 520px);
   min-width: 0;
   isolation: isolate;
+  animation: donut-appear 0.5s ease forwards;
+}
+
+@keyframes donut-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .dashboard-donut-svg {
@@ -337,7 +381,13 @@
   padding: 5px 14px 5px 6px;
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
   transform: translate(-50%, -50%);
-  pointer-events: none;
+  cursor: default;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-donut-chip:hover {
+  background: #2c2d34;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
 }
 
 .dashboard-donut-chip-left {
@@ -547,20 +597,82 @@
 }
 
 .dashboard-suggestion-content {
-  margin-top: 14px;
+  margin-top: 12px;
   min-height: 104px;
   justify-content: flex-start;
+}
+
+.dashboard-suggestion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
 }
 
 .dashboard-suggestion-text {
   margin: 0;
   color: #303039;
-  font-size: clamp(12px, 0.9vw, 13px);
+  font-size: clamp(11px, 0.85vw, 13px);
   line-height: 1.55;
 }
 
+.dashboard-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-action-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-muted, #656572);
+  margin-bottom: 4px;
+}
+
+.dashboard-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.dashboard-action-sell {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.dashboard-action-buy {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.dashboard-action-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  min-width: 28px;
+}
+
+.dashboard-action-sell .dashboard-action-badge {
+  color: #c0392b;
+}
+
+.dashboard-action-buy .dashboard-action-badge {
+  color: #1a8a3a;
+}
+
+.dashboard-action-symbol {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--app-text, #181818);
+}
+
 .dashboard-risk-content {
-  margin-top: 14px;
+  margin-top: 12px;
   min-height: 104px;
   justify-content: flex-start;
 }
@@ -568,21 +680,59 @@
 .dashboard-risk-summary {
   margin: 0;
   color: #303039;
-  font-size: clamp(12px, 0.9vw, 13px);
+  font-size: clamp(11px, 0.85vw, 13px);
   line-height: 1.55;
 }
 
-.dashboard-risk-caption {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #36363f;
+.dashboard-risk-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-height: 0;
 }
 
-.dashboard-risk-caption-strong {
-  margin-top: 0;
-  font-size: clamp(20px, 2vw, 28px);
+.dashboard-risk-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dashboard-risk-flag-high { background: rgba(239, 68, 68, 0.07); }
+.dashboard-risk-flag-medium { background: rgba(251, 146, 60, 0.07); }
+.dashboard-risk-flag-low { background: rgba(100, 100, 116, 0.05); }
+
+.dashboard-risk-flag-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.dashboard-risk-flag-high .dashboard-risk-flag-dot { background: #ef4444; }
+.dashboard-risk-flag-medium .dashboard-risk-flag-dot { background: #fb923c; }
+.dashboard-risk-flag-low .dashboard-risk-flag-dot { background: #9ca3af; }
+
+.dashboard-risk-flag-text {
+  color: var(--app-text-soft, #303039);
+}
+
+.dashboard-risk-flag-text strong {
+  color: var(--app-text, #181818);
   font-weight: 700;
-  line-height: 1;
+}
+
+.dashboard-risk-flag-footer {
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 11px;
+  color: var(--app-muted, #8a8a98);
+  padding-left: 2px;
 }
 
 .dashboard-mini-grid {

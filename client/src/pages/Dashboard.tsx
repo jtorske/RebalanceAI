@@ -42,11 +42,16 @@ type SectorBreakdownResponse = {
   generatedAt: string;
 };
 
+type RiskConcernItem = {
+  severity: "high" | "medium" | "low";
+  title?: string;
+  symbol?: string;
+  category?: string;
+};
+
 type RiskAnalysisResponse = {
   dashboardSummary: string | null;
-  concerns: Array<{
-    severity: "high" | "medium" | "low";
-  }>;
+  concerns: RiskConcernItem[];
 };
 
 const repairTextEncoding = (value: string) =>
@@ -425,7 +430,9 @@ function Dashboard() {
     useState(true);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
   const [riskConcernCount, setRiskConcernCount] = useState(0);
+  const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
   const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
+  const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(null);
 
   useEffect(() => {
     const loadHoldings = async () => {
@@ -623,6 +630,7 @@ function Dashboard() {
             : null,
         );
         setRiskConcernCount(data.concerns?.length ?? 0);
+        setRiskConcerns((data.concerns ?? []).slice(0, 4));
       } catch {
         try {
           const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
@@ -719,25 +727,29 @@ function Dashboard() {
         weight: holding.weight,
         valueCad: holding.marketValueCad,
         color: DONUT_COLORS[index % DONUT_COLORS.length],
+        holdingCount: 1,
       }));
 
-    const remainderWeight = weightedHoldings
-      .slice(7)
-      .reduce((sum, holding) => sum + holding.weight, 0);
+    const otherHoldings = weightedHoldings.slice(7);
+    const remainderWeight = otherHoldings.reduce((sum, h) => sum + h.weight, 0);
 
     if (remainderWeight > 0.01) {
       visibleHoldings.push({
         symbol: "OTHER",
         weight: remainderWeight,
-        valueCad: weightedHoldings
-          .slice(7)
-          .reduce((sum, holding) => sum + holding.marketValueCad, 0),
+        valueCad: otherHoldings.reduce((sum, h) => sum + h.marketValueCad, 0),
         color: OTHER_DONUT_COLOR,
+        holdingCount: otherHoldings.length,
       });
     }
 
     return visibleHoldings;
   }, [weightedHoldings]);
+
+  const hoveredSegment = useMemo(
+    () => (hoveredChipSymbol ? (donutSegments.find((s) => s.symbol === hoveredChipSymbol) ?? null) : null),
+    [hoveredChipSymbol, donutSegments],
+  );
 
   const donutStrokeSegments = useMemo(() => {
     const radius = 35;
@@ -1062,53 +1074,44 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <div className="dashboard-mini-grid">
-                        <article className="dashboard-mini-card dashboard-mini-card-wide">
-                          <h4>Plan Snapshot</h4>
-                          <p className="dashboard-suggestion-text">
-                            {suggestionCards.summary}
-                          </p>
-                        </article>
-
-                        <article className="dashboard-mini-card">
-                          <h4>Trim</h4>
-                          <div className="dashboard-pill-list">
-                            {suggestionCards.trim.length === 0 ? (
-                              <span className="dashboard-pill dashboard-pill-neutral">
-                                No trim targets
-                              </span>
-                            ) : (
-                              suggestionCards.trim.map((item) => (
-                                <span
-                                  className="dashboard-pill"
-                                  key={`trim-${item}`}
-                                >
-                                  {item}
+                      <div className="dashboard-suggestion-body">
+                        <p className="dashboard-suggestion-text">
+                          {suggestionCards.summary}
+                        </p>
+                        {(suggestionCards.trim.length > 0 ||
+                          suggestionCards.add.length > 0) && (
+                          <div className="dashboard-action-list">
+                            <span className="dashboard-action-label">
+                              Top Actions
+                            </span>
+                            {suggestionCards.trim.map((sym) => (
+                              <div
+                                className="dashboard-action-row dashboard-action-sell"
+                                key={`sell-${sym}`}
+                              >
+                                <span className="dashboard-action-badge">
+                                  Sell
                                 </span>
-                              ))
-                            )}
-                          </div>
-                        </article>
-
-                        <article className="dashboard-mini-card">
-                          <h4>Add</h4>
-                          <div className="dashboard-pill-list">
-                            {suggestionCards.add.length === 0 ? (
-                              <span className="dashboard-pill dashboard-pill-neutral">
-                                No add targets
-                              </span>
-                            ) : (
-                              suggestionCards.add.map((item) => (
-                                <span
-                                  className="dashboard-pill"
-                                  key={`add-${item}`}
-                                >
-                                  {item}
+                                <span className="dashboard-action-symbol">
+                                  {sym}
                                 </span>
-                              ))
-                            )}
+                              </div>
+                            ))}
+                            {suggestionCards.add.map((sym) => (
+                              <div
+                                className="dashboard-action-row dashboard-action-buy"
+                                key={`buy-${sym}`}
+                              >
+                                <span className="dashboard-action-badge">
+                                  Buy
+                                </span>
+                                <span className="dashboard-action-symbol">
+                                  {sym}
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        </article>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1136,36 +1139,45 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <div className="dashboard-mini-grid">
-                        <article className="dashboard-mini-card dashboard-mini-card-wide">
-                          <h4>Risk Readout</h4>
+                      <div className="dashboard-risk-flags">
+                        {riskConcerns.length === 0 ? (
                           <p className="dashboard-risk-summary">
                             {riskSummary ??
                               "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
                           </p>
-                        </article>
-
-                        <article className="dashboard-mini-card">
-                          <h4>Possible Concerns</h4>
-                          <div className="dashboard-risk-caption dashboard-risk-caption-strong">
-                            {riskConcernCount}
-                          </div>
-                        </article>
-
-                        <article className="dashboard-mini-card">
-                          <h4>Status</h4>
-                          <div
-                            className={`dashboard-risk-caption dashboard-risk-caption-strong ${
+                        ) : (
+                          riskConcerns.map((concern, i) => (
+                            <div
+                              className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
+                              key={`${concern.symbol ?? ""}-${i}`}
+                            >
+                              <span className="dashboard-risk-flag-dot" />
+                              <span className="dashboard-risk-flag-text">
+                                {concern.symbol && (
+                                  <strong>{concern.symbol} </strong>
+                                )}
+                                {concern.title ?? concern.category ?? "Risk signal"}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                        <div className="dashboard-risk-flag-footer">
+                          <span>
+                            {riskConcernCount} concern
+                            {riskConcernCount !== 1 ? "s" : ""} · Status:{" "}
+                          </span>
+                          <span
+                            className={
                               riskStatus === "Low"
                                 ? "dashboard-positive"
                                 : riskStatus === "Watch"
                                   ? "dashboard-comparison-muted"
                                   : "dashboard-negative"
-                            }`}
+                            }
                           >
                             {riskStatus}
-                          </div>
-                        </article>
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1208,6 +1220,23 @@ function Dashboard() {
                           <div className="dashboard-donut-empty">
                             No allocation yet
                           </div>
+                        ) : hoveredSegment ? (
+                          <div className="dashboard-donut-center">
+                            <span className="dashboard-donut-center-label">
+                              {hoveredSegment.symbol}
+                            </span>
+                            <span className="dashboard-donut-center-value" style={{ fontSize: "clamp(16px, 2.8vw, 26px)" }}>
+                              {maskDollar(formatCompactCad(hoveredSegment.valueCad))}
+                            </span>
+                            <span className="dashboard-donut-center-change" style={{ color: "#a2a3a7" }}>
+                              {hoveredSegment.weight.toFixed(1)}% of portfolio
+                            </span>
+                            {hoveredSegment.holdingCount > 1 && (
+                              <span className="dashboard-donut-center-period">
+                                {hoveredSegment.holdingCount} positions
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <div className="dashboard-donut-center">
                             <span className="dashboard-donut-center-label">
@@ -1244,7 +1273,8 @@ function Dashboard() {
                             key={`${segment.symbol}-${segment.weight.toString()}-chip`}
                             style={segment.labelStyle}
                             type="button"
-                            title={`${segment.symbol}: ${segment.weight.toFixed(1)}%`}
+                            onMouseEnter={() => setHoveredChipSymbol(segment.symbol)}
+                            onMouseLeave={() => setHoveredChipSymbol(null)}
                           >
                             <span
                               className="dashboard-donut-chip-icon"
@@ -1284,7 +1314,14 @@ function Dashboard() {
                         }}
                       >
                         <span>{entry.sector}</span>
-                        <span className="dashboard-allocation-pct">{entry.weight.toFixed(1)}%</span>
+                        <span className="dashboard-allocation-row-right">
+                          <span className="dashboard-allocation-cad">
+                            {maskDollar(formatCompactCad(entry.valueCad))}
+                          </span>
+                          <span className="dashboard-allocation-pct">
+                            {entry.weight.toFixed(1)}%
+                          </span>
+                        </span>
                       </div>
                     ))}
                   </div>
