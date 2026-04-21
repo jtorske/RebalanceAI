@@ -6,13 +6,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Screenshots and loose images at repo root
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-
 # Environment files
 .env
 .env.*

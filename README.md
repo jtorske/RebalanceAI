@@ -1,5 +1,9 @@
 # RebalanceAI
 
+AI-powered portfolio analytics platform for rebalancing, risk management, and market insights.
+
+![Dashboard Screenshot](./screenshots/dashboard.png)
+
 An AI-assisted portfolio tracking and rebalancing dashboard. Import broker CSV exports to get live P&L, daily performance vs. benchmarks, sector allocation, concentration risk, key insights, and algorithmic rebalancing plans.
 
 ---
