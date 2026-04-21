@@ -64,9 +64,13 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u0094", "-");
 
 const stripLlmPreamble = (text: string): string =>
-  text.replace(/^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i, "")
-      .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
-      .trim();
+  text
+    .replace(
+      /^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i,
+      "",
+    )
+    .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
+    .trim();
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
   if (holdings.length === 0) {
@@ -226,7 +230,10 @@ const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
 
 const getFallbackRiskAnalysis = (
   holdings: ImportedHolding[],
-): { summary: string; severityCounts: { high: number; medium: number; low: number } } => {
+): {
+  summary: string;
+  severityCounts: { high: number; medium: number; low: number };
+} => {
   if (holdings.length === 0) {
     return {
       summary:
@@ -432,9 +439,15 @@ function Dashboard() {
   const [totalSellCad, setTotalSellCad] = useState<number | null>(null);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
   const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
-  const [riskSeverityCounts, setRiskSeverityCounts] = useState({ high: 0, medium: 0, low: 0 });
+  const [riskSeverityCounts, setRiskSeverityCounts] = useState({
+    high: 0,
+    medium: 0,
+    low: 0,
+  });
   const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
-  const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(null);
+  const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadHoldings = async () => {
@@ -542,8 +555,14 @@ function Dashboard() {
         setRebalanceSummary(
           data.summary ? repairTextEncoding(data.summary) : null,
         );
-        setTrimSymbols(data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3));
-        setAddSymbols(data.addSymbols ?? (data.underweights ?? []).map((u) => u.symbol).slice(0, 3));
+        setTrimSymbols(
+          data.trimSymbols ??
+            (data.overweights ?? []).map((o) => o.symbol).slice(0, 3),
+        );
+        setAddSymbols(
+          data.addSymbols ??
+            (data.underweights ?? []).map((u) => u.symbol).slice(0, 3),
+        );
         setTotalBuyCad(data.totalBuyCad ?? null);
         setTotalSellCad(data.totalSellCad ?? null);
       } catch {
@@ -756,7 +775,10 @@ function Dashboard() {
   }, [weightedHoldings]);
 
   const hoveredSegment = useMemo(
-    () => (hoveredChipSymbol ? (donutSegments.find((s) => s.symbol === hoveredChipSymbol) ?? null) : null),
+    () =>
+      hoveredChipSymbol
+        ? (donutSegments.find((s) => s.symbol === hoveredChipSymbol) ?? null)
+        : null,
     [hoveredChipSymbol, donutSegments],
   );
 
@@ -919,7 +941,9 @@ function Dashboard() {
                   <div className="dashboard-stat-sub">avg cost basis</div>
                 </div>
 
-                <div className={`dashboard-stat-card ${totalGainLossCad >= 0 ? "dashboard-stat-card--positive" : "dashboard-stat-card--negative"}`}>
+                <div
+                  className={`dashboard-stat-card ${totalGainLossCad >= 0 ? "dashboard-stat-card--positive" : "dashboard-stat-card--negative"}`}
+                >
                   <div className="dashboard-stat-label">Unrealized P&amp;L</div>
                   <div
                     className={`dashboard-stat-value dashboard-stat-value--strong ${totalGainLossCad >= 0 ? "dashboard-positive" : "dashboard-negative"}`}
@@ -940,7 +964,9 @@ function Dashboard() {
 
                 <div className="dashboard-stat-card dashboard-stat-card--purple">
                   <div className="dashboard-stat-label">Open positions</div>
-                  <div className="dashboard-stat-value dashboard-stat-value--strong">{holdings.length}</div>
+                  <div className="dashboard-stat-value dashboard-stat-value--strong">
+                    {holdings.length}
+                  </div>
                   <div className="dashboard-stat-sub">
                     {sectorBreakdown.length} sectors
                   </div>
@@ -952,7 +978,7 @@ function Dashboard() {
                   <div className="dashboard-card-header-row">
                     <div className="dashboard-card-title-row">
                       <FiBarChart2 size={30} />
-                      <span>Portfolio vs Market</span>
+                      <span>Today's Market Summary</span>
                     </div>
                   </div>
 
@@ -971,16 +997,26 @@ function Dashboard() {
                               Welcome back {welcomeName}
                             </p>
                             {(() => {
-                              const parts = (aiSummary ?? "").split("Portfolio drivers:");
+                              const parts = (aiSummary ?? "").split(
+                                "Portfolio drivers:",
+                              );
                               const market = parts[0].trim();
                               const drivers = parts[1]?.trim() ?? null;
                               return (
                                 <>
-                                  {market && <p className="dashboard-ai-summary-text">{market}</p>}
+                                  {market && (
+                                    <p className="dashboard-ai-summary-text">
+                                      {market}
+                                    </p>
+                                  )}
                                   {drivers && (
                                     <div className="dashboard-ai-drivers">
-                                      <span className="dashboard-ai-drivers-label">Portfolio drivers</span>
-                                      <p className="dashboard-ai-summary-text">{drivers}</p>
+                                      <span className="dashboard-ai-drivers-label">
+                                        Portfolio drivers
+                                      </span>
+                                      <p className="dashboard-ai-summary-text">
+                                        {drivers}
+                                      </p>
                                     </div>
                                   )}
                                 </>
@@ -1151,7 +1187,9 @@ function Dashboard() {
                             <div className="dashboard-plan-snapshot-grid">
                               <div className="dashboard-plan-snapshot-item">
                                 <span className="dashboard-plan-snapshot-value dashboard-positive">
-                                  {maskDollar(formatCompactCad(totalBuyCad ?? 0))}
+                                  {maskDollar(
+                                    formatCompactCad(totalBuyCad ?? 0),
+                                  )}
                                 </span>
                                 <span className="dashboard-plan-snapshot-key">
                                   Buys
@@ -1159,7 +1197,9 @@ function Dashboard() {
                               </div>
                               <div className="dashboard-plan-snapshot-item">
                                 <span className="dashboard-plan-snapshot-value dashboard-negative">
-                                  {maskDollar(formatCompactCad(totalSellCad ?? 0))}
+                                  {maskDollar(
+                                    formatCompactCad(totalSellCad ?? 0),
+                                  )}
                                 </span>
                                 <span className="dashboard-plan-snapshot-key">
                                   Sells
@@ -1169,7 +1209,10 @@ function Dashboard() {
                                 <span className="dashboard-plan-snapshot-value">
                                   {maskDollar(
                                     formatCompactCad(
-                                      Math.abs((totalBuyCad ?? 0) - (totalSellCad ?? 0)),
+                                      Math.abs(
+                                        (totalBuyCad ?? 0) -
+                                          (totalSellCad ?? 0),
+                                      ),
                                     ),
                                   )}
                                 </span>
@@ -1226,7 +1269,9 @@ function Dashboard() {
                                   {concern.symbol && (
                                     <strong>{concern.symbol} </strong>
                                   )}
-                                  {concern.title ?? concern.category ?? "Risk signal"}
+                                  {concern.title ??
+                                    concern.category ??
+                                    "Risk signal"}
                                 </span>
                               </div>
                             ))
@@ -1251,7 +1296,9 @@ function Dashboard() {
                             >
                               {riskScore}
                             </span>
-                            <span className="dashboard-risk-score-denom">/100</span>
+                            <span className="dashboard-risk-score-denom">
+                              /100
+                            </span>
                           </div>
                         </div>
 
@@ -1273,10 +1320,7 @@ function Dashboard() {
                             </span>
                             <span className="dashboard-severity-sep">|</span>
                             <span>
-                              <strong>
-                                {riskSeverityCounts.low}
-                              </strong>{" "}
-                              Watch
+                              <strong>{riskSeverityCounts.low}</strong> Watch
                             </span>
                           </div>
                         </div>
@@ -1327,10 +1371,18 @@ function Dashboard() {
                             <span className="dashboard-donut-center-label">
                               {hoveredSegment.symbol}
                             </span>
-                            <span className="dashboard-donut-center-value" style={{ fontSize: "clamp(16px, 2.8vw, 26px)" }}>
-                              {maskDollar(formatCompactCad(hoveredSegment.valueCad))}
+                            <span
+                              className="dashboard-donut-center-value"
+                              style={{ fontSize: "clamp(16px, 2.8vw, 26px)" }}
+                            >
+                              {maskDollar(
+                                formatCompactCad(hoveredSegment.valueCad),
+                              )}
                             </span>
-                            <span className="dashboard-donut-center-change" style={{ color: "#a2a3a7" }}>
+                            <span
+                              className="dashboard-donut-center-change"
+                              style={{ color: "#a2a3a7" }}
+                            >
                               {hoveredSegment.weight.toFixed(1)}% of portfolio
                             </span>
                             {hoveredSegment.holdingCount > 1 && (
@@ -1375,7 +1427,9 @@ function Dashboard() {
                             key={`${segment.symbol}-${segment.weight.toString()}-chip`}
                             style={segment.labelStyle}
                             type="button"
-                            onMouseEnter={() => setHoveredChipSymbol(segment.symbol)}
+                            onMouseEnter={() =>
+                              setHoveredChipSymbol(segment.symbol)
+                            }
                             onMouseLeave={() => setHoveredChipSymbol(null)}
                           >
                             <span
