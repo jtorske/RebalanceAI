@@ -196,6 +196,10 @@ body {
   color: #171717;
 }
 
+:root[data-theme="dark"] .dashboard-button-gold:hover {
+  background: #c49535;
+}
+
 :root[data-theme="dark"] .import-status-success {
   background: #17291c;
   border-color: #295e37;
@@ -268,6 +272,29 @@ body {
 
 :root[data-theme="dark"] .dashboard-allocation-pct {
   color: var(--app-accent-strong) !important;
+}
+
+/* ── Gauge dark mode ── */
+:root[data-theme="dark"] .dashboard-gauge-track {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] .dashboard-gauge-score-text {
+  fill: #f2f2f0 !important;
+}
+
+:root[data-theme="dark"] .dashboard-gauge-denom-text {
+  fill: #a4a5a8 !important;
+}
+
+/* ── Plan snapshot / severity mix dark mode ── */
+:root[data-theme="dark"] .dashboard-plan-snapshot,
+:root[data-theme="dark"] .dashboard-severity-mix {
+  border-top-color: var(--app-border) !important;
+}
+
+:root[data-theme="dark"] .dashboard-plan-snapshot-value {
+  color: var(--app-text) !important;
 }
 
 /* ── Goal Planner dark mode ── */

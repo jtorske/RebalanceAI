@@ -599,13 +599,13 @@
 .dashboard-suggestion-content {
   margin-top: 12px;
   min-height: 104px;
-  justify-content: flex-start;
 }
 
 .dashboard-suggestion-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
   min-height: 0;
 }
 
@@ -674,7 +674,6 @@
 .dashboard-risk-content {
   margin-top: 12px;
   min-height: 104px;
-  justify-content: flex-start;
 }
 
 .dashboard-risk-summary {
@@ -690,6 +689,7 @@
   gap: 5px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .dashboard-risk-flag {
@@ -727,12 +727,142 @@
   font-weight: 700;
 }
 
-.dashboard-risk-flag-footer {
-  margin-top: auto;
-  padding-top: 4px;
+/* ── Bottom metric sections ─────────────────────────── */
+
+.dashboard-bottom-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-muted, #8a8a98);
+  margin-bottom: 8px;
+}
+
+.dashboard-plan-snapshot,
+.dashboard-severity-mix {
+  border-top: 1px solid var(--app-border, #e7e7ef);
+  padding-top: 10px;
+  flex-shrink: 0;
+}
+
+.dashboard-plan-snapshot-grid,
+.dashboard-severity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.dashboard-plan-snapshot-item,
+.dashboard-severity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-plan-snapshot-key,
+.dashboard-severity-key {
+  font-size: 10px;
+  color: var(--app-muted, #8a8a98);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dashboard-plan-snapshot-value {
+  font-size: clamp(13px, 1.1vw, 15px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--app-text, #181818);
+}
+
+/* ── Risk gauge ─────────────────────────────────────── */
+
+.dashboard-gauge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 4px 0;
+}
+
+.dashboard-gauge-status-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.dashboard-gauge-svg {
+  width: 100%;
+  max-width: 110px;
+  display: block;
+  overflow: visible;
+}
+
+.dashboard-gauge-track {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.1);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.dashboard-gauge-fill {
+  transition: stroke-dasharray 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dashboard-gauge-score-text {
+  font-size: 18px;
+  font-weight: 800;
+  fill: #181818;
+  font-variant-numeric: tabular-nums;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.dashboard-gauge-denom-text {
+  font-size: 8px;
+  fill: #9999a8;
+  font-weight: 600;
+  font-family: Inter, Arial, sans-serif;
+}
+
+/* ── Severity inline row ────────────────────────────── */
+
+.dashboard-severity-mix {
+  border-top: 1px solid var(--app-border, #e7e7ef);
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+
+.dashboard-severity-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--app-muted, #8a8a98);
-  padding-left: 2px;
+}
+
+.dashboard-severity-inline strong {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-severity-sep {
+  color: var(--app-border-strong, #d9d9e3);
+}
+
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dashboard-mini-grid {
@@ -806,21 +936,44 @@
 .dashboard-button {
   border: none;
   color: #fff;
-  padding: 7px 14px;
-  border-radius: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.02em;
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.12s ease;
+}
+
+.dashboard-button:active {
+  transform: translateY(1px);
 }
 
 .dashboard-button-purple {
   background: #8a6ef0;
 }
 
+.dashboard-button-purple:hover {
+  background: #7b5de8;
+  transform: translateY(-1px);
+}
+
 .dashboard-button-gold {
-  background: #f2c154;
+  background: #e8a820;
+  color: #1a1200;
+}
+
+.dashboard-button-gold:hover {
+  background: #d49a18;
+  transform: translateY(-1px);
 }
 
 /* ── Responsive ───────────────────────────────────── */

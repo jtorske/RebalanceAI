@@ -428,9 +428,12 @@ function Dashboard() {
   >([]);
   const [isLoadingSectorBreakdown, setIsLoadingSectorBreakdown] =
     useState(true);
+  const [totalBuyCad, setTotalBuyCad] = useState<number | null>(null);
+  const [totalSellCad, setTotalSellCad] = useState<number | null>(null);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
   const [riskConcernCount, setRiskConcernCount] = useState(0);
   const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
+  const [riskSeverityCounts, setRiskSeverityCounts] = useState({ high: 0, medium: 0, low: 0 });
   const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
   const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(null);
 
@@ -542,6 +545,8 @@ function Dashboard() {
         );
         setTrimSymbols(data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3));
         setAddSymbols(data.addSymbols ?? (data.underweights ?? []).map((u) => u.symbol).slice(0, 3));
+        setTotalBuyCad(data.totalBuyCad ?? null);
+        setTotalSellCad(data.totalSellCad ?? null);
       } catch {
         try {
           const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
@@ -629,8 +634,14 @@ function Dashboard() {
             ? stripLlmPreamble(repairTextEncoding(data.dashboardSummary))
             : null,
         );
-        setRiskConcernCount(data.concerns?.length ?? 0);
-        setRiskConcerns((data.concerns ?? []).slice(0, 4));
+        const allConcerns = data.concerns ?? [];
+        setRiskConcernCount(allConcerns.length);
+        setRiskConcerns(allConcerns.slice(0, 3));
+        setRiskSeverityCounts({
+          high: allConcerns.filter((c) => c.severity === "high").length,
+          medium: allConcerns.filter((c) => c.severity === "medium").length,
+          low: allConcerns.filter((c) => c.severity === "low").length,
+        });
       } catch {
         try {
           const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
@@ -858,6 +869,35 @@ function Dashboard() {
   const riskStatus =
     riskConcernCount >= 3 ? "Elevated" : riskConcernCount > 0 ? "Watch" : "Low";
 
+  const riskScore = useMemo(
+    () =>
+      Math.min(
+        100,
+        riskSeverityCounts.high * 15 +
+          riskSeverityCounts.medium * 5 +
+          riskSeverityCounts.low * 2,
+      ),
+    [riskSeverityCounts],
+  );
+
+  const gaugeColor =
+    riskScore >= 67 ? "#ef4444" : riskScore >= 34 ? "#f59e0b" : "#22c55e";
+  const gaugeLabel =
+    riskScore >= 76
+      ? "High Risk"
+      : riskScore >= 51
+        ? "Elevated"
+        : riskScore >= 26
+          ? "Moderate"
+          : "Low";
+
+  const GAUGE_R = 40;
+  const GAUGE_CX = 50;
+  const GAUGE_CY = 56;
+  const GAUGE_CIRC = 2 * Math.PI * GAUGE_R;
+  const GAUGE_ARC = GAUGE_CIRC * 0.75;
+  const gaugeFill = GAUGE_ARC * (riskScore / 100);
+
   return (
     <div className="dashboard-shell">
       <div className="dashboard-page">
@@ -1074,45 +1114,85 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <div className="dashboard-suggestion-body">
-                        <p className="dashboard-suggestion-text">
-                          {suggestionCards.summary}
-                        </p>
-                        {(suggestionCards.trim.length > 0 ||
-                          suggestionCards.add.length > 0) && (
-                          <div className="dashboard-action-list">
-                            <span className="dashboard-action-label">
-                              Top Actions
+                      <>
+                        <div className="dashboard-suggestion-body">
+                          <p className="dashboard-suggestion-text">
+                            {suggestionCards.summary}
+                          </p>
+                          {(suggestionCards.trim.length > 0 ||
+                            suggestionCards.add.length > 0) && (
+                            <div className="dashboard-action-list">
+                              <span className="dashboard-action-label">
+                                Top Actions
+                              </span>
+                              {suggestionCards.trim.map((sym) => (
+                                <div
+                                  className="dashboard-action-row dashboard-action-sell"
+                                  key={`sell-${sym}`}
+                                >
+                                  <span className="dashboard-action-badge">
+                                    Sell
+                                  </span>
+                                  <span className="dashboard-action-symbol">
+                                    {sym}
+                                  </span>
+                                </div>
+                              ))}
+                              {suggestionCards.add.map((sym) => (
+                                <div
+                                  className="dashboard-action-row dashboard-action-buy"
+                                  key={`buy-${sym}`}
+                                >
+                                  <span className="dashboard-action-badge">
+                                    Buy
+                                  </span>
+                                  <span className="dashboard-action-symbol">
+                                    {sym}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {(totalBuyCad !== null || totalSellCad !== null) && (
+                          <div className="dashboard-plan-snapshot">
+                            <span className="dashboard-bottom-label">
+                              Plan Snapshot
                             </span>
-                            {suggestionCards.trim.map((sym) => (
-                              <div
-                                className="dashboard-action-row dashboard-action-sell"
-                                key={`sell-${sym}`}
-                              >
-                                <span className="dashboard-action-badge">
-                                  Sell
+                            <div className="dashboard-plan-snapshot-grid">
+                              <div className="dashboard-plan-snapshot-item">
+                                <span className="dashboard-plan-snapshot-value dashboard-positive">
+                                  {maskDollar(formatCompactCad(totalBuyCad ?? 0))}
                                 </span>
-                                <span className="dashboard-action-symbol">
-                                  {sym}
+                                <span className="dashboard-plan-snapshot-key">
+                                  Buys
                                 </span>
                               </div>
-                            ))}
-                            {suggestionCards.add.map((sym) => (
-                              <div
-                                className="dashboard-action-row dashboard-action-buy"
-                                key={`buy-${sym}`}
-                              >
-                                <span className="dashboard-action-badge">
-                                  Buy
+                              <div className="dashboard-plan-snapshot-item">
+                                <span className="dashboard-plan-snapshot-value dashboard-negative">
+                                  {maskDollar(formatCompactCad(totalSellCad ?? 0))}
                                 </span>
-                                <span className="dashboard-action-symbol">
-                                  {sym}
+                                <span className="dashboard-plan-snapshot-key">
+                                  Sells
                                 </span>
                               </div>
-                            ))}
+                              <div className="dashboard-plan-snapshot-item">
+                                <span className="dashboard-plan-snapshot-value">
+                                  {maskDollar(
+                                    formatCompactCad(
+                                      Math.abs((totalBuyCad ?? 0) - (totalSellCad ?? 0)),
+                                    ),
+                                  )}
+                                </span>
+                                <span className="dashboard-plan-snapshot-key">
+                                  Net drift
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1139,46 +1219,110 @@ function Dashboard() {
                         <span className="dashboard-ai-summary-dot" />
                       </div>
                     ) : (
-                      <div className="dashboard-risk-flags">
-                        {riskConcerns.length === 0 ? (
-                          <p className="dashboard-risk-summary">
-                            {riskSummary ??
-                              "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
-                          </p>
-                        ) : (
-                          riskConcerns.map((concern, i) => (
-                            <div
-                              className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
-                              key={`${concern.symbol ?? ""}-${i}`}
-                            >
-                              <span className="dashboard-risk-flag-dot" />
-                              <span className="dashboard-risk-flag-text">
-                                {concern.symbol && (
-                                  <strong>{concern.symbol} </strong>
-                                )}
-                                {concern.title ?? concern.category ?? "Risk signal"}
-                              </span>
-                            </div>
-                          ))
-                        )}
-                        <div className="dashboard-risk-flag-footer">
-                          <span>
-                            {riskConcernCount} concern
-                            {riskConcernCount !== 1 ? "s" : ""} · Status:{" "}
-                          </span>
-                          <span
-                            className={
-                              riskStatus === "Low"
-                                ? "dashboard-positive"
-                                : riskStatus === "Watch"
-                                  ? "dashboard-comparison-muted"
-                                  : "dashboard-negative"
-                            }
-                          >
-                            {riskStatus}
-                          </span>
+                      <>
+                        {/* Top: alerts */}
+                        <div className="dashboard-risk-flags">
+                          {riskConcerns.length === 0 ? (
+                            <p className="dashboard-risk-summary">
+                              {riskSummary ??
+                                "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
+                            </p>
+                          ) : (
+                            riskConcerns.map((concern, i) => (
+                              <div
+                                className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
+                                key={`${concern.symbol ?? ""}-${i}`}
+                              >
+                                <span className="dashboard-risk-flag-dot" />
+                                <span className="dashboard-risk-flag-text">
+                                  {concern.symbol && (
+                                    <strong>{concern.symbol} </strong>
+                                  )}
+                                  {concern.title ?? concern.category ?? "Risk signal"}
+                                </span>
+                              </div>
+                            ))
+                          )}
                         </div>
-                      </div>
+
+                        {/* Middle: gauge */}
+                        <div className="dashboard-gauge-wrap">
+                          <span
+                            className="dashboard-gauge-status-label"
+                            style={{ color: gaugeColor }}
+                          >
+                            {gaugeLabel}
+                          </span>
+                          <svg
+                            viewBox="0 0 100 62"
+                            className="dashboard-gauge-svg"
+                            aria-label={`Risk score ${riskScore} out of 100`}
+                          >
+                            <circle
+                              className="dashboard-gauge-track"
+                              cx={GAUGE_CX}
+                              cy={GAUGE_CY}
+                              r={GAUGE_R}
+                              strokeDasharray={`${GAUGE_ARC} ${GAUGE_CIRC}`}
+                              transform={`rotate(135, ${GAUGE_CX}, ${GAUGE_CY})`}
+                            />
+                            <circle
+                              cx={GAUGE_CX}
+                              cy={GAUGE_CY}
+                              r={GAUGE_R}
+                              fill="none"
+                              stroke={gaugeColor}
+                              strokeWidth="9"
+                              strokeLinecap="round"
+                              strokeDasharray={`${gaugeFill} ${GAUGE_CIRC}`}
+                              transform={`rotate(135, ${GAUGE_CX}, ${GAUGE_CY})`}
+                              className="dashboard-gauge-fill"
+                            />
+                            <text
+                              x={GAUGE_CX}
+                              y={GAUGE_CY - 8}
+                              textAnchor="middle"
+                              className="dashboard-gauge-score-text"
+                            >
+                              {riskScore}
+                            </text>
+                            <text
+                              x={GAUGE_CX}
+                              y={GAUGE_CY + 5}
+                              textAnchor="middle"
+                              className="dashboard-gauge-denom-text"
+                            >
+                              / 100
+                            </text>
+                          </svg>
+                        </div>
+
+                        {/* Bottom: severity mix */}
+                        <div className="dashboard-severity-mix">
+                          <div className="dashboard-severity-inline">
+                            <span>
+                              <strong style={{ color: "#ef4444" }}>
+                                {riskSeverityCounts.high}
+                              </strong>{" "}
+                              High
+                            </span>
+                            <span className="dashboard-severity-sep">|</span>
+                            <span>
+                              <strong style={{ color: "#f59e0b" }}>
+                                {riskSeverityCounts.medium}
+                              </strong>{" "}
+                              Medium
+                            </span>
+                            <span className="dashboard-severity-sep">|</span>
+                            <span>
+                              <strong>
+                                {riskSeverityCounts.low}
+                              </strong>{" "}
+                              Watch
+                            </span>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
