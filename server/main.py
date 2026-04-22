@@ -1592,16 +1592,23 @@ def _assign_market_cap_targets(
     manual_market_caps: Optional[Dict[str, float]] = None,
 ) -> Dict[str, float]:
     weights: Dict[str, float] = {}
+    manual_market_caps = manual_market_caps or {}
     stock_positions = [
         item
         for item in positions
         if item["includedInRebalance"] and item["assetClass"] == "stock"
     ]
     market_caps = _fetch_market_caps([item["quoteSymbol"] for item in stock_positions])
+    manual_cap_symbols: List[str] = []
     for item in stock_positions:
-        item["marketCap"] = market_caps.get(item["quoteSymbol"])
-        if item["marketCap"] is None and manual_market_caps:
-            item["marketCap"] = manual_market_caps.get(item["symbol"].upper()) or manual_market_caps.get(item["quoteSymbol"].upper())
+        symbol = item["symbol"].upper()
+        quote_symbol = item["quoteSymbol"].upper()
+        manual_cap = manual_market_caps.get(symbol) or manual_market_caps.get(quote_symbol)
+        if manual_cap is not None:
+            item["marketCap"] = manual_cap
+            manual_cap_symbols.append(item["symbol"])
+        else:
+            item["marketCap"] = market_caps.get(item["quoteSymbol"])
 
     preserved = [
         item
@@ -1638,6 +1645,13 @@ def _assign_market_cap_targets(
             if total_current > 0 and item["includedInRebalance"]:
                 weights[item["symbol"]] = item["currentValueCad"] / total_current * 100
         return weights
+
+    if manual_cap_symbols:
+        notes.append(
+            "Manual market caps were applied for "
+            + ", ".join(sorted(set(manual_cap_symbols)))
+            + "."
+        )
 
     if len(valid_stock_positions) < 15 and mode == "market_cap":
         notes.append(

@@ -170,7 +170,7 @@ function KeyInsights() {
                 const ordered = topOpp ? [topOpp, ...rest] : rest;
                 return (
                   <div className="insights-card-list">
-                    {ordered.map((insight, idx) => (
+                    {ordered.map((insight) => (
                       <article
                         className={`insight-card insight-card-${insight.tone}${insight === topOpp ? " insight-card-pinned" : ""}`}
                         key={`${insight.category}-${insight.title}`}

@@ -517,6 +517,23 @@
   font-size: 12px;
 }
 
+.rw-inline-action {
+  align-self: flex-start;
+  border: 1px solid #9a6500;
+  border-radius: 7px;
+  background: #7a4f00;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.rw-inline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .rw-cap-input-wrap {
   display: flex;
   align-items: center;
@@ -531,6 +548,22 @@
   border-radius: 6px;
   background: #fff8ec;
   color: #181818;
+}
+
+.rw-cap-apply-btn {
+  border: 1px solid #9a6500;
+  border-radius: 6px;
+  background: #7a4f00;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 7px;
+}
+
+.rw-cap-apply-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .rw-cap-unit {
@@ -549,10 +582,22 @@
   color: #c49540;
 }
 
+:root[data-theme="dark"] .rw-inline-action {
+  background: #ffd27a;
+  border-color: #ffd27a;
+  color: #2a2010;
+}
+
 :root[data-theme="dark"] .rw-marketcap-input {
   background: #2a2010;
   border-color: #7a5a20;
   color: #eeeeea;
+}
+
+:root[data-theme="dark"] .rw-cap-apply-btn {
+  background: #ffd27a;
+  border-color: #ffd27a;
+  color: #2a2010;
 }
 
 @media (max-width: 900px) {

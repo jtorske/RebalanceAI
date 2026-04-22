@@ -85,6 +85,12 @@ function formatShares(value: number | null): string {
   return Math.abs(value) >= 1 ? value.toFixed(2) : value.toFixed(4);
 }
 
+function parseMarketCapBillions(value: string): number | null {
+  const parsed = Number.parseFloat(value.replace(/[$,\s]/g, ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed * 1e9;
+}
+
 function getSortValue(item: ReweightItem, key: ReweightSortKey): string | number | null {
   if (key === "symbol") return item.symbol;
   if (key === "assetClass") return item.assetClass;
@@ -125,7 +131,15 @@ function Reweight() {
     [manualTargets],
   );
 
-  const fetchReweight = async () => {
+  const buildManualMarketCapPayload = (caps: Record<string, string>) =>
+    Object.fromEntries(
+      Object.entries(caps)
+        .map(([k, v]) => [k, parseMarketCapBillions(v)])
+        .filter(([, v]) => v !== null),
+    );
+
+  const fetchReweight = async (marketCapOverrides: Record<string, string> = {}) => {
+    const marketCapsToSend = { ...manualMarketCaps, ...marketCapOverrides };
     setIsLoading(true);
     setError(null);
     try {
@@ -142,11 +156,7 @@ function Reweight() {
           cashFirst,
           noSell,
           manualTargets: targetMode === "manual" ? manualTargetList : [],
-          manualMarketCaps: Object.fromEntries(
-            Object.entries(manualMarketCaps)
-              .map(([k, v]) => [k, parseFloat(v) * 1e9])
-              .filter(([, v]) => Number.isFinite(v) && (v as number) > 0),
-          ),
+          manualMarketCaps: buildManualMarketCapPayload(marketCapsToSend),
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -166,6 +176,9 @@ function Reweight() {
 
   const hasNoHoldings = data && data.items.length === 0;
   const missingCapItems = data?.items.filter((i) => i.reason === "Missing market cap") ?? [];
+  const enteredManualCapCount = Object.values(manualMarketCaps).filter(
+    (value) => parseMarketCapBillions(value) !== null,
+  ).length;
   const buyItems = data?.items.filter((i) => i.action === "buy") ?? [];
   const sellItems = data?.items.filter((i) => i.action === "sell") ?? [];
   const atomicItems =
@@ -235,7 +248,7 @@ function Reweight() {
             </div>
             <button
               className="rw-generate-btn"
-              onClick={fetchReweight}
+              onClick={() => void fetchReweight()}
               disabled={isLoading}
             >
               {isLoading ? "Generating…" : "Generate Plan"}
@@ -419,6 +432,16 @@ function Reweight() {
               <span>
                 These positions were excluded from market-cap weighting. Enter their market caps below (in billions) and re-run the plan.
               </span>
+              {enteredManualCapCount > 0 && (
+                <button
+                  className="rw-inline-action"
+                  type="button"
+                  onClick={() => void fetchReweight()}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Applying..." : "Apply manual cap"}
+                </button>
+              )}
             </div>
           )}
 
@@ -558,8 +581,32 @@ function Reweight() {
                                       [item.symbol]: e.target.value,
                                     }))
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const value = e.currentTarget.value;
+                                      setManualMarketCaps((prev) => ({
+                                        ...prev,
+                                        [item.symbol]: value,
+                                      }));
+                                      void fetchReweight({ [item.symbol]: value });
+                                    }
+                                  }}
                                 />
                                 <span className="rw-cap-unit">B</span>
+                                {parseMarketCapBillions(manualMarketCaps[item.symbol] ?? "") !== null && (
+                                  <button
+                                    className="rw-cap-apply-btn"
+                                    type="button"
+                                    onClick={() =>
+                                      void fetchReweight({
+                                        [item.symbol]: manualMarketCaps[item.symbol] ?? "",
+                                      })
+                                    }
+                                    disabled={isLoading}
+                                  >
+                                    Apply
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               maskDollar(formatMarketCap(item.marketCap))
