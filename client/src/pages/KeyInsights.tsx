@@ -47,6 +47,18 @@ const formatCad = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+function healthScore(insights: Insight[]): number {
+  const pos = insights.filter((i) => i.tone === "positive").length;
+  const warn = insights.filter((i) => i.tone === "warning").length;
+  return Math.round(Math.min(100, Math.max(0, 50 + pos * 8 - warn * 12)));
+}
+
+function scoreColor(score: number): string {
+  if (score >= 70) return "#4ade80";
+  if (score >= 45) return "#FCC860";
+  return "#ef4444";
+}
+
 function KeyInsights() {
   const { settings } = useUserSettings();
   const [data, setData] = useState<KeyInsightsResponse | null>(null);
@@ -106,13 +118,33 @@ function KeyInsights() {
           {error && <div className="insights-error">{error}</div>}
 
           <div className="insights-summary-card">
-            <span className="insights-label">AI Readout</span>
-            <p>
-              {isLoading
-                ? "Looking for portfolio patterns..."
-                : (data?.summary ??
-                  "Import holdings to generate portfolio insights.")}
-            </p>
+            {isLoading ? (
+              <p className="insights-muted">Looking for portfolio patterns...</p>
+            ) : !data ? (
+              <p className="insights-muted">Import holdings to generate portfolio insights.</p>
+            ) : (() => {
+              const score = healthScore(data.insights);
+              const color = scoreColor(score);
+              const pos = data.insights.filter((i) => i.tone === "positive").length;
+              const warn = data.insights.filter((i) => i.tone === "warning").length;
+              const neu = data.insights.filter((i) => i.tone === "neutral").length;
+              return (
+                <div className="insights-health-row">
+                  <div className="insights-health-score">
+                    <span className="insights-health-num" style={{ color }}>{score}</span>
+                    <span className="insights-health-label">Portfolio health</span>
+                  </div>
+                  <div className="insights-chips-group">
+                    {pos > 0 && <span className="insights-chip insights-chip-pos">▲ {pos} Positive</span>}
+                    {warn > 0 && <span className="insights-chip insights-chip-warn">▼ {warn} Warning</span>}
+                    {neu > 0 && <span className="insights-chip insights-chip-neu">● {neu} Neutral</span>}
+                    {[...new Set(data.insights.map((i) => i.category))].map((cat) => (
+                      <span key={cat} className="insights-chip insights-chip-cat">{cat}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="insights-grid">
@@ -132,25 +164,35 @@ function KeyInsights() {
                 <div className="insights-empty">
                   No patterns yet. Import holdings to start the scan.
                 </div>
-              ) : (
-                <div className="insights-card-list">
-                  {data.insights.map((insight) => (
-                    <article
-                      className={`insight-card insight-card-${insight.tone}`}
-                      key={`${insight.category}-${insight.title}`}
-                    >
-                      <div className="insight-card-topline">
-                        <span>{insight.category}</span>
-                        {insight.symbols.length > 0 && (
-                          <strong>{insight.symbols.join(", ")}</strong>
-                        )}
-                      </div>
-                      <h3>{insight.title}</h3>
-                      <p>{insight.detail}</p>
-                    </article>
-                  ))}
-                </div>
-              )}
+              ) : (() => {
+                const topOpp = data.insights.find((i) => i.tone === "positive");
+                const rest = data.insights.filter((i) => i !== topOpp);
+                const ordered = topOpp ? [topOpp, ...rest] : rest;
+                return (
+                  <div className="insights-card-list">
+                    {ordered.map((insight, idx) => (
+                      <article
+                        className={`insight-card insight-card-${insight.tone}${insight === topOpp ? " insight-card-pinned" : ""}`}
+                        key={`${insight.category}-${insight.title}`}
+                      >
+                        <div className="insight-card-topline">
+                          <span>
+                            {insight === topOpp && (
+                              <span className="insight-top-badge">Top Opportunity</span>
+                            )}
+                            {insight.category}
+                          </span>
+                          {insight.symbols.length > 0 && (
+                            <strong>{insight.symbols.join(", ")}</strong>
+                          )}
+                        </div>
+                        <h3>{insight.title}</h3>
+                        <p>{insight.detail}</p>
+                      </article>
+                    ))}
+                  </div>
+                );
+              })()}
             </section>
 
             <section className="insights-panel">

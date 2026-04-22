@@ -6,6 +6,19 @@ import { useUserSettings } from "../lib/userSettings";
 import "./GoalPlanner.css";
 
 type RiskProfile = "conservative" | "moderate" | "aggressive";
+
+const FIRE_PRESETS = [
+  { label: "Lean FIRE", amount: 750_000 },
+  { label: "Regular FIRE", amount: 1_500_000 },
+  { label: "Fat FIRE", amount: 3_000_000 },
+] as const;
+
+const CONF_PCT: Record<string, number> = {
+  High: 90,
+  Moderate: 65,
+  Low: 35,
+  Below: 12,
+};
 type HoldingsResponse = { holdings?: Array<{ market_value?: number; market_value_currency?: string }> };
 
 const RISK_SPREAD: Record<RiskProfile, number> = { conservative: 1.5, moderate: 3, aggressive: 5 };
@@ -176,6 +189,19 @@ export default function GoalPlanner() {
             <div className="goal-card">
               <h3 className="goal-section-title">Your Goal</h3>
 
+              <div className="goal-fire-row">
+                {FIRE_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    className={`goal-fire-btn${goalAmount === p.amount ? " goal-fire-btn-active" : ""}`}
+                    onClick={() => setGoalAmount(p.amount)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="goal-field">
                 <label>Target amount (CA$)</label>
                 <input
@@ -208,6 +234,15 @@ export default function GoalPlanner() {
                 <label>Monthly contribution (CA$)</label>
                 <input type="number" min={0} value={monthlyContrib}
                   onChange={(e) => setMonthlyContrib(Number(e.target.value))} />
+                <input
+                  type="range"
+                  min={0}
+                  max={10000}
+                  step={100}
+                  value={Math.min(monthlyContrib, 10000)}
+                  onChange={(e) => setMonthlyContrib(Number(e.target.value))}
+                  className="goal-slider"
+                />
               </div>
             </div>
 
@@ -278,7 +313,7 @@ export default function GoalPlanner() {
                     <line x1={ML} y1={sy(v)} x2={ML + PW} y2={sy(v)}
                       stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
                     <text x={ML - 6} y={sy(v)} textAnchor="end" dominantBaseline="middle"
-                      fontSize="10" fill="#666">
+                      fontSize="10" fill="var(--app-muted, #888)">
                       {fmtAxis(v)}
                     </text>
                   </g>
@@ -287,7 +322,7 @@ export default function GoalPlanner() {
                 {/* X-axis labels */}
                 {xLabels.map((t) => (
                   <text key={t} x={sx(t)} y={SVG_H - MB + 14}
-                    textAnchor="middle" fontSize="10" fill="#666">
+                    textAnchor="middle" fontSize="10" fill="var(--app-muted, #888)">
                     {t === 0 ? "Now" : `Yr ${t}`}
                   </text>
                 ))}
@@ -358,6 +393,12 @@ export default function GoalPlanner() {
               <div className="goal-outcome-card" style={{ borderLeftColor: confColor }}>
                 <div className="goal-outcome-label">Confidence</div>
                 <div className="goal-outcome-value" style={{ color: confColor }}>{confidence}</div>
+                <div className="goal-conf-bar-track">
+                  <div
+                    className="goal-conf-bar-fill"
+                    style={{ width: `${CONF_PCT[confidence]}%`, background: confColor }}
+                  />
+                </div>
                 <div className="goal-outcome-sub">
                   Bear {mask(fmtCad(pessEnd))} · Bull {mask(fmtCad(optEnd))}
                 </div>

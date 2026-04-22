@@ -57,6 +57,71 @@
   max-width: 960px;
 }
 
+/* Health score row */
+.insights-health-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.insights-health-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.insights-health-num {
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.insights-health-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-muted, #767680);
+}
+
+/* Chips */
+.insights-chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.insights-chip {
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.insights-chip-pos {
+  background: #d4f5e2;
+  color: #1a6b35;
+}
+
+.insights-chip-warn {
+  background: #ffe8e8;
+  color: #b32626;
+}
+
+.insights-chip-neu {
+  background: #ede9ff;
+  color: #5b3fc4;
+}
+
+.insights-chip-cat {
+  background: var(--app-border, #ededf2);
+  color: var(--app-muted, #767680);
+}
+
 .insights-label {
   color: var(--app-muted, #767680);
   font-size: 11px;
@@ -149,15 +214,35 @@
 }
 
 .insight-card-positive {
-  border-left: 4px solid var(--app-positive, #1a8a3a);
+  border-left: 4px solid #22c55e;
+  background: #f0fdf6;
 }
 
 .insight-card-warning {
-  border-left: 4px solid var(--app-negative, #c0392b);
+  border-left: 4px solid #ef4444;
+  background: #fff5f5;
 }
 
 .insight-card-neutral {
-  border-left: 4px solid var(--app-accent, #8a6ef0);
+  border-left: 4px solid #8a6ef0;
+  background: #f5f3ff;
+}
+
+.insight-card-pinned {
+  box-shadow: 0 0 0 1px #22c55e40, 0 4px 12px rgba(34, 197, 94, 0.1);
+}
+
+.insight-top-badge {
+  display: inline-block;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 6px;
 }
 
 .insights-performance-columns {
@@ -233,6 +318,45 @@
   background: #2d1b1b;
   border-color: #673131;
   color: #ffb0b0;
+}
+
+:root[data-theme="dark"] .insight-card-positive {
+  background: #0d2318;
+  border-left-color: #4ade80;
+}
+
+:root[data-theme="dark"] .insight-card-warning {
+  background: #2d1212;
+  border-left-color: #f87171;
+}
+
+:root[data-theme="dark"] .insight-card-neutral {
+  background: #1a1530;
+  border-left-color: #a78bfa;
+}
+
+:root[data-theme="dark"] .insight-top-badge {
+  background: #16a34a;
+}
+
+:root[data-theme="dark"] .insights-chip-pos {
+  background: #0d2318;
+  color: #4ade80;
+}
+
+:root[data-theme="dark"] .insights-chip-warn {
+  background: #2d1212;
+  color: #f87171;
+}
+
+:root[data-theme="dark"] .insights-chip-neu {
+  background: #1a1530;
+  color: #a78bfa;
+}
+
+:root[data-theme="dark"] .insights-chip-cat {
+  background: #2a2a35;
+  color: #9999aa;
 }
 
 @media (max-width: 980px) {

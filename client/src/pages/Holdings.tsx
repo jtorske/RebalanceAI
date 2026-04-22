@@ -38,6 +38,7 @@ function HoldingsPage() {
     "desc",
   );
   const [showAllHoldings, setShowAllHoldings] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [dailyChangeBySymbol, setDailyChangeBySymbol] = useState<
     Record<string, number | null>
   >(() => loadCachedDailyChangeMap());
@@ -233,13 +234,21 @@ function HoldingsPage() {
     return holdingsToSort;
   }, [previewHoldings, sortKey, sortDirection, dailyChangeBySymbol]);
 
-  const displayedHoldings = useMemo(() => {
-    if (showAllHoldings) {
-      return sortedPreviewHoldings;
-    }
+  const filteredHoldings = useMemo(() => {
+    if (!searchQuery.trim()) return sortedPreviewHoldings;
+    const q = searchQuery.trim().toLowerCase();
+    return sortedPreviewHoldings.filter(
+      (h) =>
+        h.symbol.toLowerCase().includes(q) ||
+        (h.name ?? "").toLowerCase().includes(q) ||
+        h.security_type.toLowerCase().includes(q),
+    );
+  }, [sortedPreviewHoldings, searchQuery]);
 
-    return sortedPreviewHoldings.slice(0, 10);
-  }, [showAllHoldings, sortedPreviewHoldings]);
+  const displayedHoldings = useMemo(() => {
+    if (showAllHoldings) return filteredHoldings;
+    return filteredHoldings.slice(0, 10);
+  }, [showAllHoldings, filteredHoldings]);
 
   const maskDollar = (displayValue: string) =>
     settings.hideDollarAmounts ? "..." : displayValue;
@@ -495,16 +504,30 @@ function HoldingsPage() {
 
           <section className="import-table-wrap">
             <div className="import-section-title-row">
-              <h2 className="import-section-title">Holdings Table</h2>
-              {sortedPreviewHoldings.length > 10 ? (
-                <button
-                  type="button"
-                  className="import-show-all-button"
-                  onClick={() => setShowAllHoldings((current) => !current)}
-                >
-                  {showAllHoldings ? "Show Top 10" : "Show All Holdings"}
-                </button>
-              ) : null}
+              <h2 className="import-section-title">
+                Holdings Table
+                {filteredHoldings.length > 0 && (
+                  <span className="import-holdings-count">{filteredHoldings.length}</span>
+                )}
+              </h2>
+              <div className="import-table-controls">
+                <input
+                  type="search"
+                  className="import-search-input"
+                  placeholder="Search symbol or name…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {filteredHoldings.length > 10 && (
+                  <button
+                    type="button"
+                    className="import-show-all-button"
+                    onClick={() => setShowAllHoldings((current) => !current)}
+                  >
+                    {showAllHoldings ? "Show Top 10" : `Show All ${filteredHoldings.length}`}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="import-table-scroll">
               <table className="import-table">
@@ -649,9 +672,17 @@ function HoldingsPage() {
               </table>
 
               {previewHoldings.length === 0 ? (
+                <div className="import-empty-state">
+                  <div className="import-empty-icon">📂</div>
+                  <h3>No holdings yet</h3>
+                  <p>Export a CSV from your broker and upload it above to get started.</p>
+                  <label className="import-empty-cta" htmlFor="holdings-csv-upload">
+                    Upload CSV
+                  </label>
+                </div>
+              ) : filteredHoldings.length === 0 ? (
                 <div className="import-table-empty">
-                  Upload a CSV to preview holdings before saving. Persisted
-                  holdings will also appear here when available.
+                  No holdings match &ldquo;{searchQuery}&rdquo;
                 </div>
               ) : null}
             </div>

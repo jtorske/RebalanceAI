@@ -140,6 +140,60 @@
   gap: 8px;
 }
 
+/* FIRE presets */
+.goal-fire-row {
+  display: flex;
+  gap: 5px;
+}
+
+.goal-fire-btn {
+  flex: 1;
+  padding: 5px 4px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.goal-fire-btn:hover {
+  border-color: #8a6ef0;
+  color: #8a6ef0;
+}
+
+.goal-fire-btn-active {
+  background: #8a6ef015;
+  border-color: #8a6ef0;
+  color: #8a6ef0;
+}
+
+/* Contribution slider */
+.goal-slider {
+  width: 100%;
+  margin-top: 2px;
+  accent-color: var(--app-accent, #8a6ef0);
+  cursor: pointer;
+}
+
+/* Confidence progress bar */
+.goal-conf-bar-track {
+  height: 5px;
+  background: var(--app-border, #e8e8ef);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 4px 0 2px;
+}
+
+.goal-conf-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
 /* Risk profile toggle */
 .goal-risk-row {
   display: flex;
