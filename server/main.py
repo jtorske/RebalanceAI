@@ -78,6 +78,7 @@ class RebalancePlanRequest(BaseModel):
     cashFirst: bool = True
     noSell: bool = False
     manualTargets: List[ManualTarget] = []
+    manualMarketCaps: Dict[str, float] = {}
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -808,6 +809,11 @@ def _fetch_market_caps(symbols: List[str]) -> Dict[str, Optional[float]]:
         try:
             info = yf.Ticker(symbol).info
             mc = info.get("marketCap") or info.get("totalAssets")
+            if not mc:
+                shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+                price = info.get("currentPrice") or info.get("regularMarketPrice")
+                if shares and price:
+                    mc = float(shares) * float(price)
             cached[symbol] = float(mc) if mc else None
         except Exception:
             cached[symbol] = None
@@ -1582,6 +1588,7 @@ def _assign_market_cap_targets(
     mode: str,
     max_single_stock_pct: float,
     notes: List[str],
+    manual_market_caps: Optional[Dict[str, float]] = None,
 ) -> Dict[str, float]:
     weights: Dict[str, float] = {}
     stock_positions = [
@@ -1592,6 +1599,8 @@ def _assign_market_cap_targets(
     market_caps = _fetch_market_caps([item["quoteSymbol"] for item in stock_positions])
     for item in stock_positions:
         item["marketCap"] = market_caps.get(item["quoteSymbol"])
+        if item["marketCap"] is None and manual_market_caps:
+            item["marketCap"] = manual_market_caps.get(item["symbol"].upper()) or manual_market_caps.get(item["quoteSymbol"].upper())
 
     preserved = [
         item
@@ -1671,6 +1680,7 @@ def _assign_targets(
     target_mode: str,
     manual_targets: List[ManualTarget],
     max_single_stock_pct: float,
+    manual_market_caps: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     mode = target_mode.strip().lower().replace("-", "_")
     total_current = sum(item["currentValueCad"] for item in positions)
@@ -1712,6 +1722,7 @@ def _assign_targets(
             "market_cap" if mode == "marketcap" else mode,
             max_single_stock_pct,
             notes,
+            manual_market_caps=manual_market_caps,
         )
     else:
         notes.append(f"Unknown target mode '{target_mode}', so current weights were retained.")
@@ -1845,11 +1856,13 @@ def _build_rebalance_plan(request: RebalancePlanRequest) -> Dict[str, Any]:
 
     positions = _prepare_rebalance_positions(holdings)
     total_value_cad = sum(item["currentValueCad"] for item in positions)
+    normalized_manual_caps = {k.upper(): v for k, v in request.manualMarketCaps.items() if v and v > 0}
     target_plan = _assign_targets(
         positions,
         request.targetMode,
         request.manualTargets,
         request.maxSingleStockPct,
+        manual_market_caps=normalized_manual_caps or None,
     )
     result_items = _generate_rebalance_trades(
         positions,

@@ -111,6 +111,7 @@ function Reweight() {
   const [cashFirst, setCashFirst] = useState(true);
   const [noSell, setNoSell] = useState(false);
   const [manualTargets, setManualTargets] = useState<Record<string, number>>({});
+  const [manualMarketCaps, setManualMarketCaps] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<ReweightSortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -141,6 +142,11 @@ function Reweight() {
           cashFirst,
           noSell,
           manualTargets: targetMode === "manual" ? manualTargetList : [],
+          manualMarketCaps: Object.fromEntries(
+            Object.entries(manualMarketCaps)
+              .map(([k, v]) => [k, parseFloat(v) * 1e9])
+              .filter(([, v]) => Number.isFinite(v) && (v as number) > 0),
+          ),
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -159,6 +165,7 @@ function Reweight() {
   }, []);
 
   const hasNoHoldings = data && data.items.length === 0;
+  const missingCapItems = data?.items.filter((i) => i.reason === "Missing market cap") ?? [];
   const buyItems = data?.items.filter((i) => i.action === "buy") ?? [];
   const sellItems = data?.items.filter((i) => i.action === "sell") ?? [];
   const atomicItems =
@@ -405,6 +412,16 @@ function Reweight() {
             </div>
           )}
 
+          {/* ── Missing market cap warning ── */}
+          {missingCapItems.length > 0 && (
+            <div className="rw-missing-cap-banner">
+              <strong>⚠ Market cap unavailable for {missingCapItems.map((i) => i.symbol).join(", ")}</strong>
+              <span>
+                These positions were excluded from market-cap weighting. Enter their market caps below (in billions) and re-run the plan.
+              </span>
+            </div>
+          )}
+
           {/* ── Table ── */}
           {data && !hasNoHoldings && (
             <div className="rw-table-wrap">
@@ -524,7 +541,30 @@ function Reweight() {
                             )}
                           </td>
                           <td>{formatShares(item.tradeShares)}</td>
-                          <td>{maskDollar(formatMarketCap(item.marketCap))}</td>
+                          <td>
+                            {item.reason === "Missing market cap" ? (
+                              <div className="rw-cap-input-wrap">
+                                <input
+                                  className="rw-marketcap-input"
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  placeholder="$ B"
+                                  title="Market cap in billions (e.g. 45.2 for $45.2B)"
+                                  value={manualMarketCaps[item.symbol] ?? ""}
+                                  onChange={(e) =>
+                                    setManualMarketCaps((prev) => ({
+                                      ...prev,
+                                      [item.symbol]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                <span className="rw-cap-unit">B</span>
+                              </div>
+                            ) : (
+                              maskDollar(formatMarketCap(item.marketCap))
+                            )}
+                          </td>
                         </tr>
                       );
                     })}

@@ -114,6 +114,14 @@
   border-radius: 8px;
   background: var(--app-soft-surface, #f7f7fb);
   padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.risk-concern-card:hover {
+  border-color: #8a6ef0;
+  box-shadow: 0 0 0 1px #8a6ef030, 0 4px 16px rgba(138, 110, 240, 0.12);
+  transform: translateY(-1px);
 }
 
 .risk-concern-topline,
@@ -172,11 +180,318 @@
   font-weight: 700;
 }
 
+.risk-card-cta {
+  margin-top: 10px;
+  color: #8a6ef0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.risk-category-icon {
+  margin-right: 5px;
+  font-style: normal;
+}
+
+/* Summary chips */
+.risk-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.risk-chip-high {
+  background: #ffe8e8;
+  color: #b32626;
+}
+
+.risk-chip-medium {
+  background: #fff3d6;
+  color: #9a6500;
+}
+
+.risk-chip-low {
+  background: #e9f2ff;
+  color: #235d9d;
+}
+
+.risk-chip-category {
+  background: var(--app-border, #ededf2);
+  color: var(--app-muted, #767680);
+  cursor: default;
+}
+
+.risk-count-high {
+  color: #b32626;
+}
+
+/* Filter bar */
+.risk-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.risk-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--app-border, #e8e8ef);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-muted, #767680);
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.risk-filter-btn:hover {
+  border-color: #8a6ef0;
+  color: #8a6ef0;
+}
+
+.risk-filter-btn-active {
+  background: #8a6ef020;
+  border-color: #8a6ef0;
+  color: #8a6ef0;
+}
+
+.risk-filter-btn-high.risk-filter-btn-active {
+  background: #ffe8e8;
+  border-color: #b32626;
+  color: #b32626;
+}
+
+.risk-filter-btn-medium.risk-filter-btn-active {
+  background: #fff3d6;
+  border-color: #9a6500;
+  color: #9a6500;
+}
+
+.risk-filter-btn-low.risk-filter-btn-active {
+  background: #e9f2ff;
+  border-color: #235d9d;
+  color: #235d9d;
+}
+
+.risk-filter-count {
+  background: currentColor;
+  border-radius: 999px;
+  color: white;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.risk-updated-time {
+  margin-left: 4px;
+  color: var(--app-muted, #767680);
+  font-size: 12px;
+}
+
+/* Detail dialog */
+.risk-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.risk-dialog {
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-border, #e8e8ef);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.risk-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.risk-dialog-topline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.risk-dialog-close {
+  border: none;
+  background: none;
+  color: var(--app-muted, #767680);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.risk-dialog-close:hover {
+  background: var(--app-border, #ededf2);
+  color: var(--app-text, #181818);
+}
+
+.risk-dialog-title {
+  margin: 0 0 16px;
+  color: var(--app-text, #181818);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.risk-dialog-section {
+  margin-bottom: 16px;
+}
+
+.risk-dialog-section p {
+  margin: 8px 0 0;
+  color: var(--app-text-soft, #303039);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.risk-dialog-metrics {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px;
+  background: var(--app-soft-surface, #f7f7fb);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.risk-dialog-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.risk-dialog-metric strong {
+  color: var(--app-text, #181818);
+  font-size: 15px;
+}
+
+.risk-dialog-severity-high { color: #b32626; }
+.risk-dialog-severity-medium { color: #9a6500; }
+.risk-dialog-severity-low { color: #235d9d; }
+
+.risk-dialog-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.risk-dialog-link-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.risk-dialog-link {
+  color: #8a6ef0;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.risk-dialog-link:hover {
+  text-decoration: underline;
+}
+
 .risk-empty {
   padding: 28px 16px;
   color: var(--app-muted, #767680);
   font-size: 14px;
   text-align: center;
+}
+
+:root[data-theme="dark"] .risk-chip-category {
+  background: #2a2a35;
+  color: #9999aa;
+}
+
+:root[data-theme="dark"] .risk-chip-high {
+  background: #3a2020;
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .risk-chip-medium {
+  background: #352a17;
+  color: #ffd27a;
+}
+
+:root[data-theme="dark"] .risk-chip-low {
+  background: #1c2a3a;
+  color: #9fccff;
+}
+
+:root[data-theme="dark"] .risk-count-high {
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .risk-filter-btn-high.risk-filter-btn-active {
+  background: #3a2020;
+  border-color: #ff9b9b;
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .risk-filter-btn-medium.risk-filter-btn-active {
+  background: #352a17;
+  border-color: #ffd27a;
+  color: #ffd27a;
+}
+
+:root[data-theme="dark"] .risk-filter-btn-low.risk-filter-btn-active {
+  background: #1c2a3a;
+  border-color: #9fccff;
+  color: #9fccff;
+}
+
+:root[data-theme="dark"] .risk-dialog {
+  background: #1a1a22;
+  border-color: #2e2e3e;
+}
+
+:root[data-theme="dark"] .risk-dialog-metrics {
+  background: #12121a;
+}
+
+:root[data-theme="dark"] .risk-dialog-close:hover {
+  background: #2e2e3e;
+  color: #eeeeea;
+}
+
+:root[data-theme="dark"] .risk-dialog-severity-high { color: #ff9b9b; }
+:root[data-theme="dark"] .risk-dialog-severity-medium { color: #ffd27a; }
+:root[data-theme="dark"] .risk-dialog-severity-low { color: #9fccff; }
+
+:root[data-theme="dark"] .risk-concern-card:hover {
+  border-color: #8a6ef0;
+  box-shadow: 0 0 0 1px #8a6ef040, 0 4px 16px rgba(138, 110, 240, 0.2);
 }
 
 :root[data-theme="dark"] .risk-refresh-button {

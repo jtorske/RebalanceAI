@@ -496,6 +496,65 @@
   font-size: 12px;
 }
 
+.rw-missing-cap-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #9a6500;
+  border-radius: 8px;
+  background: #fff3d6;
+  color: #7a4f00;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.rw-missing-cap-banner strong {
+  font-size: 13px;
+}
+
+.rw-missing-cap-banner span {
+  color: #9a6500;
+  font-size: 12px;
+}
+
+.rw-cap-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rw-marketcap-input {
+  width: 72px;
+  padding: 4px 7px;
+  font-size: 12px;
+  border: 1px solid #9a6500;
+  border-radius: 6px;
+  background: #fff8ec;
+  color: #181818;
+}
+
+.rw-cap-unit {
+  color: var(--app-muted, #767680);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .rw-missing-cap-banner {
+  background: #352a17;
+  border-color: #7a5a20;
+  color: #ffd27a;
+}
+
+:root[data-theme="dark"] .rw-missing-cap-banner span {
+  color: #c49540;
+}
+
+:root[data-theme="dark"] .rw-marketcap-input {
+  background: #2a2010;
+  border-color: #7a5a20;
+  color: #eeeeea;
+}
+
 @media (max-width: 900px) {
   .rw-header-row { flex-direction: column; }
   .rw-generate-btn { width: 100%; text-align: center; }
