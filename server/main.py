@@ -1174,7 +1174,9 @@ def _build_risk_analysis() -> Dict[str, Any]:
         weight = item["currentValueCad"] / total_value * 100
         asset_class = item.get("assetClass")
 
-        if weight >= 30:
+        if _is_broad_diversified_fund(item):
+            pass
+        elif weight >= 30:
             _add_risk(
                 concerns,
                 symbol,
@@ -1333,6 +1335,33 @@ def _add_insight(
     )
 
 
+def _is_broad_diversified_fund(position: Dict[str, Any]) -> bool:
+    symbol = str(position.get("symbol", "")).strip().upper()
+    quote_symbol = str(position.get("quoteSymbol", "")).strip().upper()
+    asset_class = str(position.get("assetClass", "")).strip().lower()
+    name = str(position.get("name", "")).strip().upper()
+
+    if asset_class not in {"etf", "mutual_fund"}:
+        return False
+
+    if symbol in {"XEQT", "VEQT", "ZEQT", "XGRO", "VGRO", "ZGRO", "XBAL", "VBAL", "VT", "VTI", "SPY", "VOO"}:
+        return True
+
+    if quote_symbol in {"XEQT.TO", "VEQT.TO", "ZEQT.TO", "XGRO.TO", "VGRO.TO", "ZGRO.TO", "XBAL.TO", "VBAL.TO"}:
+        return True
+
+    diversified_terms = [
+        "ALL EQUITY",
+        "CORE EQUITY ETF PORTFOLIO",
+        "ASSET ALLOCATION",
+        "BALANCED ETF",
+        "GROWTH ETF PORTFOLIO",
+        "TOTAL MARKET",
+        "TOTAL WORLD",
+    ]
+    return any(term in name for term in diversified_terms)
+
+
 def _holding_return_percent(holding: Dict[str, Any]) -> Optional[float]:
     book_value = _to_float(holding.get("book_value_market"))
     unrealized = _to_float(holding.get("market_unrealized_returns"))
@@ -1426,7 +1455,16 @@ def _build_key_insights() -> Dict[str, Any]:
     top_position = sorted_positions[0] if sorted_positions else None
     if top_position:
         top_weight = top_position["currentValueCad"] / total_value * 100
-        if top_weight >= 25:
+        if top_weight >= 25 and _is_broad_diversified_fund(top_position):
+            _add_insight(
+                insights,
+                f"{top_position['symbol']} is a diversified core sleeve",
+                f"{top_position['symbol']} is {top_weight:.1f}% of the portfolio, but it is a broad diversified fund rather than a single-company bet.",
+                "Concentration",
+                "positive",
+                [top_position["symbol"]],
+            )
+        elif top_weight >= 25:
             _add_insight(
                 insights,
                 f"{top_position['symbol']} drives a large share of results",

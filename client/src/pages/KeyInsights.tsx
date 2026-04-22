@@ -165,20 +165,20 @@ function KeyInsights() {
                   No patterns yet. Import holdings to start the scan.
                 </div>
               ) : (() => {
-                const topOpp = data.insights.find((i) => i.tone === "positive");
-                const rest = data.insights.filter((i) => i !== topOpp);
-                const ordered = topOpp ? [topOpp, ...rest] : rest;
+                const topInsight = data.insights.find((i) => i.tone === "positive");
+                const rest = data.insights.filter((i) => i !== topInsight);
+                const ordered = topInsight ? [topInsight, ...rest] : rest;
                 return (
                   <div className="insights-card-list">
                     {ordered.map((insight) => (
                       <article
-                        className={`insight-card insight-card-${insight.tone}${insight === topOpp ? " insight-card-pinned" : ""}`}
+                        className={`insight-card insight-card-${insight.tone}${insight === topInsight ? " insight-card-pinned" : ""}`}
                         key={`${insight.category}-${insight.title}`}
                       >
                         <div className="insight-card-topline">
                           <span>
-                            {insight === topOpp && (
-                              <span className="insight-top-badge">Top Opportunity</span>
+                            {insight === topInsight && (
+                              <span className="insight-top-badge">Top Insight</span>
                             )}
                             {insight.category}
                           </span>
