@@ -123,6 +123,101 @@ def _default_store() -> Dict[str, Any]:
     }
 
 
+_demo_mode_active = False
+
+_DEMO_STORE: Dict[str, Any] = {
+    "source_file_name": "demo-portfolio.csv",
+    "as_of": "2026-04-25",
+    "imported_at": "2026-04-25T00:00:00Z",
+    "holdings": [
+        {
+            "account_name": "TFSA", "account_type": "TFSA",
+            "account_classification": "Tax-Free Savings Account", "account_number": "DEMO-001",
+            "symbol": "XEQT", "exchange": "TSX", "mic": "XTSE",
+            "name": "iShares Core Equity ETF Portfolio", "security_type": "ETF",
+            "quantity": 120.0, "position_direction": "Long",
+            "market_price": 32.85, "market_price_currency": "CAD",
+            "book_value_cad": 3600.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 3600.0, "book_value_currency_market": "CAD",
+            "market_value": 3942.0, "market_value_currency": "CAD",
+            "market_unrealized_returns": 342.0, "market_unrealized_returns_currency": "CAD",
+        },
+        {
+            "account_name": "RRSP", "account_type": "RRSP",
+            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
+            "symbol": "AAPL", "exchange": "NASDAQ", "mic": "XNAS",
+            "name": "Apple Inc.", "security_type": "Common Stock",
+            "quantity": 25.0, "position_direction": "Long",
+            "market_price": 187.50, "market_price_currency": "USD",
+            "book_value_cad": 5200.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 3800.0, "book_value_currency_market": "USD",
+            "market_value": 4687.50, "market_value_currency": "USD",
+            "market_unrealized_returns": 887.50, "market_unrealized_returns_currency": "USD",
+        },
+        {
+            "account_name": "RRSP", "account_type": "RRSP",
+            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
+            "symbol": "MSFT", "exchange": "NASDAQ", "mic": "XNAS",
+            "name": "Microsoft Corporation", "security_type": "Common Stock",
+            "quantity": 12.0, "position_direction": "Long",
+            "market_price": 415.00, "market_price_currency": "USD",
+            "book_value_cad": 5800.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 4200.0, "book_value_currency_market": "USD",
+            "market_value": 4980.00, "market_value_currency": "USD",
+            "market_unrealized_returns": 780.00, "market_unrealized_returns_currency": "USD",
+        },
+        {
+            "account_name": "Margin", "account_type": "Margin",
+            "account_classification": "Margin Account", "account_number": "DEMO-003",
+            "symbol": "AMD", "exchange": "NASDAQ", "mic": "XNAS",
+            "name": "Advanced Micro Devices Inc.", "security_type": "Common Stock",
+            "quantity": 40.0, "position_direction": "Long",
+            "market_price": 125.00, "market_price_currency": "USD",
+            "book_value_cad": 5100.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 3700.0, "book_value_currency_market": "USD",
+            "market_value": 5000.00, "market_value_currency": "USD",
+            "market_unrealized_returns": 1300.00, "market_unrealized_returns_currency": "USD",
+        },
+        {
+            "account_name": "TFSA", "account_type": "TFSA",
+            "account_classification": "Tax-Free Savings Account", "account_number": "DEMO-001",
+            "symbol": "TD", "exchange": "TSX", "mic": "XTSE",
+            "name": "Toronto-Dominion Bank", "security_type": "Common Stock",
+            "quantity": 50.0, "position_direction": "Long",
+            "market_price": 78.40, "market_price_currency": "CAD",
+            "book_value_cad": 3600.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 3600.0, "book_value_currency_market": "CAD",
+            "market_value": 3920.00, "market_value_currency": "CAD",
+            "market_unrealized_returns": 320.00, "market_unrealized_returns_currency": "CAD",
+        },
+        {
+            "account_name": "Margin", "account_type": "Margin",
+            "account_classification": "Margin Account", "account_number": "DEMO-003",
+            "symbol": "CEG", "exchange": "NASDAQ", "mic": "XNAS",
+            "name": "Constellation Energy Corporation", "security_type": "Common Stock",
+            "quantity": 8.0, "position_direction": "Long",
+            "market_price": 265.00, "market_price_currency": "USD",
+            "book_value_cad": 2400.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 1750.0, "book_value_currency_market": "USD",
+            "market_value": 2120.00, "market_value_currency": "USD",
+            "market_unrealized_returns": 370.00, "market_unrealized_returns_currency": "USD",
+        },
+        {
+            "account_name": "RRSP", "account_type": "RRSP",
+            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
+            "symbol": "GOOG", "exchange": "NASDAQ", "mic": "XNAS",
+            "name": "Alphabet Inc.", "security_type": "Common Stock",
+            "quantity": 20.0, "position_direction": "Long",
+            "market_price": 168.00, "market_price_currency": "USD",
+            "book_value_cad": 3100.0, "book_value_currency_cad": "CAD",
+            "book_value_market": 2250.0, "book_value_currency_market": "USD",
+            "market_value": 3360.00, "market_value_currency": "USD",
+            "market_unrealized_returns": 1110.00, "market_unrealized_returns_currency": "USD",
+        },
+    ],
+}
+
+
 def _default_perf_store() -> Dict[str, Any]:
     return {
         "snapshots": [],
@@ -130,6 +225,9 @@ def _default_perf_store() -> Dict[str, Any]:
 
 
 def _load_store() -> Dict[str, Any]:
+    if _demo_mode_active:
+        return _DEMO_STORE
+
     if not HOLDINGS_STORE_FILE.exists():
         return _default_store()
 
@@ -1080,6 +1178,7 @@ def _add_risk(
     severity: str,
     category: str,
     weight: Optional[float] = None,
+    metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     concerns.append(
         {
@@ -1089,6 +1188,7 @@ def _add_risk(
             "severity": severity,
             "category": category,
             "weight": round(weight, 2) if weight is not None else None,
+            "metrics": metrics or {},
         }
     )
 
@@ -1225,6 +1325,7 @@ def _build_risk_analysis() -> Dict[str, Any]:
                 "high",
                 "Small-cap exposure",
                 weight,
+                {"marketCap": market_cap, "marketCapLabel": f"${market_cap / 1e6:.0f}M"},
             )
         elif market_cap < 2_000_000_000 and weight >= 5:
             _add_risk(
@@ -1235,6 +1336,7 @@ def _build_risk_analysis() -> Dict[str, Any]:
                 "medium",
                 "Small-cap exposure",
                 weight,
+                {"marketCap": market_cap, "marketCapLabel": f"${market_cap / 1e9:.2f}B"},
             )
 
         if beta is not None and beta >= 1.8 and weight >= 5:
@@ -1246,6 +1348,7 @@ def _build_risk_analysis() -> Dict[str, Any]:
                 "medium",
                 "Volatility",
                 weight,
+                {"beta": round(beta, 2)},
             )
 
         if earnings_days is not None and 0 <= earnings_days <= 21:
@@ -1257,6 +1360,7 @@ def _build_risk_analysis() -> Dict[str, Any]:
                 "medium",
                 "Catalyst",
                 weight,
+                {"earningsDate": earnings_date, "earningsInDays": earnings_days},
             )
 
         title_keywords = (
@@ -2081,6 +2185,61 @@ def get_sector_breakdown():
 @app.get("/risk/analysis")
 def get_risk_analysis():
     return _build_risk_analysis()
+
+
+@app.post("/demo/enable")
+def enable_demo_mode():
+    global _demo_mode_active
+    _demo_mode_active = True
+    _risk_profile_cache.clear()
+    return {"demo": True}
+
+
+@app.post("/demo/disable")
+def disable_demo_mode():
+    global _demo_mode_active
+    _demo_mode_active = False
+    _risk_profile_cache.clear()
+    return {"demo": False}
+
+
+@app.get("/demo/status")
+def get_demo_status():
+    return {"demo": _demo_mode_active}
+
+
+@app.get("/portfolio/earnings-calendar")
+def get_earnings_calendar():
+    store = _load_store()
+    holdings = store.get("holdings", [])
+    positions = _prepare_rebalance_positions(holdings)
+
+    today = datetime.now(timezone.utc).date()
+    cutoff = today + timedelta(days=90)
+    events: Dict[str, List[str]] = {}
+
+    for item in positions:
+        if item.get("assetClass") != "stock":
+            continue
+        symbol = item["symbol"]
+        quote_symbol = item.get("quoteSymbol") or symbol
+        profile = _fetch_risk_profile(quote_symbol)
+        earnings_date = profile.get("earningsDate")
+        if not earnings_date:
+            continue
+        try:
+            date = datetime.fromisoformat(str(earnings_date)).date()
+        except (ValueError, TypeError):
+            continue
+        if today <= date <= cutoff:
+            date_str = date.isoformat()
+            if date_str not in events:
+                events[date_str] = []
+            if symbol not in events[date_str]:
+                events[date_str].append(symbol)
+
+    sorted_events = [{"date": d, "symbols": s} for d, s in sorted(events.items())]
+    return {"events": sorted_events, "generatedAt": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/portfolio/key-insights")

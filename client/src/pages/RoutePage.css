@@ -355,6 +355,14 @@
   max-width: 320px;
 }
 
+.import-empty-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
 .import-empty-cta {
   display: inline-flex;
   align-items: center;
@@ -368,11 +376,39 @@
   padding: 10px 20px;
   cursor: pointer;
   transition: background 0.15s;
-  margin-top: 4px;
 }
 
 .import-empty-cta:hover {
   background: #7358d8;
+}
+
+.import-empty-demo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c9baff;
+  border-radius: 8px;
+  background: #f0eeff;
+  color: #5b4abf;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.import-empty-demo-btn:hover {
+  background: #e4daff;
+}
+
+:root[data-theme="dark"] .import-empty-demo-btn {
+  background: #2a2240;
+  color: #b39dff;
+  border-color: #4a3a80;
+}
+
+:root[data-theme="dark"] .import-empty-demo-btn:hover {
+  background: #342856;
 }
 
 :root[data-theme="dark"] .import-search-input {
@@ -398,6 +434,168 @@
   color: #9999aa;
 }
 
+/* Earnings Calendar */
+.earnings-calendar-wrap {
+  padding-top: 8px;
+}
+
+.earnings-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.earnings-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.earnings-nav-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 18px;
+  cursor: pointer;
+  color: #555;
+  line-height: 1;
+}
+
+.earnings-nav-btn:hover {
+  background: #f0f0f5;
+}
+
+.earnings-month-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  min-width: 140px;
+  text-align: center;
+}
+
+.earnings-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.earnings-day-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-align: center;
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.earnings-day {
+  min-height: 52px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: #fafafa;
+}
+
+.earnings-day-empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+.earnings-day-today {
+  border-color: #8A6EF0;
+  background: #f5f2ff;
+}
+
+.earnings-day-today .earnings-day-num {
+  background: #8A6EF0;
+  color: #fff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.earnings-day-thisweek {
+  border-color: #e0a800;
+  background: #fffbea;
+}
+
+.earnings-day-num {
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  line-height: 1;
+  display: block;
+}
+
+.earnings-ticker-chip {
+  font-size: 10px;
+  font-weight: 700;
+  background: #8A6EF0;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  display: inline-block;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.earnings-day-thisweek .earnings-ticker-chip {
+  background: #d48a00;
+}
+
+/* Dark theme */
+:root[data-theme="dark"] .earnings-nav-btn {
+  border-color: #3a3a4e;
+  color: #aaa;
+  background: none;
+}
+
+:root[data-theme="dark"] .earnings-nav-btn:hover {
+  background: #2a2a3e;
+}
+
+:root[data-theme="dark"] .earnings-month-label {
+  color: #ccc;
+}
+
+:root[data-theme="dark"] .earnings-day {
+  background: #1e1e2e;
+  border-color: #2e2e3e;
+}
+
+:root[data-theme="dark"] .earnings-day-empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+:root[data-theme="dark"] .earnings-day-today {
+  border-color: #8A6EF0;
+  background: #221e36;
+}
+
+:root[data-theme="dark"] .earnings-day-thisweek {
+  border-color: #e0a800;
+  background: #2a2200;
+}
+
+:root[data-theme="dark"] .earnings-day-num {
+  color: #888;
+}
+
+:root[data-theme="dark"] .earnings-day-header {
+  color: #666;
+}
+
 @media (max-width: 900px) {
   .route-page-main {
     padding: 24px;
@@ -405,5 +603,14 @@
 
   .route-page-title {
     font-size: 28px;
+  }
+
+  .earnings-cal-grid {
+    gap: 2px;
+  }
+
+  .earnings-day {
+    min-height: 40px;
+    padding: 3px 3px;
   }
 }

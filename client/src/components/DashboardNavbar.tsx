@@ -4,15 +4,18 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import "./DashboardNavbar.css";
 import { useUserSettings, type ThemePreference } from "../lib/userSettings";
+import { useDemoMode } from "../lib/demoMode";
 
 function DashboardNavbar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { settings, resolvedTheme, updateSettings } = useUserSettings();
+  const { isDemoMode, enableDemoMode, disableDemoMode } = useDemoMode();
 
   return (
     <header className="dashboard-navbar">
       <Link className="dashboard-navbar-brand" to="/">
         Rebalance<span className="dashboard-navbar-brand-accent">AI</span>
+        {isDemoMode && <span className="demo-mode-badge">Demo</span>}
       </Link>
 
       <nav className="dashboard-navbar-nav">
@@ -162,6 +165,28 @@ function DashboardNavbar() {
                 />
                 Hide dollar amounts
               </label>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title-row">
+                <h3>Demo Mode</h3>
+                {isDemoMode && <span className="demo-mode-badge">Active</span>}
+              </div>
+              <p className="settings-demo-description">
+                {isDemoMode
+                  ? "All pages are showing sample portfolio data."
+                  : "Try the app with a built-in sample portfolio."}
+              </p>
+              <button
+                type="button"
+                className={isDemoMode ? "settings-demo-btn settings-demo-btn-off" : "settings-demo-btn settings-demo-btn-on"}
+                onClick={() => {
+                  void (isDemoMode ? disableDemoMode() : enableDemoMode());
+                  setIsSettingsOpen(false);
+                }}
+              >
+                {isDemoMode ? "Disable Demo Mode" : "Enable Demo Mode"}
+              </button>
             </div>
           </aside>
         </div>,

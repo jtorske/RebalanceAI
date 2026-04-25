@@ -15,6 +15,14 @@ import { API_BASE_URL } from "../lib/constants";
 import { convertToCad } from "../lib/holdingsUtils";
 import type { HoldingsResponse, ImportedHolding } from "../lib/types";
 
+type RiskMetrics = {
+  beta?: number;
+  marketCap?: number;
+  marketCapLabel?: string;
+  earningsDate?: string;
+  earningsInDays?: number;
+};
+
 type RiskConcern = {
   symbol: string;
   title: string;
@@ -22,6 +30,7 @@ type RiskConcern = {
   severity: "high" | "medium" | "low";
   category: string;
   weight: number | null;
+  metrics?: RiskMetrics;
 };
 
 type RiskAnalysisResponse = {
@@ -278,6 +287,30 @@ function RiskDetailDialog({
               {severityLabel[concern.severity]}
             </strong>
           </div>
+          {concern.metrics?.beta !== undefined && (
+            <div className="risk-dialog-metric">
+              <span className="risk-card-label">Beta</span>
+              <strong>{concern.metrics.beta.toFixed(2)}</strong>
+            </div>
+          )}
+          {concern.metrics?.marketCapLabel && (
+            <div className="risk-dialog-metric">
+              <span className="risk-card-label">Market cap</span>
+              <strong>{concern.metrics.marketCapLabel}</strong>
+            </div>
+          )}
+          {concern.metrics?.earningsInDays !== undefined && (
+            <div className="risk-dialog-metric">
+              <span className="risk-card-label">Earnings in</span>
+              <strong>{concern.metrics.earningsInDays === 0 ? "Today" : `${concern.metrics.earningsInDays}d`}</strong>
+            </div>
+          )}
+          {concern.metrics?.earningsDate && (
+            <div className="risk-dialog-metric">
+              <span className="risk-card-label">Earnings date</span>
+              <strong>{new Date(concern.metrics.earningsDate).toLocaleDateString()}</strong>
+            </div>
+          )}
         </div>
 
         {yahooUrl && (

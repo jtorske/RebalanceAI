@@ -15,6 +15,7 @@ import {
   isOptionHolding,
 } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
+import { useDemoMode } from "../lib/demoMode";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -25,6 +26,7 @@ import type {
 
 function HoldingsPage() {
   const { settings } = useUserSettings();
+  const { isDemoMode, enableDemoMode } = useDemoMode();
   const [fileName, setFileName] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [parsedHoldings, setParsedHoldings] = useState<ImportedHolding[]>([]);
@@ -42,6 +44,12 @@ function HoldingsPage() {
   const [dailyChangeBySymbol, setDailyChangeBySymbol] = useState<
     Record<string, number | null>
   >(() => loadCachedDailyChangeMap());
+  const [earningsEvents, setEarningsEvents] = useState<{ date: string; symbols: string[] }[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
 
   useEffect(() => {
     const loadPersistedHoldings = async () => {
@@ -65,6 +73,8 @@ function HoldingsPage() {
     };
 
     void loadPersistedHoldings();
+    window.addEventListener("holdings-changed", loadPersistedHoldings);
+    return () => window.removeEventListener("holdings-changed", loadPersistedHoldings);
   }, []);
 
   useEffect(() => {
@@ -141,6 +151,23 @@ function HoldingsPage() {
     return () => {
       window.removeEventListener("holdings-changed", refreshTickerDailyChanges);
     };
+  }, []);
+
+  useEffect(() => {
+    const loadEarnings = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`);
+        if (res.ok) {
+          const data = (await res.json()) as { events: { date: string; symbols: string[] }[] };
+          setEarningsEvents(data.events ?? []);
+        }
+      } catch {
+        // best-effort
+      }
+    };
+    void loadEarnings();
+    window.addEventListener("holdings-changed", loadEarnings);
+    return () => window.removeEventListener("holdings-changed", loadEarnings);
   }, []);
 
   const parsedMarketValue = useMemo(
@@ -676,9 +703,20 @@ function HoldingsPage() {
                   <div className="import-empty-icon">📂</div>
                   <h3>No holdings yet</h3>
                   <p>Export a CSV from your broker and upload it above to get started.</p>
-                  <label className="import-empty-cta" htmlFor="holdings-csv-upload">
-                    Upload CSV
-                  </label>
+                  <div className="import-empty-actions">
+                    <label className="import-empty-cta" htmlFor="holdings-csv-upload">
+                      Upload CSV
+                    </label>
+                    {!isDemoMode && (
+                      <button
+                        type="button"
+                        className="import-empty-demo-btn"
+                        onClick={() => void enableDemoMode()}
+                      >
+                        Try Demo Portfolio
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : filteredHoldings.length === 0 ? (
                 <div className="import-table-empty">
@@ -687,9 +725,98 @@ function HoldingsPage() {
               ) : null}
             </div>
           </section>
+
+          {earningsEvents.length > 0 && (
+            <EarningsCalendar
+              events={earningsEvents}
+              month={calendarMonth}
+              onPrevMonth={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+              onNextMonth={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+            />
+          )}
         </section>
       </main>
     </div>
+  );
+}
+
+type EarningsEvent = { date: string; symbols: string[] };
+
+function EarningsCalendar({
+  events,
+  month,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  events: EarningsEvent[];
+  month: Date;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, monthIdx, 1).getDay();
+
+  const eventMap = new Map<string, string[]>();
+  for (const ev of events) {
+    eventMap.set(ev.date, ev.symbols);
+  }
+
+  const monthName = month.toLocaleString("default", { month: "long", year: "numeric" });
+  const days: (number | null)[] = [...Array(firstDayOfWeek).fill(null)];
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+
+  return (
+    <section className="earnings-calendar-wrap">
+      <div className="earnings-calendar-header">
+        <h2 className="import-section-title">Portfolio Events</h2>
+        <div className="earnings-cal-nav">
+          <button type="button" onClick={onPrevMonth} className="earnings-nav-btn">‹</button>
+          <span className="earnings-month-label">{monthName}</span>
+          <button type="button" onClick={onNextMonth} className="earnings-nav-btn">›</button>
+        </div>
+      </div>
+      <div className="earnings-cal-grid">
+        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
+          <div key={d} className="earnings-day-header">{d}</div>
+        ))}
+        {days.map((day, i) => {
+          if (day === null) return <div key={`empty-${i}`} className="earnings-day earnings-day-empty" />;
+          const dateStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const cellDate = new Date(year, monthIdx, day);
+          cellDate.setHours(0, 0, 0, 0);
+          const isToday = cellDate.getTime() === today.getTime();
+          const isThisWeek = cellDate >= weekStart && cellDate <= weekEnd;
+          const symbols = eventMap.get(dateStr) ?? [];
+          const hasEvents = symbols.length > 0;
+          return (
+            <div
+              key={dateStr}
+              className={[
+                "earnings-day",
+                isToday ? "earnings-day-today" : "",
+                isThisWeek && hasEvents ? "earnings-day-thisweek" : "",
+                hasEvents ? "earnings-day-has-events" : "",
+              ].filter(Boolean).join(" ")}
+            >
+              <span className="earnings-day-num">{day}</span>
+              {symbols.map((sym) => (
+                <span key={sym} className="earnings-ticker-chip">{sym}</span>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

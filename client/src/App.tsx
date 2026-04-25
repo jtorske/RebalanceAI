@@ -6,20 +6,23 @@ import KeyInsights from "./pages/KeyInsights";
 import RiskManager from "./pages/RiskManager";
 import GoalPlanner from "./pages/GoalPlanner";
 import { UserSettingsProvider } from "./lib/userSettings";
+import { DemoModeProvider } from "./lib/demoMode";
 
 function App() {
   return (
     <UserSettingsProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/re-weight" element={<Reweight />} />
-          <Route path="/risk-manager" element={<RiskManager />} />
-          <Route path="/key-insights" element={<KeyInsights />} />
-          <Route path="/holdings" element={<HoldingsPage />} />
-          <Route path="/goal-planner" element={<GoalPlanner />} />
-        </Routes>
-      </BrowserRouter>
+      <DemoModeProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/re-weight" element={<Reweight />} />
+            <Route path="/risk-manager" element={<RiskManager />} />
+            <Route path="/key-insights" element={<KeyInsights />} />
+            <Route path="/holdings" element={<HoldingsPage />} />
+            <Route path="/goal-planner" element={<GoalPlanner />} />
+          </Routes>
+        </BrowserRouter>
+      </DemoModeProvider>
     </UserSettingsProvider>
   );
 }

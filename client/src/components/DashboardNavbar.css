@@ -310,6 +310,64 @@
   accent-color: var(--app-accent, #8a6ef0);
 }
 
+.demo-mode-badge {
+  display: inline-block;
+  background: #8A6EF0;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 20px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: middle;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.settings-demo-description {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 10px;
+}
+
+.settings-demo-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.settings-demo-btn:hover {
+  opacity: 0.85;
+}
+
+.settings-demo-btn-on {
+  background: #8A6EF0;
+  color: #fff;
+}
+
+.settings-demo-btn-off {
+  background: #f0eeff;
+  color: #5b4abf;
+  border: 1px solid #c9baff;
+}
+
+/* Dark theme */
+:root[data-theme="dark"] .settings-demo-description {
+  color: #888;
+}
+
+:root[data-theme="dark"] .settings-demo-btn-off {
+  background: #2a2240;
+  color: #b39dff;
+  border-color: #4a3a80;
+}
+
 @media (max-width: 1200px) {
   .dashboard-navbar-nav {
     gap: 20px;
