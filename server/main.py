@@ -2062,6 +2062,7 @@ def _format_symbol_list(items: List[Dict[str, Any]], limit: int = 3) -> str:
 
 
 def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
+    max_top_actions = 5
     items = plan.get("items", [])
     if not items:
         return {
@@ -2155,10 +2156,10 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "summary": summary,
         "mode": plan.get("targetMode", "capped_market_cap"),
-        "trimSymbols": [item.get("symbol", "") for item in sells[:3]],
-        "addSymbols": [item.get("symbol", "") for item in buys[:3]],
-        "overweights": overweights[:3],
-        "underweights": underweights[:3],
+        "trimSymbols": [item.get("symbol", "") for item in sells[:max_top_actions]],
+        "addSymbols": [item.get("symbol", "") for item in buys[:max_top_actions]],
+        "overweights": overweights[:max_top_actions],
+        "underweights": underweights[:max_top_actions],
         "totalBuyCad": round(total_buy, 2),
         "totalSellCad": round(total_sell, 2),
         "generatedAt": plan.get("generatedAt"),
@@ -2168,7 +2169,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
                 "action": item.get("action", "hold"),
                 "tradeCad": round(abs(item.get("tradeCad") or 0.0), 2),
             }
-            for item in actionable_trades[:3]
+            for item in actionable_trades[:max_top_actions]
         ],
         "tradeCount": len(actionable_trades),
     }

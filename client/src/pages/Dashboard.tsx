@@ -60,6 +60,8 @@ type RiskAnalysisResponse = {
   concerns: RiskConcernItem[];
 };
 
+const MAX_CARD_ACTION_ROWS = 5;
+
 const repairTextEncoding = (value: string) =>
   value
     .replaceAll("\u00e2\u0080\u0099", "'")
@@ -900,6 +902,15 @@ function Dashboard() {
     return { summary: text, trim: trimSymbols, add: addSymbols };
   }, [rebalanceSummary, trimSymbols, addSymbols]);
 
+  const fallbackActionRows = useMemo(
+    () =>
+      [
+        ...suggestionCards.trim.map((symbol) => ({ symbol, side: "sell" as const })),
+        ...suggestionCards.add.map((symbol) => ({ symbol, side: "buy" as const })),
+      ].slice(0, MAX_CARD_ACTION_ROWS),
+    [suggestionCards],
+  );
+
   const riskScore = useMemo(
     () =>
       Math.min(
@@ -1148,23 +1159,25 @@ function Dashboard() {
                     ) : (
                       <>
                         <div className="dashboard-suggestion-body">
-                          <p className="dashboard-suggestion-text">
-                            {suggestionCards.summary}
-                          </p>
+                          <div className="dashboard-card-summary-block">
+                            <p className="dashboard-suggestion-text">
+                              {suggestionCards.summary}
+                            </p>
+                          </div>
+                          <div className="dashboard-card-middle-space" aria-hidden="true" />
                           {topTrades.length > 0 ? (
                             <div className="dashboard-action-list">
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
-                              {topTrades.map((trade) => (
-                                <Link
-                                  className={`dashboard-action-row dashboard-action-link ${
+                              {topTrades.slice(0, MAX_CARD_ACTION_ROWS).map((trade) => (
+                                <div
+                                  className={`dashboard-action-row ${
                                     trade.action === "sell"
                                       ? "dashboard-action-sell"
                                       : "dashboard-action-buy"
                                   }`}
                                   key={`${trade.action}-${trade.symbol}`}
-                                  to="/re-weight"
                                 >
                                   <span className="dashboard-action-badge">
                                     {trade.action === "sell" ? "Sell" : "Buy"}
@@ -1173,58 +1186,45 @@ function Dashboard() {
                                     {trade.symbol}
                                   </span>
                                   <span className="dashboard-action-value">
-                                    {maskDollar(formatCompactCad(trade.tradeCad))}
+                                    {maskDollar(
+                                      formatCompactCad(trade.tradeCad),
+                                    )}
                                   </span>
-                                  <span className="dashboard-action-arrow">
-                                    →
-                                  </span>
-                                </Link>
+                                </div>
                               ))}
-                              <Link className="dashboard-inline-link" to="/re-weight">
+                              <Link
+                                className="dashboard-inline-link"
+                                to="/re-weight"
+                              >
                                 View all {tradeCount} suggested trades →
                               </Link>
                             </div>
-                          ) : (suggestionCards.trim.length > 0 ||
-                            suggestionCards.add.length > 0) ? (
+                          ) : fallbackActionRows.length > 0 ? (
                             <div className="dashboard-action-list">
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
-                              {suggestionCards.trim.map((sym) => (
-                                <Link
-                                  className="dashboard-action-row dashboard-action-link dashboard-action-sell"
-                                  key={`sell-${sym}`}
-                                  to="/re-weight"
+                              {fallbackActionRows.map((row) => (
+                                <div
+                                  className={`dashboard-action-row ${
+                                    row.side === "sell"
+                                      ? "dashboard-action-sell"
+                                      : "dashboard-action-buy"
+                                  }`}
+                                  key={`${row.side}-${row.symbol}`}
                                 >
                                   <span className="dashboard-action-badge">
-                                    Sell
+                                    {row.side === "sell" ? "Sell" : "Buy"}
                                   </span>
                                   <span className="dashboard-action-symbol">
-                                    {sym}
+                                    {row.symbol}
                                   </span>
-                                  <span className="dashboard-action-arrow">
-                                    →
-                                  </span>
-                                </Link>
+                                </div>
                               ))}
-                              {suggestionCards.add.map((sym) => (
-                                <Link
-                                  className="dashboard-action-row dashboard-action-link dashboard-action-buy"
-                                  key={`buy-${sym}`}
-                                  to="/re-weight"
-                                >
-                                  <span className="dashboard-action-badge">
-                                    Buy
-                                  </span>
-                                  <span className="dashboard-action-symbol">
-                                    {sym}
-                                  </span>
-                                  <span className="dashboard-action-arrow">
-                                    →
-                                  </span>
-                                </Link>
-                              ))}
-                              <Link className="dashboard-inline-link" to="/re-weight">
+                              <Link
+                                className="dashboard-inline-link"
+                                to="/re-weight"
+                              >
                                 View full rebalance plan →
                               </Link>
                             </div>
@@ -1297,15 +1297,44 @@ function Dashboard() {
                       </div>
                     ) : (
                       <>
-                        {/* Top: alerts */}
+                        <div className="dashboard-card-summary-block">
+                          <p className="dashboard-risk-summary">
+                            {riskSummary ??
+                              "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
+                          </p>
+                        </div>
+
+                        <div className="dashboard-card-middle-space dashboard-risk-middle-space">
+                          <div className="dashboard-gauge-wrap">
+                            <span
+                              className="dashboard-gauge-status-label"
+                              style={{ color: gaugeColor }}
+                            >
+                              {gaugeLabel}
+                            </span>
+                            <div
+                              className="dashboard-risk-score"
+                              aria-label={`Risk score ${riskScore} out of 100`}
+                            >
+                              <span
+                                className="dashboard-risk-score-value"
+                                style={{ color: gaugeColor }}
+                              >
+                                {riskScore}
+                              </span>
+                              <span className="dashboard-risk-score-denom">
+                                /100
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="dashboard-risk-flags">
-                          {riskConcerns.length === 0 ? (
-                            <p className="dashboard-risk-summary">
-                              {riskSummary ??
-                                "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
-                            </p>
-                          ) : (
+                          {riskConcerns.length > 0 ? (
                             <>
+                              <span className="dashboard-action-label">
+                                Top Alerts
+                              </span>
                               {riskConcerns.map((concern, i) => (
                                 <div
                                   className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
@@ -1322,43 +1351,26 @@ function Dashboard() {
                                   </span>
                                 </div>
                               ))}
-                              {riskSeverityCounts.high + riskSeverityCounts.medium + riskSeverityCounts.low > riskConcerns.length && (
+                              {riskSeverityCounts.high +
+                                riskSeverityCounts.medium +
+                                riskSeverityCounts.low >
+                                riskConcerns.length && (
                                 <Link
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  +{riskSeverityCounts.high + riskSeverityCounts.medium + riskSeverityCounts.low - riskConcerns.length} more risks →
+                                  +
+                                  {riskSeverityCounts.high +
+                                    riskSeverityCounts.medium +
+                                    riskSeverityCounts.low -
+                                    riskConcerns.length}{" "}
+                                  more items
                                 </Link>
                               )}
                             </>
-                          )}
+                          ) : null}
                         </div>
 
-                        {/* Middle: risk score */}
-                        <div className="dashboard-gauge-wrap">
-                          <span
-                            className="dashboard-gauge-status-label"
-                            style={{ color: gaugeColor }}
-                          >
-                            {gaugeLabel}
-                          </span>
-                          <div
-                            className="dashboard-risk-score"
-                            aria-label={`Risk score ${riskScore} out of 100`}
-                          >
-                            <span
-                              className="dashboard-risk-score-value"
-                              style={{ color: gaugeColor }}
-                            >
-                              {riskScore}
-                            </span>
-                            <span className="dashboard-risk-score-denom">
-                              /100
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Bottom: severity mix */}
                         <div className="dashboard-severity-mix">
                           <div className="dashboard-severity-inline">
                             <span>
