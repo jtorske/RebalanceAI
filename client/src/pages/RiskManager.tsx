@@ -457,7 +457,7 @@ function RiskManager() {
               onClick={loadRiskAnalysis}
               disabled={isLoading}
             >
-              {isLoading ? "Scanning..." : "Refresh scan"}
+              {isLoading ? "Scanning..." : "Refresh Risk Scan"}
             </button>
           </div>
 
@@ -525,7 +525,7 @@ function RiskManager() {
 
           <div className="risk-concern-panel">
             <div className="risk-panel-header">
-              <h2>Possible Concerns</h2>
+              <h2>Risk Findings</h2>
               <div className="risk-filter-bar">
                 {(["all", "high", "medium", "low"] as const).map((f) => (
                   <button

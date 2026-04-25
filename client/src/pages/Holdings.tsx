@@ -1,6 +1,6 @@
 import DashboardNavbar from "../components/DashboardNavbar";
 import "./RoutePage.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, USD_TO_CAD_RATE } from "../lib/constants";
 import {
   loadCachedDailyChangeMap,
@@ -44,38 +44,49 @@ function HoldingsPage() {
   const [dailyChangeBySymbol, setDailyChangeBySymbol] = useState<
     Record<string, number | null>
   >(() => loadCachedDailyChangeMap());
-  const [earningsEvents, setEarningsEvents] = useState<{ date: string; symbols: string[] }[]>([]);
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
+  const holdingsLoadRequestId = useRef(0);
 
   useEffect(() => {
     const loadPersistedHoldings = async () => {
+      const requestId = holdingsLoadRequestId.current + 1;
+      holdingsLoadRequestId.current = requestId;
       setIsLoadingPersisted(true);
+
+      const url = isDemoMode
+        ? `${API_BASE_URL}/demo/holdings`
+        : `${API_BASE_URL}/holdings`;
+
       try {
-        const response = await fetch(`${API_BASE_URL}/holdings`);
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error("Unable to read saved holdings from the backend.");
         }
         const data = (await response.json()) as HoldingsResponse;
-        setPersisted(data);
+        if (holdingsLoadRequestId.current === requestId) {
+          setPersisted(data);
+        }
       } catch (loadError) {
         const details =
           loadError instanceof Error
             ? loadError.message
             : "Unknown error while loading holdings.";
-        setError(details);
+        if (holdingsLoadRequestId.current === requestId) {
+          setError(details);
+        }
       } finally {
-        setIsLoadingPersisted(false);
+        if (holdingsLoadRequestId.current === requestId) {
+          setIsLoadingPersisted(false);
+        }
       }
     };
 
     void loadPersistedHoldings();
     window.addEventListener("holdings-changed", loadPersistedHoldings);
-    return () => window.removeEventListener("holdings-changed", loadPersistedHoldings);
-  }, []);
+    return () => {
+      holdingsLoadRequestId.current += 1;
+      window.removeEventListener("holdings-changed", loadPersistedHoldings);
+    };
+  }, [isDemoMode]);
 
   useEffect(() => {
     clearLegacyDailyChangeCache();
@@ -153,22 +164,6 @@ function HoldingsPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const loadEarnings = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`);
-        if (res.ok) {
-          const data = (await res.json()) as { events: { date: string; symbols: string[] }[] };
-          setEarningsEvents(data.events ?? []);
-        }
-      } catch {
-        // best-effort
-      }
-    };
-    void loadEarnings();
-    window.addEventListener("holdings-changed", loadEarnings);
-    return () => window.removeEventListener("holdings-changed", loadEarnings);
-  }, []);
 
   const parsedMarketValue = useMemo(
     () =>
@@ -188,12 +183,16 @@ function HoldingsPage() {
   );
 
   const previewHoldings = useMemo(() => {
+    if (isDemoMode) {
+      return persisted?.holdings ?? [];
+    }
+
     if (parsedHoldings.length > 0) {
       return parsedHoldings;
     }
 
     return persisted?.holdings ?? [];
-  }, [parsedHoldings, persisted]);
+  }, [isDemoMode, parsedHoldings, persisted]);
 
   const sortedPreviewHoldings = useMemo(() => {
     if (!sortKey || !sortDirection) {
@@ -380,7 +379,7 @@ function HoldingsPage() {
         window.dispatchEvent(new Event("holdings-changed"));
       }
 
-      setMessage(`Saved ${parsedHoldings.length} holdings to backend storage.`);
+      setMessage(`Saved ${parsedHoldings.length} holdings.`);
     } catch (saveError) {
       const details =
         saveError instanceof Error
@@ -400,7 +399,7 @@ function HoldingsPage() {
     }
 
     const confirmed = window.confirm(
-      "Delete all persisted holdings from backend storage?",
+      "Delete all saved holdings?",
     );
     if (!confirmed) {
       return;
@@ -468,7 +467,7 @@ function HoldingsPage() {
               onClick={handleSaveToBackend}
               disabled={isUploading || parsedHoldings.length === 0}
             >
-              {isUploading ? "Saving..." : "Save To Backend"}
+              {isUploading ? "Saving..." : "Save Holdings"}
             </button>
 
             <button
@@ -490,7 +489,7 @@ function HoldingsPage() {
 
           <section className="import-metrics-grid">
             <article className="import-metric-card">
-              <h3>Uploaded Preview</h3>
+              <h3>Import Preview</h3>
               <p>{parsedHoldings.length} rows</p>
               <span>
                 {fileName
@@ -500,13 +499,13 @@ function HoldingsPage() {
             </article>
 
             <article className="import-metric-card">
-              <h3>Uploaded Market Value</h3>
+              <h3>Imported Market Value</h3>
               <p>{maskDollar(`$${parsedMarketValue.toFixed(2)}`)}</p>
               <span>Computed from current file before save</span>
             </article>
 
             <article className="import-metric-card">
-              <h3>Persisted Holdings</h3>
+              <h3>Saved Holdings</h3>
               <p>
                 {isLoadingPersisted
                   ? "Loading..."
@@ -520,10 +519,10 @@ function HoldingsPage() {
             </article>
 
             <article className="import-metric-card">
-              <h3>Persisted Market Value (CAD)</h3>
+              <h3>Saved Market Value (CAD)</h3>
               <p>{maskDollar(`CA$${persistedMarketValueCad.toFixed(2)}`)}</p>
               <span>
-                Read from backend storage and converted to CAD using 1 USD =
+                Saved from your portfolio data, converted to CAD using 1 USD =
                 {` ${USD_TO_CAD_RATE.toFixed(2)} CAD`}
               </span>
             </article>
@@ -726,97 +725,9 @@ function HoldingsPage() {
             </div>
           </section>
 
-          {earningsEvents.length > 0 && (
-            <EarningsCalendar
-              events={earningsEvents}
-              month={calendarMonth}
-              onPrevMonth={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-              onNextMonth={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-            />
-          )}
         </section>
       </main>
     </div>
-  );
-}
-
-type EarningsEvent = { date: string; symbols: string[] };
-
-function EarningsCalendar({
-  events,
-  month,
-  onPrevMonth,
-  onNextMonth,
-}: {
-  events: EarningsEvent[];
-  month: Date;
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
-}) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay());
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-
-  const year = month.getFullYear();
-  const monthIdx = month.getMonth();
-  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
-  const firstDayOfWeek = new Date(year, monthIdx, 1).getDay();
-
-  const eventMap = new Map<string, string[]>();
-  for (const ev of events) {
-    eventMap.set(ev.date, ev.symbols);
-  }
-
-  const monthName = month.toLocaleString("default", { month: "long", year: "numeric" });
-  const days: (number | null)[] = [...Array(firstDayOfWeek).fill(null)];
-  for (let d = 1; d <= daysInMonth; d++) days.push(d);
-
-  return (
-    <section className="earnings-calendar-wrap">
-      <div className="earnings-calendar-header">
-        <h2 className="import-section-title">Portfolio Events</h2>
-        <div className="earnings-cal-nav">
-          <button type="button" onClick={onPrevMonth} className="earnings-nav-btn">‹</button>
-          <span className="earnings-month-label">{monthName}</span>
-          <button type="button" onClick={onNextMonth} className="earnings-nav-btn">›</button>
-        </div>
-      </div>
-      <div className="earnings-cal-grid">
-        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
-          <div key={d} className="earnings-day-header">{d}</div>
-        ))}
-        {days.map((day, i) => {
-          if (day === null) return <div key={`empty-${i}`} className="earnings-day earnings-day-empty" />;
-          const dateStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const cellDate = new Date(year, monthIdx, day);
-          cellDate.setHours(0, 0, 0, 0);
-          const isToday = cellDate.getTime() === today.getTime();
-          const isThisWeek = cellDate >= weekStart && cellDate <= weekEnd;
-          const symbols = eventMap.get(dateStr) ?? [];
-          const hasEvents = symbols.length > 0;
-          return (
-            <div
-              key={dateStr}
-              className={[
-                "earnings-day",
-                isToday ? "earnings-day-today" : "",
-                isThisWeek && hasEvents ? "earnings-day-thisweek" : "",
-                hasEvents ? "earnings-day-has-events" : "",
-              ].filter(Boolean).join(" ")}
-            >
-              <span className="earnings-day-num">{day}</span>
-              {symbols.map((sym) => (
-                <span key={sym} className="earnings-ticker-chip">{sym}</span>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 

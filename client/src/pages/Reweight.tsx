@@ -4,6 +4,7 @@ import "./RoutePage.css";
 import "./Reweight.css";
 import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings } from "../lib/userSettings";
+import { buildTradeExplanation } from "../lib/rebalanceExplanations";
 
 type TargetMode =
   | "capped_market_cap"
@@ -122,6 +123,7 @@ function Reweight() {
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [explainItem, setExplainItem] = useState<ReweightItem | null>(null);
 
   const manualTargetList = useMemo(
     () =>
@@ -503,7 +505,9 @@ function Reweight() {
                       return (
                         <tr
                           key={item.symbol}
-                          className={!item.includedInRebalance ? "rw-row-dimmed" : ""}
+                          className={`rw-row-clickable${!item.includedInRebalance ? " rw-row-dimmed" : ""}`}
+                          onClick={() => setExplainItem(item)}
+                          title="Click for trade explanation"
                         >
                           <td title={item.name}>
                             <span className="rw-symbol">{item.symbol}</span>
@@ -517,7 +521,7 @@ function Reweight() {
                           </td>
                           <td>{maskDollar(formatCad(item.currentValueCad))}</td>
                           <td>{formatPct(item.currentWeight)}</td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             {targetMode === "manual" && item.includedInRebalance ? (
                               <input
                                 className="rw-target-input"
@@ -564,7 +568,7 @@ function Reweight() {
                             )}
                           </td>
                           <td>{formatShares(item.tradeShares)}</td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             {item.reason === "Missing market cap" ? (
                               <div className="rw-cap-input-wrap">
                                 <input
@@ -626,6 +630,45 @@ function Reweight() {
           )}
         </div>
       </main>
+
+      {explainItem && data && (
+        <div
+          className="rw-explain-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Trade explanation for ${explainItem.symbol}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setExplainItem(null);
+          }}
+        >
+          <div className="rw-explain-modal">
+            <div className="rw-explain-header">
+              <span className="rw-explain-symbol">{explainItem.symbol}</span>
+              <span className="rw-explain-name">{explainItem.name}</span>
+              <button
+                className="rw-explain-close"
+                type="button"
+                aria-label="Close"
+                onClick={() => setExplainItem(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="rw-explain-lines">
+              {buildTradeExplanation(explainItem, {
+                totalValueCad: data.totalValueCad,
+                settings: data.settings,
+                targetMode: data.targetMode,
+              }).map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+            {explainItem.reason && explainItem.action !== "hold" && (
+              <p className="rw-explain-note">{explainItem.reason}</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

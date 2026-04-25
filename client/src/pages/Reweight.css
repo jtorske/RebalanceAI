@@ -609,3 +609,128 @@
   .rw-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .rw-snapshot-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Clickable rows ───────────────────────────────── */
+
+.rw-row-clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.rw-row-clickable:hover {
+  background: rgba(124, 106, 245, 0.05);
+}
+
+:root[data-theme="dark"] .rw-row-clickable:hover {
+  background: rgba(124, 106, 245, 0.1);
+}
+
+/* ── Trade explanation modal ──────────────────────── */
+
+.rw-explain-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+
+.rw-explain-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 30px 24px;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  position: relative;
+}
+
+.rw-explain-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.rw-explain-symbol {
+  font-size: 20px;
+  font-weight: 700;
+  color: #181818;
+}
+
+.rw-explain-name {
+  font-size: 13px;
+  color: #888;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rw-explain-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  margin-left: auto;
+}
+
+.rw-explain-close:hover {
+  color: #333;
+}
+
+.rw-explain-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rw-explain-lines li {
+  font-size: 14px;
+  line-height: 1.55;
+  color: #333;
+  padding-left: 18px;
+  position: relative;
+}
+
+.rw-explain-lines li::before {
+  content: "›";
+  position: absolute;
+  left: 4px;
+  color: #7c6af5;
+  font-weight: 700;
+}
+
+.rw-explain-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #999;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 10px;
+}
+
+:root[data-theme="dark"] .rw-explain-modal {
+  background: #1e1e2e;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .rw-explain-symbol {
+  color: #eeeeea;
+}
+
+:root[data-theme="dark"] .rw-explain-lines li {
+  color: #ccc;
+}
+
+:root[data-theme="dark"] .rw-explain-note {
+  color: #777;
+  border-top-color: #2a2a3a;
+}

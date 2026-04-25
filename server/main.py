@@ -2069,6 +2069,8 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
             "mode": "capped_market_cap",
             "overweights": [],
             "underweights": [],
+            "topTrades": [],
+            "tradeCount": 0,
         }
 
     notes = [str(note) for note in plan.get("notes", [])]
@@ -2081,6 +2083,8 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
             "totalBuyCad": 0.0,
             "totalSellCad": 0.0,
             "generatedAt": plan.get("generatedAt"),
+            "topTrades": [],
+            "tradeCount": 0,
         }
 
     sells = sorted(
@@ -2117,6 +2121,12 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     underweight_text = _format_symbol_list(underweights)
     total_buy = plan.get("totalBuyCad") or 0.0
     total_sell = plan.get("totalSellCad") or 0.0
+    actionable_trades = [*sells, *buys]
+    actionable_trades = sorted(
+        actionable_trades,
+        key=lambda item: abs(item.get("tradeCad") or 0),
+        reverse=True,
+    )
 
     if buys or sells:
         trade_parts = []
@@ -2152,6 +2162,15 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         "totalBuyCad": round(total_buy, 2),
         "totalSellCad": round(total_sell, 2),
         "generatedAt": plan.get("generatedAt"),
+        "topTrades": [
+            {
+                "symbol": item.get("symbol", ""),
+                "action": item.get("action", "hold"),
+                "tradeCad": round(abs(item.get("tradeCad") or 0.0), 2),
+            }
+            for item in actionable_trades[:3]
+        ],
+        "tradeCount": len(actionable_trades),
     }
 
 
@@ -2206,6 +2225,12 @@ def disable_demo_mode():
 @app.get("/demo/status")
 def get_demo_status():
     return {"demo": _demo_mode_active}
+
+
+@app.get("/demo/holdings")
+def get_demo_holdings():
+    """Always returns demo holdings regardless of demo mode flag."""
+    return _DEMO_STORE
 
 
 @app.get("/portfolio/earnings-calendar")

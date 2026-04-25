@@ -6,6 +6,7 @@ const stripPreamble = (text: string): string =>
     .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
     .trim();
 import DashboardNavbar from "../components/DashboardNavbar.tsx";
+import { EarningsCalendar, type EarningsEvent } from "../components/EarningsCalendar";
 import "./RoutePage.css";
 import "./KeyInsights.css";
 import { API_BASE_URL } from "../lib/constants";
@@ -59,11 +60,19 @@ function scoreColor(score: number): string {
   return "#ef4444";
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 function KeyInsights() {
   const { settings } = useUserSettings();
   const [data, setData] = useState<KeyInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [earningsEvents, setEarningsEvents] = useState<EarningsEvent[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
 
   const maskDollar = (displayValue: string) =>
     settings.hideDollarAmounts ? "..." : displayValue;
@@ -92,6 +101,23 @@ function KeyInsights() {
     void loadInsights();
   }, []);
 
+  useEffect(() => {
+    const loadEarnings = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`);
+        if (res.ok) {
+          const d = (await res.json()) as { events: EarningsEvent[] };
+          setEarningsEvents(d.events ?? []);
+        }
+      } catch {
+        // best-effort
+      }
+    };
+    void loadEarnings();
+    window.addEventListener("holdings-changed", loadEarnings);
+    return () => window.removeEventListener("holdings-changed", loadEarnings);
+  }, []);
+
   return (
     <div className="route-page">
       <DashboardNavbar />
@@ -111,7 +137,7 @@ function KeyInsights() {
               onClick={loadInsights}
               disabled={isLoading}
             >
-              {isLoading ? "Reading..." : "Refresh insights"}
+              {isLoading ? "Reading..." : "Refresh Insights"}
             </button>
           </div>
 
@@ -244,23 +270,24 @@ function KeyInsights() {
               </div>
             </section>
 
-            <section className="insights-panel">
-              <div className="insights-panel-header">
-                <h2>Research Ideas</h2>
-              </div>
-              {(data?.researchIdeas ?? []).length > 0 ? (
-                <div className="insights-ideas-list">
-                  {data?.researchIdeas.map((idea) => (
-                    <article className="insights-idea" key={idea.title}>
-                      <h3>{idea.title}</h3>
-                      <p>{idea.detail}</p>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="insights-empty">
-                  No diversification gaps found from the current scan.
-                </div>
+            <section className="insights-panel insights-panel-calendar">
+              <EarningsCalendar
+                events={earningsEvents}
+                month={calendarMonth}
+                onPrevMonth={() =>
+                  setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+                }
+                onNextMonth={() =>
+                  setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+                }
+                title="Upcoming Earnings"
+                maxVisible={2}
+                yearLock={CURRENT_YEAR}
+              />
+              {earningsEvents.length === 0 && !isLoading && (
+                <p className="insights-muted ec-empty-hint">
+                  No upcoming earnings found for held tickers in the next 90 days.
+                </p>
               )}
             </section>
           </div>

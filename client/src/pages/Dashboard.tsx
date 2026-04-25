@@ -28,6 +28,12 @@ type RebalanceAiSummaryResponse = {
   underweights?: Array<{ symbol: string }>;
   totalBuyCad?: number;
   totalSellCad?: number;
+  topTrades?: Array<{
+    symbol: string;
+    action: "buy" | "sell" | "hold";
+    tradeCad: number;
+  }>;
+  tradeCount?: number;
 };
 
 type SectorBreakdownEntry = {
@@ -437,6 +443,10 @@ function Dashboard() {
     useState(true);
   const [totalBuyCad, setTotalBuyCad] = useState<number | null>(null);
   const [totalSellCad, setTotalSellCad] = useState<number | null>(null);
+  const [topTrades, setTopTrades] = useState<
+    Array<{ symbol: string; action: "buy" | "sell" | "hold"; tradeCad: number }>
+  >([]);
+  const [tradeCount, setTradeCount] = useState(0);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
   const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
   const [riskSeverityCounts, setRiskSeverityCounts] = useState({
@@ -565,7 +575,11 @@ function Dashboard() {
         );
         setTotalBuyCad(data.totalBuyCad ?? null);
         setTotalSellCad(data.totalSellCad ?? null);
+        setTopTrades(data.topTrades ?? []);
+        setTradeCount(data.tradeCount ?? 0);
       } catch {
+        setTopTrades([]);
+        setTradeCount(0);
         try {
           const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
           if (!holdingsRes.ok) {
@@ -653,7 +667,7 @@ function Dashboard() {
             : null,
         );
         const allConcerns = data.concerns ?? [];
-        setRiskConcerns(allConcerns.slice(0, 3));
+        setRiskConcerns(allConcerns.slice(0, 5));
         setRiskSeverityCounts({
           high: allConcerns.filter((c) => c.severity === "high").length,
           medium: allConcerns.filter((c) => c.severity === "medium").length,
@@ -1120,14 +1134,8 @@ function Dashboard() {
                   <div className="dashboard-card-header-row">
                     <div className="dashboard-card-title-row">
                       <HiOutlineLightBulb size={31} />
-                      <span>AI Suggestion</span>
+                      <span>Suggested Rebalance</span>
                     </div>
-                    <Link
-                      className="dashboard-button dashboard-button-purple"
-                      to="/re-weight"
-                    >
-                      Rebalance Now
-                    </Link>
                   </div>
 
                   <div className="dashboard-card-content dashboard-suggestion-content">
@@ -1143,16 +1151,50 @@ function Dashboard() {
                           <p className="dashboard-suggestion-text">
                             {suggestionCards.summary}
                           </p>
-                          {(suggestionCards.trim.length > 0 ||
-                            suggestionCards.add.length > 0) && (
+                          {topTrades.length > 0 ? (
+                            <div className="dashboard-action-list">
+                              <span className="dashboard-action-label">
+                                Top Actions
+                              </span>
+                              {topTrades.map((trade) => (
+                                <Link
+                                  className={`dashboard-action-row dashboard-action-link ${
+                                    trade.action === "sell"
+                                      ? "dashboard-action-sell"
+                                      : "dashboard-action-buy"
+                                  }`}
+                                  key={`${trade.action}-${trade.symbol}`}
+                                  to="/re-weight"
+                                >
+                                  <span className="dashboard-action-badge">
+                                    {trade.action === "sell" ? "Sell" : "Buy"}
+                                  </span>
+                                  <span className="dashboard-action-symbol">
+                                    {trade.symbol}
+                                  </span>
+                                  <span className="dashboard-action-value">
+                                    {maskDollar(formatCompactCad(trade.tradeCad))}
+                                  </span>
+                                  <span className="dashboard-action-arrow">
+                                    →
+                                  </span>
+                                </Link>
+                              ))}
+                              <Link className="dashboard-inline-link" to="/re-weight">
+                                View all {tradeCount} suggested trades →
+                              </Link>
+                            </div>
+                          ) : (suggestionCards.trim.length > 0 ||
+                            suggestionCards.add.length > 0) ? (
                             <div className="dashboard-action-list">
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
                               {suggestionCards.trim.map((sym) => (
-                                <div
-                                  className="dashboard-action-row dashboard-action-sell"
+                                <Link
+                                  className="dashboard-action-row dashboard-action-link dashboard-action-sell"
                                   key={`sell-${sym}`}
+                                  to="/re-weight"
                                 >
                                   <span className="dashboard-action-badge">
                                     Sell
@@ -1160,12 +1202,16 @@ function Dashboard() {
                                   <span className="dashboard-action-symbol">
                                     {sym}
                                   </span>
-                                </div>
+                                  <span className="dashboard-action-arrow">
+                                    →
+                                  </span>
+                                </Link>
                               ))}
                               {suggestionCards.add.map((sym) => (
-                                <div
-                                  className="dashboard-action-row dashboard-action-buy"
+                                <Link
+                                  className="dashboard-action-row dashboard-action-link dashboard-action-buy"
                                   key={`buy-${sym}`}
+                                  to="/re-weight"
                                 >
                                   <span className="dashboard-action-badge">
                                     Buy
@@ -1173,10 +1219,16 @@ function Dashboard() {
                                   <span className="dashboard-action-symbol">
                                     {sym}
                                   </span>
-                                </div>
+                                  <span className="dashboard-action-arrow">
+                                    →
+                                  </span>
+                                </Link>
                               ))}
+                              <Link className="dashboard-inline-link" to="/re-weight">
+                                View full rebalance plan →
+                              </Link>
                             </div>
-                          )}
+                          ) : null}
                         </div>
 
                         {(totalBuyCad !== null || totalSellCad !== null) && (
@@ -1234,12 +1286,6 @@ function Dashboard() {
                       <FiAlertCircle size={31} />
                       <span>Risk Alert</span>
                     </div>
-                    <Link
-                      className="dashboard-button dashboard-button-gold"
-                      to="/risk-manager"
-                    >
-                      View Risks
-                    </Link>
                   </div>
 
                   <div className="dashboard-card-content dashboard-risk-content">
@@ -1259,22 +1305,32 @@ function Dashboard() {
                                 "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
                             </p>
                           ) : (
-                            riskConcerns.map((concern, i) => (
-                              <div
-                                className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
-                                key={`${concern.symbol ?? ""}-${i}`}
-                              >
-                                <span className="dashboard-risk-flag-dot" />
-                                <span className="dashboard-risk-flag-text">
-                                  {concern.symbol && (
-                                    <strong>{concern.symbol} </strong>
-                                  )}
-                                  {concern.title ??
-                                    concern.category ??
-                                    "Risk signal"}
-                                </span>
-                              </div>
-                            ))
+                            <>
+                              {riskConcerns.map((concern, i) => (
+                                <div
+                                  className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
+                                  key={`${concern.symbol ?? ""}-${i}`}
+                                >
+                                  <span className="dashboard-risk-flag-dot" />
+                                  <span className="dashboard-risk-flag-text">
+                                    {concern.symbol && (
+                                      <strong>{concern.symbol} </strong>
+                                    )}
+                                    {concern.title ??
+                                      concern.category ??
+                                      "Risk signal"}
+                                  </span>
+                                </div>
+                              ))}
+                              {riskSeverityCounts.high + riskSeverityCounts.medium + riskSeverityCounts.low > riskConcerns.length && (
+                                <Link
+                                  className="dashboard-inline-link"
+                                  to="/risk-manager"
+                                >
+                                  +{riskSeverityCounts.high + riskSeverityCounts.medium + riskSeverityCounts.low - riskConcerns.length} more risks →
+                                </Link>
+                              )}
+                            </>
                           )}
                         </div>
 
