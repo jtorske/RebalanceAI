@@ -1368,7 +1368,7 @@ function Dashboard() {
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  View all {riskConcernTotal} items ?
+                                  View all {riskConcernTotal} items →
                                 </Link>
                               )}
                             </>
