@@ -451,6 +451,7 @@ function Dashboard() {
   const [tradeCount, setTradeCount] = useState(0);
   const [riskSummary, setRiskSummary] = useState<string | null>(null);
   const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
+  const [riskConcernTotal, setRiskConcernTotal] = useState(0);
   const [riskSeverityCounts, setRiskSeverityCounts] = useState({
     high: 0,
     medium: 0,
@@ -670,6 +671,7 @@ function Dashboard() {
         );
         const allConcerns = data.concerns ?? [];
         setRiskConcerns(allConcerns.slice(0, 5));
+        setRiskConcernTotal(allConcerns.length);
         setRiskSeverityCounts({
           high: allConcerns.filter((c) => c.severity === "high").length,
           medium: allConcerns.filter((c) => c.severity === "medium").length,
@@ -684,9 +686,11 @@ function Dashboard() {
           const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
           const fallback = getFallbackRiskAnalysis(holdingsData.holdings ?? []);
           setRiskSummary(fallback.summary);
+          setRiskConcernTotal(0);
           setRiskSeverityCounts(fallback.severityCounts);
         } catch {
           setRiskSummary(null);
+          setRiskConcernTotal(0);
           setRiskSeverityCounts({ high: 0, medium: 0, low: 0 });
         }
       } finally {
@@ -905,8 +909,14 @@ function Dashboard() {
   const fallbackActionRows = useMemo(
     () =>
       [
-        ...suggestionCards.trim.map((symbol) => ({ symbol, side: "sell" as const })),
-        ...suggestionCards.add.map((symbol) => ({ symbol, side: "buy" as const })),
+        ...suggestionCards.trim.map((symbol) => ({
+          symbol,
+          side: "sell" as const,
+        })),
+        ...suggestionCards.add.map((symbol) => ({
+          symbol,
+          side: "buy" as const,
+        })),
       ].slice(0, MAX_CARD_ACTION_ROWS),
     [suggestionCards],
   );
@@ -1141,15 +1151,15 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="dashboard-card">
-                  <div className="dashboard-card-header-row">
+                <div className="dashboard-card dashboard-structured-card">
+                  <div className="dashboard-card-header-row dashboard-structured-card-header">
                     <div className="dashboard-card-title-row">
                       <HiOutlineLightBulb size={31} />
                       <span>Suggested Rebalance</span>
                     </div>
                   </div>
 
-                  <div className="dashboard-card-content dashboard-suggestion-content">
+                  <div className="dashboard-card-content dashboard-structured-card-content">
                     {isLoadingRebalanceSummary ? (
                       <div className="dashboard-ai-summary-loading">
                         <span className="dashboard-ai-summary-dot" />
@@ -1158,49 +1168,56 @@ function Dashboard() {
                       </div>
                     ) : (
                       <>
-                        <div className="dashboard-suggestion-body">
-                          <div className="dashboard-card-summary-block">
-                            <p className="dashboard-suggestion-text">
-                              {suggestionCards.summary}
-                            </p>
-                          </div>
-                          <div className="dashboard-card-middle-space" aria-hidden="true" />
+                        <div className="dashboard-card-summary-block">
+                          <p className="dashboard-suggestion-text">
+                            {suggestionCards.summary}
+                          </p>
+                        </div>
+
+                        <div
+                          className="dashboard-card-middle-block"
+                          aria-hidden="true"
+                        />
+
+                        <div className="dashboard-card-table-section dashboard-action-list">
                           {topTrades.length > 0 ? (
-                            <div className="dashboard-action-list">
+                            <>
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
-                              {topTrades.slice(0, MAX_CARD_ACTION_ROWS).map((trade) => (
-                                <div
-                                  className={`dashboard-action-row ${
-                                    trade.action === "sell"
-                                      ? "dashboard-action-sell"
-                                      : "dashboard-action-buy"
-                                  }`}
-                                  key={`${trade.action}-${trade.symbol}`}
-                                >
-                                  <span className="dashboard-action-badge">
-                                    {trade.action === "sell" ? "Sell" : "Buy"}
-                                  </span>
-                                  <span className="dashboard-action-symbol">
-                                    {trade.symbol}
-                                  </span>
-                                  <span className="dashboard-action-value">
-                                    {maskDollar(
-                                      formatCompactCad(trade.tradeCad),
-                                    )}
-                                  </span>
-                                </div>
-                              ))}
+                              {topTrades
+                                .slice(0, MAX_CARD_ACTION_ROWS)
+                                .map((trade) => (
+                                  <div
+                                    className={`dashboard-action-row ${
+                                      trade.action === "sell"
+                                        ? "dashboard-action-sell"
+                                        : "dashboard-action-buy"
+                                    }`}
+                                    key={`${trade.action}-${trade.symbol}`}
+                                  >
+                                    <span className="dashboard-action-badge">
+                                      {trade.action === "sell" ? "Sell" : "Buy"}
+                                    </span>
+                                    <span className="dashboard-action-symbol">
+                                      {trade.symbol}
+                                    </span>
+                                    <span className="dashboard-action-value">
+                                      {maskDollar(
+                                        formatCompactCad(trade.tradeCad),
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
                               <Link
                                 className="dashboard-inline-link"
                                 to="/re-weight"
                               >
                                 View all {tradeCount} suggested trades →
                               </Link>
-                            </div>
+                            </>
                           ) : fallbackActionRows.length > 0 ? (
-                            <div className="dashboard-action-list">
+                            <>
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
@@ -1227,68 +1244,63 @@ function Dashboard() {
                               >
                                 View full rebalance plan →
                               </Link>
-                            </div>
+                            </>
                           ) : null}
                         </div>
 
-                        {(totalBuyCad !== null || totalSellCad !== null) && (
-                          <div className="dashboard-plan-snapshot">
-                            <span className="dashboard-bottom-label">
-                              Plan Snapshot
-                            </span>
-                            <div className="dashboard-plan-snapshot-grid">
-                              <div className="dashboard-plan-snapshot-item">
-                                <span className="dashboard-plan-snapshot-value dashboard-positive">
-                                  {maskDollar(
-                                    formatCompactCad(totalBuyCad ?? 0),
-                                  )}
-                                </span>
-                                <span className="dashboard-plan-snapshot-key">
-                                  Buys
-                                </span>
-                              </div>
-                              <div className="dashboard-plan-snapshot-item">
-                                <span className="dashboard-plan-snapshot-value dashboard-negative">
-                                  {maskDollar(
-                                    formatCompactCad(totalSellCad ?? 0),
-                                  )}
-                                </span>
-                                <span className="dashboard-plan-snapshot-key">
-                                  Sells
-                                </span>
-                              </div>
-                              <div className="dashboard-plan-snapshot-item">
-                                <span className="dashboard-plan-snapshot-value">
-                                  {maskDollar(
-                                    formatCompactCad(
-                                      Math.abs(
-                                        (totalBuyCad ?? 0) -
-                                          (totalSellCad ?? 0),
-                                      ),
+                        <div className="dashboard-plan-snapshot">
+                          <span className="dashboard-bottom-label">
+                            Plan Snapshot
+                          </span>
+                          <div className="dashboard-plan-snapshot-grid">
+                            <div className="dashboard-plan-snapshot-item">
+                              <span className="dashboard-plan-snapshot-value dashboard-positive">
+                                {maskDollar(formatCompactCad(totalBuyCad ?? 0))}
+                              </span>
+                              <span className="dashboard-plan-snapshot-key">
+                                Buys
+                              </span>
+                            </div>
+                            <div className="dashboard-plan-snapshot-item">
+                              <span className="dashboard-plan-snapshot-value dashboard-negative">
+                                {maskDollar(
+                                  formatCompactCad(totalSellCad ?? 0),
+                                )}
+                              </span>
+                              <span className="dashboard-plan-snapshot-key">
+                                Sells
+                              </span>
+                            </div>
+                            <div className="dashboard-plan-snapshot-item">
+                              <span className="dashboard-plan-snapshot-value">
+                                {maskDollar(
+                                  formatCompactCad(
+                                    Math.abs(
+                                      (totalBuyCad ?? 0) - (totalSellCad ?? 0),
                                     ),
-                                  )}
-                                </span>
-                                <span className="dashboard-plan-snapshot-key">
-                                  Net drift
-                                </span>
-                              </div>
+                                  ),
+                                )}
+                              </span>
+                              <span className="dashboard-plan-snapshot-key">
+                                Net drift
+                              </span>
                             </div>
                           </div>
-                        )}
+                        </div>
                       </>
                     )}
                   </div>
                 </div>
 
-                <div className="dashboard-card dashboard-risk-card">
-                  <div className="dashboard-card-header-row">
+                <div className="dashboard-card dashboard-risk-card dashboard-structured-card">
+                  <div className="dashboard-card-header-row dashboard-structured-card-header">
                     <div className="dashboard-card-title-row">
                       <FiAlertCircle size={31} />
                       <span>Risk Alert</span>
                     </div>
                   </div>
 
-                  <div className="dashboard-card-content dashboard-risk-content">
+                  <div className="dashboard-card-content dashboard-structured-card-content">
                     {isLoadingRiskSummary ? (
                       <div className="dashboard-ai-summary-loading">
                         <span className="dashboard-ai-summary-dot" />
@@ -1304,7 +1316,7 @@ function Dashboard() {
                           </p>
                         </div>
 
-                        <div className="dashboard-card-middle-space dashboard-risk-middle-space">
+                        <div className="dashboard-card-middle-block dashboard-risk-middle-block">
                           <div className="dashboard-gauge-wrap">
                             <span
                               className="dashboard-gauge-status-label"
@@ -1329,7 +1341,7 @@ function Dashboard() {
                           </div>
                         </div>
 
-                        <div className="dashboard-risk-flags">
+                        <div className="dashboard-card-table-section dashboard-risk-flags">
                           {riskConcerns.length > 0 ? (
                             <>
                               <span className="dashboard-action-label">
@@ -1351,20 +1363,12 @@ function Dashboard() {
                                   </span>
                                 </div>
                               ))}
-                              {riskSeverityCounts.high +
-                                riskSeverityCounts.medium +
-                                riskSeverityCounts.low >
-                                riskConcerns.length && (
+                              {riskConcernTotal > riskConcerns.length && (
                                 <Link
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  +
-                                  {riskSeverityCounts.high +
-                                    riskSeverityCounts.medium +
-                                    riskSeverityCounts.low -
-                                    riskConcerns.length}{" "}
-                                  more items
+                                  View all {riskConcernTotal} items ?
                                 </Link>
                               )}
                             </>
