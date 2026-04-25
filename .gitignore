@@ -51,3 +51,9 @@ ollama/
 CLAUDE.md
 SESSION.md
 TODO.md
+
+venv/
+server/venv/
+.venv/
+__pycache__/
+*.pyc

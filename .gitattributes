@@ -1,0 +1,3 @@
+server/data/* linguist-vendored
+*.md linguist-documentation
+*.tsx linguist-language=TypeScript
