@@ -1,229 +1,220 @@
 # RebalanceAI
 
-AI-powered portfolio analytics platform for rebalancing, risk management, and market insights.
+AI-powered portfolio intelligence platform for portfolio tracking, rebalancing, risk management, and long-term goal planning.
 
 ![Dashboard Screenshot](./screenshots/dashboard.png)
 
-An AI-assisted portfolio tracking and rebalancing dashboard. Import broker CSV exports to get live P&L, daily performance vs. benchmarks, sector allocation, concentration risk, key insights, and algorithmic rebalancing plans.
+RebalanceAI transforms brokerage CSV exports into a modern portfolio command center. Import holdings, track live performance, analyze concentration risk, generate intelligent rebalance plans, monitor catalysts, and model FIRE / wealth-building goals — all through a polished full-stack dashboard.
 
 ---
 
-## Features
+## Why RebalanceAI?
 
-- **Dashboard** — Portfolio value in CAD, daily % vs. 5 benchmark indices, sector donut chart, top movers, concentration bar, and an LLM-generated daily market commentary
-- **Holdings** — CSV import from Questrade exports, sortable table with live prices and unrealized returns, per-position daily change
-- **Reweight** — Generate rebalancing plans across 5 strategies with configurable drift thresholds, trade sizing, and cash constraints
-- **Risk Manager** — Multi-tier concentration and volatility risk scoring with severity-ranked concerns
-- **Key Insights** — Auto-detected portfolio patterns: sector dominance, diversification gaps, top performers, laggards, and research ideas
+Most retail investing tools show balances. RebalanceAI helps answer:
+
+- **Am I too concentrated?**
+- **What should I buy or trim right now?**
+- **How risky is my current allocation?**
+- **How am I performing vs the market?**
+- **Am I on track for my FIRE / wealth goals?**
+
+It combines portfolio analytics with explainable decision tools in a clean fintech-style interface.
+
+---
+
+## Core Features
+
+## Dashboard
+
+Your portfolio control center.
+
+- Total market value, book value, unrealized P&L
+- Daily portfolio return vs benchmark average
+- Sector allocation donut chart
+- Market summary with benchmark comparisons
+- Suggested rebalance summary
+- Risk alert score with flagged concerns
+- Top actions and portfolio drift snapshot
+
+---
+
+## Holdings
+
+Import and manage positions.
+
+- CSV import from broker exports
+- Searchable holdings table
+- Multi-currency support (USD/CAD)
+- Live prices and unrealized gains/losses
+- Daily change tracking
+- Backend persistence
+- Demo mode sample portfolio
+
+---
+
+## Re-weight
+
+Generate optimized rebalance plans.
+
+Supports multiple strategies:
+
+- **Capped Market Cap**
+- **Pure Market Cap**
+- **Square Root Market Cap**
+- **Equal Weight**
+- **Manual Targets**
+
+Includes:
+
+- Drift threshold logic
+- Fractional shares
+- Minimum trade filters
+- Cash-first mode
+- No-sell mode
+- Max single-position caps
+- Explainable trade rationale
+
+---
+
+## Risk Manager
+
+Scan current holdings for portfolio weaknesses.
+
+Checks include:
+
+- Sector concentration
+- Single-position concentration
+- High beta exposure
+- Small / micro cap sizing risk
+- Earnings catalysts
+- News / headline concerns
+- Missing market cap / data quality issues
+- Diversification gaps
+
+Severity ranked into:
+
+- High
+- Medium
+- Watch
+
+---
+
+## Key Insights
+
+AI-assisted portfolio pattern recognition.
+
+Examples:
+
+- Strongest winners
+- Largest laggards
+- Concentration observations
+- Sector sleeve dominance
+- Core ETF diversification benefits
+- Research ideas
+- Broad diversification checks
+
+---
+
+## Goal Planner
+
+Project future wealth outcomes.
+
+Includes:
+
+- Lean FIRE / Regular FIRE / Fat FIRE presets
+- Adjustable age targets
+- Monthly contribution sliders
+- Bull / Base / Bear scenarios
+- Inflation-adjusted targets
+- Confidence score indicators
+- Suggested monthly contribution increases
+
+---
+
+## Demo Mode
+
+Built-in sample portfolio for instant product exploration.
+
+- Toggleable from settings
+- Loads backend demo holdings
+- Great for showcasing features without importing data
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite |
-| Routing | React Router 7 |
-| Backend | Python, FastAPI, uvicorn |
-| Market data | yfinance |
-| AI commentary | Ollama (llama3.2) — optional |
+| Layer         | Technology                 |
+| ------------- | -------------------------- |
+| Frontend      | React 19, TypeScript, Vite |
+| Routing       | React Router 7             |
+| Backend       | Python, FastAPI            |
+| Market Data   | yfinance                   |
+| Charts        | Recharts                   |
+| Styling       | Custom CSS                 |
+| AI (optional) | Ollama (llama3.x)          |
 
 ---
 
-## Getting Started
+## Architecture Highlights
 
-### Prerequisites
-
-- Node.js 18+
-- Python 3.10+
-- (Optional) [Ollama](https://ollama.com) with `llama3.2` for AI summaries
-
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/your-username/RebalanceAI.git
-cd RebalanceAI
-```
-
-### 2. Start the backend
-
-```bash
-cd server
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-The API runs on `http://localhost:8000`.
-
-### 3. Start the frontend
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-The app runs on `http://localhost:5173`.
-
-### 4. (Optional) Enable AI summaries
-
-Install Ollama and pull the model:
-
-```bash
-ollama pull llama3.2
-ollama serve
-```
-
-The backend auto-detects Ollama at `http://localhost:11434`. If unavailable, the app falls back to rule-based summaries — everything else still works.
+- Full-stack React + FastAPI application
+- Modular page-based frontend
+- JSON-backed local persistence layer
+- Multi-currency portfolio normalization
+- Explainable portfolio decision engine
+- Live + fallback pricing system
+- Responsive dark-mode product UI
 
 ---
 
-## Environment Variables
+## Rebalancing Engine
 
-Create `client/.env`:
+The optimizer evaluates holdings and recommends trades using configurable rules.
 
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_USD_TO_CAD_RATE=1.37
-```
+### Supported Constraints
 
-The USD → CAD rate defaults to `1.37` if the env var is not set. To update it, change the constant in `client/src/lib/constants.ts`.
+- Max stock %
+- Drift threshold %
+- Minimum trade amount
+- Available cash
+- Fractional share support
+- No-sell mode
+- ETF preservation logic
 
----
+### Example Output
 
-## CSV Import Format
-
-The Holdings page accepts **Questrade/Wealthsimple portfolio exports**. The CSV must contain these 21 columns in order:
-
-| # | Column |
-|---|--------|
-| 1 | Account Name |
-| 2 | Account Type |
-| 3 | Account Classification |
-| 4 | Account Number |
-| 5 | Symbol |
-| 6 | Exchange |
-| 7 | MIC |
-| 8 | Name |
-| 9 | Security Type |
-| 10 | Quantity |
-| 11 | Position Direction |
-| 12 | Market Price |
-| 13 | Market Price Currency |
-| 14 | Book Value (CAD) |
-| 15 | Book Value Currency (CAD) |
-| 16 | Book Value (Market) |
-| 17 | Book Value Currency (Market) |
-| 18 | Market Value |
-| 19 | Market Value Currency |
-| 20 | Market Unrealized Returns |
-| 21 | Market Unrealized Returns Currency |
-
-The parser handles quoted fields, comma-separated numbers, and extracts the "As Of" date from the first cell if present.
+- Sell overweight positions
+- Buy underweight positions
+- Net drift reduced
+- Position caps respected
 
 ---
 
-## Rebalancing Strategies
+## Risk Engine Logic
 
-| Strategy | Description |
-|----------|-------------|
-| **Capped Market-Cap** (default) | Weight by market cap; caps any single position at `maxSingleStockPct` (default 20%) |
-| **Market-Cap** | Pure market-cap weighting with no cap |
-| **Square-Root Market-Cap** | `sqrt(market_cap)` weighting — compresses mega-cap dominance |
-| **Equal Weight** | All eligible positions receive equal allocation |
-| **Manual** | User specifies target weights directly |
+Portfolio concerns are dynamically scored using weighting thresholds.
 
-Options, cash, and positions with missing market-cap data are excluded from rebalancing automatically.
+Examples:
 
-### Configurable parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Max single stock % | 20% | Upper bound for any one position |
-| Drift threshold | 2% | Minimum drift before a trade is generated |
-| Minimum trade | CA$50 | Trades below this are suppressed |
-| Available cash | 0 | Extra cash to deploy in buys |
-| No-sell mode | off | Restricts plan to buys and holds only |
-| Fractional shares | on | Allow non-integer share quantities |
+| Check                | Example Trigger             |
+| -------------------- | --------------------------- |
+| Sector Risk          | Tech > target concentration |
+| Position Risk        | Single holding oversized    |
+| Volatility Risk      | High beta stock overweight  |
+| Catalyst Risk        | Earnings within 21 days     |
+| Data Risk            | Missing market cap          |
+| Diversification Risk | Overreliance on few names   |
 
 ---
 
-## Risk Analysis
+## Benchmarks Used
 
-The risk engine scores each position and the portfolio as a whole across the following checks:
+Daily portfolio performance compares against:
 
-| Check | Threshold | Severity |
-|-------|-----------|----------|
-| Sector concentration | ≥ 45% | High |
-| Sector concentration | ≥ 30% | Medium |
-| Single position weight | ≥ 30% | High |
-| Single position weight | ≥ 18% | Medium |
-| Micro-cap position (market cap < CA$300M) | weight ≥ 2% | High |
-| Small-cap position (market cap < CA$2B) | weight ≥ 5% | Medium |
-| High beta (β ≥ 1.8) | weight ≥ 5% | Medium |
-| Upcoming earnings catalyst | 0–21 days out | Medium |
-| Negative news sentiment | keyword match | Medium |
-
-Concerns are ranked high → medium → low, then by position weight. A 1–2 sentence summary is generated by Llama (or a rule-based fallback).
+- VT
+- VTI
+- QQQ
+- SPY
+- DIA
 
 ---
-
-## Benchmark Indices
-
-Portfolio daily performance is compared against the average of 5 indices:
-
-| Symbol | Index |
-|--------|-------|
-| VT | Total World Stock Market |
-| VTI | Total US Stock Market |
-| QQQ | NASDAQ |
-| SPY | S&P 500 |
-| DIA | Dow Jones |
-
-Daily snapshots are retained for up to **120 trading days**.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/holdings` | All persisted holdings |
-| POST | `/holdings/import` | Import broker CSV |
-| DELETE | `/holdings` | Clear all holdings |
-| GET | `/market/benchmarks` | Live benchmark quotes |
-| GET | `/market/portfolio-vs-market` | Daily portfolio vs. market comparison |
-| GET | `/market/portfolio-performance-history` | 120-day snapshot history |
-| GET | `/market/ai-summary` | LLM market commentary |
-| GET | `/portfolio/sector-breakdown` | Sector allocation |
-| GET | `/risk/analysis` | Risk concerns with severity scores |
-| GET | `/portfolio/key-insights` | Portfolio patterns and research ideas |
-| POST | `/reweight/plan` | Generate rebalancing plan |
-| GET | `/reweight/ai-summary` | LLM rebalancing summary |
-
----
-
-## Project Structure
-
-```
-RebalanceAI/
-├── client/
-│   └── src/
-│       ├── pages/          # Dashboard, Holdings, Reweight, RiskManager, KeyInsights
-│       ├── components/     # DashboardNavbar
-│       └── lib/            # Constants, types, CSV parser, utilities, caching
-└── server/
-    ├── main.py             # All API endpoints and business logic
-    ├── requirements.txt
-    └── data/               # Auto-created; holds JSON stores and caches
-```
-
----
-
-## Development Notes
-
-- Both the frontend and backend must run concurrently during development.
-- Cross-component state is propagated via `window.dispatchEvent(new Event("holdings-changed"))` — no global state library.
-- TSX tickers get `.TO` appended and CSE tickers get `.CN` before yfinance lookups.
-- Live quote → imported `market_price` → cached value is the pricing fallback chain.
-- The `server/data/` directory is created automatically on first run and is gitignored.
