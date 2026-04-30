@@ -1,0 +1,109 @@
+.dashboard-onboarding-banner {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid rgba(138, 110, 240, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(138, 110, 240, 0.15), rgba(138, 110, 240, 0.04)),
+    var(--app-surface, #ffffff);
+  color: var(--app-text, #181818);
+  box-shadow: var(--app-shadow, 0 4px 12px rgba(0, 0, 0, 0.06));
+}
+
+.dashboard-onboarding-banner p {
+  margin: 0;
+  color: var(--app-text-soft, #303039);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dashboard-onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.dashboard-onboarding-primary,
+.dashboard-onboarding-secondary,
+.dashboard-onboarding-ghost,
+.dashboard-onboarding-dismiss {
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dashboard-onboarding-primary {
+  border: none;
+  padding: 0 11px;
+  background: var(--app-accent, #8a6ef0);
+  color: #ffffff;
+}
+
+.dashboard-onboarding-secondary {
+  border: 1px solid rgba(138, 110, 240, 0.42);
+  padding: 0 11px;
+  background: rgba(138, 110, 240, 0.1);
+  color: var(--app-accent-strong, #6f55dc);
+}
+
+.dashboard-onboarding-ghost,
+.dashboard-onboarding-dismiss {
+  border: 1px solid var(--app-border, #e5e5ec);
+  padding: 0 10px;
+  background: transparent;
+  color: var(--app-muted-strong, #4a4a55);
+}
+
+.dashboard-onboarding-dismiss {
+  color: var(--app-muted, #686872);
+}
+
+:root[data-theme="dark"] .dashboard-onboarding-banner {
+  background:
+    linear-gradient(135deg, rgba(155, 140, 255, 0.16), rgba(155, 140, 255, 0.05)),
+    rgba(30, 31, 33, 0.92);
+  border-color: rgba(155, 140, 255, 0.28);
+}
+
+:root[data-theme="dark"] .dashboard-onboarding-secondary {
+  color: var(--app-accent-strong, #b8adff);
+}
+
+:root[data-theme="dark"] .dashboard-onboarding-ghost,
+:root[data-theme="dark"] .dashboard-onboarding-dismiss {
+  color: var(--app-muted-strong, #c2c2c4);
+}
+
+@media (max-width: 820px) {
+  .dashboard-onboarding-banner {
+    align-items: stretch;
+    width: auto;
+    min-width: 0;
+  }
+
+  .dashboard-onboarding-actions {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-onboarding-primary,
+  .dashboard-onboarding-secondary,
+  .dashboard-onboarding-ghost,
+  .dashboard-onboarding-dismiss {
+    flex: 1;
+  }
+}

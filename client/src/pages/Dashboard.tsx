@@ -3,6 +3,7 @@ import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
+import DashboardOnboardingBanner from "../components/DashboardOnboardingBanner";
 import "./Dashboard.css";
 import { API_BASE_URL } from "../lib/constants";
 import { DONUT_COLORS, OTHER_DONUT_COLOR } from "../lib/dashboardUtils";
@@ -1408,6 +1409,8 @@ function Dashboard() {
             </div>
 
             <div className="dashboard-right-column">
+              <DashboardOnboardingBanner />
+
               <div className="dashboard-donut-wrap">
                 <div className="dashboard-donut-stage">
                   <div className="dashboard-donut-panel">
