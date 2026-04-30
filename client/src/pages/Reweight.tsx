@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
+import AuthGateModal from "../components/AuthGateModal";
+import AuthModal from "../components/AuthModal";
 import "./RoutePage.css";
 import "./Reweight.css";
 import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings } from "../lib/userSettings";
 import { buildTradeExplanation } from "../lib/rebalanceExplanations";
+import { useRequireAuth } from "../lib/useRequireAuth";
 
 type TargetMode =
   | "capped_market_cap"
@@ -108,6 +111,12 @@ const MODE_LABELS: Record<TargetMode, string> = {
 
 function Reweight() {
   const { settings } = useUserSettings();
+  const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
+
+  function openGateLogin() { setGateOpen(false); setAuthModalMode("login"); setAuthModalOpen(true); }
+  function openGateSignup() { setGateOpen(false); setAuthModalMode("signup"); setAuthModalOpen(true); }
   const [data, setData] = useState<ReweightResponse | null>(null);
   const [targetMode, setTargetMode] = useState<TargetMode>("capped_market_cap");
   const [cashCad, setCashCad] = useState(0);
@@ -250,7 +259,7 @@ function Reweight() {
             </div>
             <button
               className="rw-generate-btn"
-              onClick={() => void fetchReweight()}
+              onClick={() => requireAuth(() => void fetchReweight())}
               disabled={isLoading}
             >
               {isLoading ? "Generating…" : "Generate Plan"}
@@ -668,6 +677,20 @@ function Reweight() {
             )}
           </div>
         </div>
+      )}
+
+      {gateOpen && (
+        <AuthGateModal
+          onClose={() => setGateOpen(false)}
+          onLogin={openGateLogin}
+          onSignup={openGateSignup}
+        />
+      )}
+      {authModalOpen && (
+        <AuthModal
+          mode={authModalMode}
+          onClose={() => setAuthModalOpen(false)}
+        />
       )}
     </div>
   );

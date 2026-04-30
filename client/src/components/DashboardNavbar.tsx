@@ -17,7 +17,7 @@ function DashboardNavbar() {
 
   const { settings, resolvedTheme, updateSettings } = useUserSettings();
   const { isDemoMode } = useDemoMode();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, profile, signOut } = useAuth();
 
   const openAuthModal = (mode: AuthModalMode) => {
     setAuthModalMode(mode);
@@ -29,12 +29,13 @@ function DashboardNavbar() {
     void signOut();
   };
 
+  // Preference order: saved profile name → local display name → Supabase email
   const displayName = user
-    ? (settings.displayName || user.email || "User")
+    ? (profile?.full_name || settings.displayName || user.email || "User")
     : "Demo User";
 
   const avatarLetter = (
-    (user ? (settings.displayName || user.email) : null) ?? "D"
+    (user ? (profile?.full_name || settings.displayName || user.email) : null) ?? "D"
   )
     .trim()
     .charAt(0)

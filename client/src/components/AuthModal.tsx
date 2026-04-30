@@ -1,138 +1,159 @@
 import { useState } from "react";
-import { FiX } from "react-icons/fi";
 import { createPortal } from "react-dom";
-import { useAuth } from "../context/AuthContext";
+import { FiX } from "react-icons/fi";
+import { FaGoogle } from "react-icons/fa";
+import { supabase } from "../lib/supabase";
+import SignupFlow from "./SignupFlow";
+import LoginForm from "./LoginForm";
 import "./AuthModal.css";
 
-interface AuthModalProps {
-  mode: "login" | "signup";
+export type AuthModalMode = "login" | "signup";
+
+type TopView = "landing" | "login" | "signup";
+
+interface Props {
+  mode: AuthModalMode;
   onClose: () => void;
 }
 
-function AuthModal({ mode: initialMode, onClose }: AuthModalProps) {
-  const [mode, setMode] = useState(initialMode);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { signIn, signUp } = useAuth();
+export default function AuthModal({ mode: initialMode, onClose }: Props) {
+  const [view, setView] = useState<TopView>("landing");
+  const [tab, setTab] = useState<AuthModalMode>(initialMode);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
-  const switchMode = (next: "login" | "signup") => {
-    setMode(next);
-    setError(null);
+  const handleGoogle = async () => {
+    setGoogleError(null);
+    setGoogleBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setGoogleError(error.message);
+      setGoogleBusy(false);
+    }
+    // success → browser redirects to Google; no further handling needed here
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      if (mode === "login") {
-        await signIn(email, password);
-      } else {
-        await signUp(email, password);
-      }
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
+  const goToView = (v: TopView, t?: AuthModalMode) => {
+    setView(v);
+    if (t) setTab(t);
+    setGoogleError(null);
   };
 
   return createPortal(
-    <div
-      className="auth-modal-backdrop"
-      role="presentation"
-      onMouseDown={onClose}
-    >
+    <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
       <div
         className="auth-modal"
         role="dialog"
         aria-modal="true"
-        aria-label={mode === "login" ? "Log in" : "Sign up"}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="auth-modal-header">
-          <div>
-            <p className="auth-modal-eyebrow">RebalanceAI</p>
-            <h2>{mode === "login" ? "Welcome back" : "Create account"}</h2>
-          </div>
+        {/* ── Top bar ─────────────────────────────────────────── */}
+        <div className="auth-topbar">
+          <span className="auth-wordmark">
+            Rebalance<span>AI</span>
+          </span>
           <button
-            className="auth-modal-close"
+            className="auth-icon-btn"
             type="button"
             aria-label="Close"
             onClick={onClose}
           >
-            <FiX size={20} />
+            <FiX size={17} />
           </button>
         </div>
 
-        <form className="auth-modal-form" onSubmit={(e) => void handleSubmit(e)}>
-          <label className="auth-modal-label">
-            Email
-            <input
-              type="email"
-              className="auth-modal-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoFocus
-              autoComplete="email"
-            />
-          </label>
+        {/* ── Content ─────────────────────────────────────────── */}
+        <div className="auth-content">
 
-          <label className="auth-modal-label">
-            Password
-            <input
-              type="password"
-              className="auth-modal-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-            />
-          </label>
+          {/* Landing view */}
+          {view === "landing" && (
+            <div className="auth-view">
+              <div className="auth-tabs">
+                <button
+                  className={`auth-tab${tab === "login" ? " auth-tab--active" : ""}`}
+                  type="button"
+                  onClick={() => setTab("login")}
+                >
+                  Log in
+                </button>
+                <button
+                  className={`auth-tab${tab === "signup" ? " auth-tab--active" : ""}`}
+                  type="button"
+                  onClick={() => setTab("signup")}
+                >
+                  Sign up
+                </button>
+              </div>
 
-          {error && <p className="auth-modal-error">{error}</p>}
+              <h2 className="auth-title">
+                {tab === "login" ? "Welcome back" : "Create your account"}
+              </h2>
 
-          <button
-            className="auth-modal-submit"
-            type="submit"
-            disabled={busy}
-          >
-            {busy
-              ? "Please wait…"
-              : mode === "login"
-              ? "Log in"
-              : "Create account"}
-          </button>
-        </form>
-
-        <p className="auth-modal-switch">
-          {mode === "login" ? (
-            <>
-              Don&apos;t have an account?{" "}
-              <button type="button" onClick={() => switchMode("signup")}>
-                Sign up
+              <button
+                className="auth-google-btn"
+                type="button"
+                disabled={googleBusy}
+                onClick={() => void handleGoogle()}
+              >
+                <FaGoogle size={14} />
+                {googleBusy ? "Redirecting…" : "Continue with Google"}
               </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button type="button" onClick={() => switchMode("login")}>
-                Log in
+
+              {googleError && <p className="auth-error">{googleError}</p>}
+
+              <div className="auth-or"><span>or</span></div>
+
+              <button
+                className="auth-outline-btn"
+                type="button"
+                onClick={() => goToView(tab === "login" ? "login" : "signup")}
+              >
+                Continue with email
               </button>
-            </>
+
+              <p className="auth-switch">
+                {tab === "login" ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button type="button" onClick={() => setTab("signup")}>
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button type="button" onClick={() => setTab("login")}>
+                      Log in
+                    </button>
+                  </>
+                )}
+              </p>
+            </div>
           )}
-        </p>
+
+          {/* Login flow */}
+          {view === "login" && (
+            <LoginForm
+              onBack={() => goToView("landing", "login")}
+              onSuccess={onClose}
+              onSwitchToSignup={() => goToView("signup", "signup")}
+            />
+          )}
+
+          {/* Signup flow */}
+          {view === "signup" && (
+            <SignupFlow
+              onBack={() => goToView("landing", "signup")}
+              onSuccess={onClose}
+              onSwitchToLogin={() => goToView("login", "login")}
+            />
+          )}
+        </div>
       </div>
     </div>,
     document.body,
   );
 }
-
-export default AuthModal;

@@ -8,6 +8,7 @@ import { API_BASE_URL } from "../lib/constants";
 import { DONUT_COLORS, OTHER_DONUT_COLOR } from "../lib/dashboardUtils";
 import { convertToCad } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
+import { useAuth } from "../context/AuthContext";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -426,6 +427,7 @@ const buildSectorBreakdownFromHoldings = (
 
 function Dashboard() {
   const { settings } = useUserSettings();
+  const { user, profile } = useAuth();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
@@ -897,7 +899,9 @@ function Dashboard() {
       ? null
       : marketDailyPercent - portfolioDailyPercent;
 
-  const welcomeName = settings.displayName.trim() || "Investor";
+  const welcomeName = user
+    ? (profile?.full_name?.split(" ")[0] || settings.displayName.trim() || "there")
+    : "there";
 
   const suggestionCards = useMemo(() => {
     const fallbackSummary =

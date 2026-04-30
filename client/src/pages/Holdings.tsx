@@ -1,4 +1,6 @@
 import DashboardNavbar from "../components/DashboardNavbar";
+import AuthGateModal from "../components/AuthGateModal";
+import AuthModal from "../components/AuthModal";
 import "./RoutePage.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, USD_TO_CAD_RATE } from "../lib/constants";
@@ -16,6 +18,7 @@ import {
 } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
 import { useDemoMode } from "../lib/demoMode";
+import { useRequireAuth } from "../lib/useRequireAuth";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -27,6 +30,12 @@ import type {
 function HoldingsPage() {
   const { settings } = useUserSettings();
   const { isDemoMode, enableDemoMode } = useDemoMode();
+  const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
+
+  function openGateLogin() { setGateOpen(false); setAuthModalMode("login"); setAuthModalOpen(true); }
+  function openGateSignup() { setGateOpen(false); setAuthModalMode("signup"); setAuthModalOpen(true); }
   const [fileName, setFileName] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [parsedHoldings, setParsedHoldings] = useState<ImportedHolding[]>([]);
@@ -450,6 +459,7 @@ function HoldingsPage() {
             <label
               className="import-file-input-wrap"
               htmlFor="holdings-csv-upload"
+              onClick={(e) => { if (!requireAuth()) e.preventDefault(); }}
             >
               Select CSV File
             </label>
@@ -464,7 +474,7 @@ function HoldingsPage() {
             <button
               className="import-save-button"
               type="button"
-              onClick={handleSaveToBackend}
+              onClick={() => requireAuth(handleSaveToBackend)}
               disabled={isUploading || parsedHoldings.length === 0}
             >
               {isUploading ? "Saving..." : "Save Holdings"}
@@ -473,7 +483,7 @@ function HoldingsPage() {
             <button
               className="holdings-delete-button"
               type="button"
-              onClick={handleDeleteHoldings}
+              onClick={() => requireAuth(handleDeleteHoldings)}
               disabled={isUploading || (persisted?.holdings.length ?? 0) === 0}
             >
               Delete Holdings
@@ -703,7 +713,11 @@ function HoldingsPage() {
                   <h3>No holdings yet</h3>
                   <p>Export a CSV from your broker and upload it above to get started.</p>
                   <div className="import-empty-actions">
-                    <label className="import-empty-cta" htmlFor="holdings-csv-upload">
+                    <label
+                      className="import-empty-cta"
+                      htmlFor="holdings-csv-upload"
+                      onClick={(e) => { if (!requireAuth()) e.preventDefault(); }}
+                    >
                       Upload CSV
                     </label>
                     {!isDemoMode && (
@@ -727,6 +741,20 @@ function HoldingsPage() {
 
         </section>
       </main>
+
+      {gateOpen && (
+        <AuthGateModal
+          onClose={() => setGateOpen(false)}
+          onLogin={openGateLogin}
+          onSignup={openGateSignup}
+        />
+      )}
+      {authModalOpen && (
+        <AuthModal
+          mode={authModalMode}
+          onClose={() => setAuthModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
