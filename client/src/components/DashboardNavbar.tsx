@@ -1,15 +1,44 @@
-import { FiUser, FiX } from "react-icons/fi";
+import { FiUser, FiX, FiLogOut } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import "./DashboardNavbar.css";
 import { useUserSettings, type ThemePreference } from "../lib/userSettings";
 import { useDemoMode } from "../lib/demoMode";
+import { useAuth } from "../context/AuthContext";
+import AuthModal from "./AuthModal";
+
+type AuthModalMode = "login" | "signup";
 
 function DashboardNavbar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("login");
+
   const { settings, resolvedTheme, updateSettings } = useUserSettings();
-  const { isDemoMode, enableDemoMode, disableDemoMode } = useDemoMode();
+  const { isDemoMode } = useDemoMode();
+  const { user, loading, signOut } = useAuth();
+
+  const openAuthModal = (mode: AuthModalMode) => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleSignOut = () => {
+    setIsSettingsOpen(false);
+    void signOut();
+  };
+
+  const displayName = user
+    ? (settings.displayName || user.email || "User")
+    : "Demo User";
+
+  const avatarLetter = (
+    (user ? (settings.displayName || user.email) : null) ?? "D"
+  )
+    .trim()
+    .charAt(0)
+    .toUpperCase() || "D";
 
   return (
     <header className="dashboard-navbar">
@@ -36,16 +65,39 @@ function DashboardNavbar() {
         </NavLink>
       </nav>
 
-      <button
-        className="dashboard-navbar-user-button"
-        type="button"
-        aria-label="Open profile settings"
-        onClick={() => setIsSettingsOpen(true)}
-      >
-        <FiUser size={21} />
-      </button>
+      {/* Auth area — hidden while session is loading to avoid flash */}
+      {!loading && (
+        user ? (
+          <button
+            className="dashboard-navbar-user-button"
+            type="button"
+            aria-label="Open profile settings"
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            <FiUser size={21} />
+          </button>
+        ) : (
+          <div className="navbar-auth-buttons">
+            <button
+              className="navbar-auth-login"
+              type="button"
+              onClick={() => openAuthModal("login")}
+            >
+              Log in
+            </button>
+            <button
+              className="navbar-auth-signup"
+              type="button"
+              onClick={() => openAuthModal("signup")}
+            >
+              Sign up
+            </button>
+          </div>
+        )
+      )}
 
-      {isSettingsOpen && createPortal(
+      {/* Settings panel (logged-in only) */}
+      {user && isSettingsOpen && createPortal(
         <div
           className="settings-backdrop"
           role="presentation"
@@ -72,15 +124,11 @@ function DashboardNavbar() {
             </div>
 
             <div className="settings-profile-card">
-              <div className="settings-avatar">
-                {settings.displayName.trim().charAt(0).toUpperCase() || "U"}
-              </div>
+              <div className="settings-avatar">{avatarLetter}</div>
               <div>
-                <div className="settings-profile-name">
-                  {settings.displayName || "RebalanceAI User"}
-                </div>
+                <div className="settings-profile-name">{displayName}</div>
                 <div className="settings-profile-email">
-                  {settings.email || "No email added"}
+                  {user.email ?? "No email"}
                 </div>
               </div>
             </div>
@@ -94,16 +142,6 @@ function DashboardNavbar() {
                   value={settings.displayName}
                   onChange={(event) =>
                     updateSettings({ displayName: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={settings.email}
-                  onChange={(event) =>
-                    updateSettings({ email: event.target.value })
                   }
                 />
               </label>
@@ -168,29 +206,26 @@ function DashboardNavbar() {
             </div>
 
             <div className="settings-section">
-              <div className="settings-section-title-row">
-                <h3>Demo Mode</h3>
-                {isDemoMode && <span className="demo-mode-badge">Active</span>}
-              </div>
-              <p className="settings-demo-description">
-                {isDemoMode
-                  ? "All pages are showing sample portfolio data."
-                  : "Try the app with a built-in sample portfolio."}
-              </p>
               <button
                 type="button"
-                className={isDemoMode ? "settings-demo-btn settings-demo-btn-off" : "settings-demo-btn settings-demo-btn-on"}
-                onClick={() => {
-                  void (isDemoMode ? disableDemoMode() : enableDemoMode());
-                  setIsSettingsOpen(false);
-                }}
+                className="settings-signout-btn"
+                onClick={handleSignOut}
               >
-                {isDemoMode ? "Disable Demo Mode" : "Enable Demo Mode"}
+                <FiLogOut size={15} />
+                Log out
               </button>
             </div>
           </aside>
         </div>,
         document.body,
+      )}
+
+      {/* Auth modal (logged-out only) */}
+      {isAuthModalOpen && (
+        <AuthModal
+          mode={authModalMode}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
       )}
     </header>
   );

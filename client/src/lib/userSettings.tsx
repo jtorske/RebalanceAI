@@ -26,8 +26,8 @@ type UserSettingsContextValue = {
 const STORAGE_KEY = "rebalanceai:user-settings";
 
 const defaultSettings: UserSettings = {
-  displayName: "Jordan",
-  email: "jordan@example.com",
+  displayName: "",
+  email: "",
   defaultCurrency: "CAD",
   themePreference: "system",
   hideDollarAmounts: false,
