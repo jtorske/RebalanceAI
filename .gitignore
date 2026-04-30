@@ -29,17 +29,26 @@ dist/
 
 # Server runtime / local data
 server/.pytest_cache/
+server/data/holdings_store.json
 server/data/*.json
 
 # Frontend (fallback at repo root)
 node_modules/
 client/node_modules/
 client/dist/
+client/dist-ssr/
 client/.vite/
+client/*.local
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 logs/
+client/logs/
 
 # Local Ollama installation
 ollama/
