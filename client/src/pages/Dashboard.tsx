@@ -1,4 +1,4 @@
-import { FiAlertCircle, FiBarChart2 } from "react-icons/fi";
+import { FiAlertCircle, FiBarChart2, FiLock } from "react-icons/fi";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -10,6 +10,7 @@ import { DONUT_COLORS, OTHER_DONUT_COLOR } from "../lib/dashboardUtils";
 import { convertToCad } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
 import { useAuth } from "../context/AuthContext";
+import { useDemoMode } from "../lib/demoMode";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -428,7 +429,8 @@ const buildSectorBreakdownFromHoldings = (
 
 function Dashboard() {
   const { settings } = useUserSettings();
-  const { user, profile } = useAuth();
+  const { user, profile, hasHoldings, portfolioLoading } = useAuth();
+  const { isDemoMode, enableDemoMode } = useDemoMode();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
@@ -952,6 +954,72 @@ function Dashboard() {
         : riskScore >= 26
           ? "Moderate"
           : "Low";
+
+  const showEmptyOnboarding =
+    !!user && !isDemoMode && !portfolioLoading && !hasHoldings;
+
+  if (showEmptyOnboarding) {
+    const previewCards = [
+      {
+        title: "Portfolio Overview",
+        copy: "Import holdings to see market value, asset allocation, and performance.",
+      },
+      {
+        title: "Rebalancing",
+        copy: "Import holdings to generate target allocations and suggested trades.",
+      },
+      {
+        title: "Risk Manager",
+        copy: "Import holdings to detect concentration, volatility, and catalyst risks.",
+      },
+      {
+        title: "Key Insights",
+        copy: "Import holdings to uncover portfolio patterns and diversification gaps.",
+      },
+    ];
+
+    return (
+      <div className="dashboard-shell">
+        <div className="dashboard-page">
+          <DashboardNavbar />
+          <main className="dashboard-main dashboard-empty-main">
+            <section className="dashboard-empty-onboarding">
+              <div className="dashboard-empty-copy">
+                <span className="dashboard-empty-eyebrow">New portfolio</span>
+                <h1>Start by importing your holdings</h1>
+                <p>
+                  Upload a portfolio CSV to generate your dashboard, risk scan,
+                  rebalancing plan, and AI-assisted insights.
+                </p>
+                <div className="dashboard-empty-actions">
+                  <Link className="dashboard-empty-primary" to="/holdings">
+                    Upload holdings
+                  </Link>
+                  <button
+                    className="dashboard-empty-secondary"
+                    type="button"
+                    onClick={() => void enableDemoMode()}
+                  >
+                    Try demo portfolio
+                  </button>
+                </div>
+              </div>
+
+              <div className="dashboard-empty-preview-grid">
+                {previewCards.map((card) => (
+                  <article className="dashboard-empty-preview-card" key={card.title}>
+                    <FiLock size={15} />
+                    <h2>{card.title}</h2>
+                    <p>{card.copy}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-shell">

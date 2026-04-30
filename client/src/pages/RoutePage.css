@@ -46,6 +46,64 @@
   gap: 12px;
 }
 
+.import-upload-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-upload-helper {
+  color: var(--app-muted, #686872);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.import-demo-active-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(138, 110, 240, 0.28);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(138, 110, 240, 0.13), rgba(138, 110, 240, 0.04)),
+    var(--app-soft-surface, #f7f7fb);
+  padding: 12px 14px;
+}
+
+.import-demo-active-banner div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.import-demo-active-banner strong {
+  color: var(--app-text, #181818);
+  font-size: 14px;
+}
+
+.import-demo-active-banner span {
+  color: var(--app-muted, #686872);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.import-demo-active-button {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--app-accent, #8a6ef0);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 13px;
+}
+
+.import-demo-active-button:hover {
+  background: var(--app-accent-strong, #6f55dc);
+}
+
 .import-file-input-wrap {
   display: inline-flex;
   align-items: center;

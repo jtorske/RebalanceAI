@@ -16,6 +16,8 @@ type AuthContextType = {
   loading: boolean;
   profileLoading: boolean;
   portfolioLoading: boolean;
+  savedHoldingsCount: number;
+  hasHoldings: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [savedHoldingsCount, setSavedHoldingsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
@@ -44,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       setPortfolio(mainPortfolio);
       const savedHoldings = await getHoldings(mainPortfolio.id);
+      setSavedHoldingsCount(savedHoldings.length);
       await syncBackendHoldings(savedHoldings);
       window.dispatchEvent(new Event("holdings-changed"));
     } finally {
@@ -95,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
         setPortfolio(null);
+        setSavedHoldingsCount(0);
       }
     });
 
@@ -121,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         profileLoading,
         portfolioLoading,
+        savedHoldingsCount,
+        hasHoldings: savedHoldingsCount > 0,
         signIn,
         signOut,
         refreshProfile,

@@ -1,4 +1,4 @@
-import { FiUser, FiX, FiLogOut, FiEdit2 } from "react-icons/fi";
+import { FiUser, FiX, FiLogOut, FiEdit2, FiLock } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,6 +15,7 @@ function DashboardNavbar() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("login");
   const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [lockedMessage, setLockedMessage] = useState<string | null>(null);
 
   const {
     settings,
@@ -27,7 +28,8 @@ function DashboardNavbar() {
   } = useUserSettings();
   const [draftSettings, setDraftSettings] = useState(settings);
   const { isDemoMode } = useDemoMode();
-  const { user, loading, profile, signOut } = useAuth();
+  const { user, loading, profile, signOut, hasHoldings } = useAuth();
+  const isFeatureLocked = !!user && !isDemoMode && !hasHoldings;
 
   const openAuthModal = (mode: AuthModalMode) => {
     setAuthModalMode(mode);
@@ -94,6 +96,33 @@ function DashboardNavbar() {
     .charAt(0)
     .toUpperCase() || "D";
 
+  const showLockedMessage = () => {
+    setLockedMessage("Import holdings first to unlock this feature.");
+    window.setTimeout(() => setLockedMessage(null), 2200);
+  };
+
+  const renderFeatureNavItem = (to: string, label: string) => {
+    if (!isFeatureLocked) {
+      return (
+        <NavLink className="dashboard-navbar-link" to={to}>
+          {label}
+        </NavLink>
+      );
+    }
+
+    return (
+      <button
+        className="dashboard-navbar-link dashboard-navbar-link-locked"
+        type="button"
+        title="Import holdings first to unlock this feature."
+        onClick={showLockedMessage}
+      >
+        <FiLock size={12} />
+        {label}
+      </button>
+    );
+  };
+
   return (
     <header className="dashboard-navbar">
       <Link className="dashboard-navbar-brand" to="/">
@@ -102,22 +131,30 @@ function DashboardNavbar() {
       </Link>
 
       <nav className="dashboard-navbar-nav">
-        <NavLink className="dashboard-navbar-link" to="/re-weight">
-          Re-weight
-        </NavLink>
-        <NavLink className="dashboard-navbar-link" to="/risk-manager">
-          Risk Manager
-        </NavLink>
-        <NavLink className="dashboard-navbar-link" to="/key-insights">
-          Key Insights
-        </NavLink>
-        <NavLink className="dashboard-navbar-link" to="/goal-planner">
-          Goals
-        </NavLink>
-        <NavLink className="dashboard-navbar-link" to="/holdings">
+        {renderFeatureNavItem("/re-weight", "Re-weight")}
+        {renderFeatureNavItem("/risk-manager", "Risk Manager")}
+        {renderFeatureNavItem("/key-insights", "Key Insights")}
+        {renderFeatureNavItem("/goal-planner", "Goals")}
+        <NavLink
+          className={({ isActive }) =>
+            isActive || isFeatureLocked
+              ? "dashboard-navbar-link dashboard-navbar-link-active-start"
+              : "dashboard-navbar-link"
+          }
+          to="/holdings"
+        >
           Holdings
+          {isFeatureLocked && (
+            <span className="dashboard-navbar-start-badge">Start here</span>
+          )}
         </NavLink>
       </nav>
+
+      {lockedMessage && (
+        <div className="dashboard-navbar-lock-message" role="status">
+          {lockedMessage}
+        </div>
+      )}
 
       {/* Auth area — hidden while session is loading to avoid flash */}
       {!loading && (

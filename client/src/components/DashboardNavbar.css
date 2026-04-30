@@ -42,10 +42,14 @@
 .dashboard-navbar-link {
   color: #181818;
   text-decoration: none;
+  border: none;
+  background: transparent;
+  font: inherit;
   white-space: nowrap;
   position: relative;
   padding-bottom: 2px;
   transition: color 0.18s ease;
+  cursor: pointer;
 }
 
 .dashboard-navbar-link::after {
@@ -71,6 +75,49 @@
 .dashboard-navbar-link.active {
   font-weight: 600;
   color: var(--app-accent, #8a6ef0);
+}
+
+.dashboard-navbar-link-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--app-muted, #767680) !important;
+  opacity: 0.72;
+}
+
+.dashboard-navbar-link-locked::after {
+  display: none;
+}
+
+.dashboard-navbar-link-active-start {
+  color: var(--app-accent, #8a6ef0) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dashboard-navbar-start-badge {
+  border-radius: 999px;
+  background: var(--app-accent, #8a6ef0);
+  color: #ffffff;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.dashboard-navbar-lock-message {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: clamp(16px, 2.5vw, 48px);
+  z-index: 40;
+  border: 1px solid rgba(138, 110, 240, 0.32);
+  border-radius: 8px;
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #181818);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .dashboard-navbar-link.active::after {

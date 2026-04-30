@@ -38,7 +38,7 @@ import type {
 
 function HoldingsPage() {
   const { settings } = useUserSettings();
-  const { isDemoMode, enableDemoMode } = useDemoMode();
+  const { isDemoMode, enableDemoMode, disableDemoMode } = useDemoMode();
   const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
   const { user, portfolio, portfolioLoading, refreshPortfolio } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -358,6 +358,10 @@ function HoldingsPage() {
     }
 
     try {
+      if (user && isDemoMode) {
+        await disableDemoMode();
+      }
+
       const fileText = await file.text();
       const { holdings, asOf: csvAsOf } = parseHoldingsCsv(fileText);
       setFileName(file.name);
@@ -457,19 +461,60 @@ function HoldingsPage() {
     }
   };
 
+  const handleTryDemoPortfolio = async () => {
+    await enableDemoMode();
+    window.dispatchEvent(new Event("holdings-changed"));
+  };
+
+  const handleUseOwnHoldings = async () => {
+    await disableDemoMode();
+    setParsedHoldings([]);
+    setFileName(null);
+    setAsOf(null);
+    setMessage("Demo mode is off. Upload your CSV to save a live portfolio.");
+    window.dispatchEvent(new Event("holdings-changed"));
+  };
+
   return (
     <div className="route-page">
       <DashboardNavbar />
       <main className="route-page-main">
         <section className="route-page-card holdings-card">
           <h1 className="route-page-title">Holdings</h1>
+          <p className="route-page-copy">
+            Upload your portfolio CSV to unlock dashboard analytics,
+            rebalancing, risk scans, and AI-assisted insights.
+          </p>
+          {user && isDemoMode && (
+            <div className="import-demo-active-banner">
+              <div>
+                <strong>Viewing demo portfolio</strong>
+                <span>
+                  Demo data is for exploration only. Switch to your own holdings
+                  before importing and saving a live portfolio.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="import-demo-active-button"
+                onClick={() => void handleUseOwnHoldings()}
+              >
+                Use my own holdings
+              </button>
+            </div>
+          )}
           <div className="import-upload-row">
-            <label
-              className="import-file-input-wrap"
-              htmlFor="holdings-csv-upload"
-            >
-              Select CSV File
-            </label>
+            <div className="import-upload-control">
+              <label
+                className="import-file-input-wrap"
+                htmlFor="holdings-csv-upload"
+              >
+                Select CSV File
+              </label>
+              <span className="import-upload-helper">
+                Start here to analyze your own portfolio.
+              </span>
+            </div>
             <input
               id="holdings-csv-upload"
               className="import-file-input"
@@ -718,7 +763,10 @@ function HoldingsPage() {
                 <div className="import-empty-state">
                   <div className="import-empty-icon">📂</div>
                   <h3>No holdings yet</h3>
-                  <p>Export a CSV from your broker and upload it above to get started.</p>
+                  <p>
+                    Export a CSV from your broker and upload it here to start
+                    analyzing your portfolio.
+                  </p>
                   <div className="import-empty-actions">
                     <label
                       className="import-empty-cta"
@@ -730,7 +778,7 @@ function HoldingsPage() {
                       <button
                         type="button"
                         className="import-empty-demo-btn"
-                        onClick={() => void enableDemoMode()}
+                        onClick={() => void handleTryDemoPortfolio()}
                       >
                         Try Demo Portfolio
                       </button>
