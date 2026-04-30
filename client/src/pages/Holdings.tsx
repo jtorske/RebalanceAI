@@ -19,6 +19,15 @@ import {
 import { useUserSettings } from "../lib/userSettings";
 import { useDemoMode } from "../lib/demoMode";
 import { useRequireAuth } from "../lib/useRequireAuth";
+import { useAuth } from "../context/AuthContext";
+import {
+  buildHoldingsResponse,
+  getHoldings,
+  replaceHoldings,
+  syncBackendHoldings,
+} from "../services/holdingsService";
+import { getOrCreateMainPortfolio } from "../services/portfolioService";
+import { getSupabaseErrorMessage } from "../services/supabaseError";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -31,6 +40,7 @@ function HoldingsPage() {
   const { settings } = useUserSettings();
   const { isDemoMode, enableDemoMode } = useDemoMode();
   const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
+  const { user, portfolio, portfolioLoading, refreshPortfolio } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
 
@@ -61,15 +71,28 @@ function HoldingsPage() {
       holdingsLoadRequestId.current = requestId;
       setIsLoadingPersisted(true);
 
-      const url = isDemoMode
-        ? `${API_BASE_URL}/demo/holdings`
-        : `${API_BASE_URL}/holdings`;
-
       try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error("Unable to read saved holdings from the backend.");
+        if (user) {
+          if (!portfolio) {
+            if (!portfolioLoading) {
+              setPersisted(buildHoldingsResponse([], null));
+            }
+            return;
+          }
+
+          const holdings = await getHoldings(portfolio.id);
+          if (holdingsLoadRequestId.current === requestId) {
+            setPersisted(buildHoldingsResponse(holdings));
+            await syncBackendHoldings(holdings);
+          }
+          return;
         }
+
+        const url = isDemoMode
+          ? `${API_BASE_URL}/demo/holdings`
+          : `${API_BASE_URL}/holdings`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Unable to read holdings.");
         const data = (await response.json()) as HoldingsResponse;
         if (holdingsLoadRequestId.current === requestId) {
           setPersisted(data);
@@ -95,7 +118,7 @@ function HoldingsPage() {
       holdingsLoadRequestId.current += 1;
       window.removeEventListener("holdings-changed", loadPersistedHoldings);
     };
-  }, [isDemoMode]);
+  }, [isDemoMode, portfolio, portfolioLoading, user]);
 
   useEffect(() => {
     clearLegacyDailyChangeCache();
@@ -366,35 +389,22 @@ function HoldingsPage() {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/holdings/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source_file_name: fileName,
-          as_of: asOf,
-          holdings: parsedHoldings,
-        }),
-      });
-
-      if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(responseText || "Failed to persist holdings.");
+      if (!user) {
+        throw new Error("Sign in before saving holdings.");
       }
 
-      const latestResponse = await fetch(`${API_BASE_URL}/holdings`);
-      if (latestResponse.ok) {
-        const latestData = (await latestResponse.json()) as HoldingsResponse;
-        setPersisted(latestData);
-        window.dispatchEvent(new Event("holdings-changed"));
-      }
+      const activePortfolio =
+        portfolio ??
+        (await getOrCreateMainPortfolio(user.id, settings.defaultCurrency));
 
+      await replaceHoldings(user.id, activePortfolio.id, parsedHoldings);
+      await syncBackendHoldings(parsedHoldings, fileName);
+      await refreshPortfolio();
+      setPersisted(buildHoldingsResponse(parsedHoldings, fileName));
+      window.dispatchEvent(new Event("holdings-changed"));
       setMessage(`Saved ${parsedHoldings.length} holdings.`);
     } catch (saveError) {
-      const details =
-        saveError instanceof Error
-          ? saveError.message
-          : "Unexpected save error.";
-      setError(details);
+      setError(getSupabaseErrorMessage(saveError));
     } finally {
       setIsUploading(false);
     }
@@ -419,13 +429,11 @@ function HoldingsPage() {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/holdings`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(responseText || "Failed to delete holdings.");
+      if (user && portfolio) {
+        await replaceHoldings(user.id, portfolio.id, []);
       }
+
+      await syncBackendHoldings([]);
 
       setPersisted({
         source_file_name: null,
@@ -459,7 +467,6 @@ function HoldingsPage() {
             <label
               className="import-file-input-wrap"
               htmlFor="holdings-csv-upload"
-              onClick={(e) => { if (!requireAuth()) e.preventDefault(); }}
             >
               Select CSV File
             </label>
@@ -716,7 +723,6 @@ function HoldingsPage() {
                     <label
                       className="import-empty-cta"
                       htmlFor="holdings-csv-upload"
-                      onClick={(e) => { if (!requireAuth()) e.preventDefault(); }}
                     >
                       Upload CSV
                     </label>

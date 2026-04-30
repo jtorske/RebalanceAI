@@ -901,7 +901,12 @@ function Dashboard() {
       : marketDailyPercent - portfolioDailyPercent;
 
   const welcomeName = user
-    ? (profile?.full_name?.split(" ")[0] || settings.displayName.trim() || "there")
+    ? (
+        profile?.display_name?.split(" ")[0] ||
+        profile?.full_name?.split(" ")[0] ||
+        settings.displayName.trim() ||
+        "there"
+      )
     : "there";
 
   const suggestionCards = useMemo(() => {

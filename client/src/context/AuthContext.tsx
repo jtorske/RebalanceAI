@@ -1,17 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { fetchProfile, upsertProfile, type Profile } from "../lib/profiles";
+import { ensureProfile, fetchProfile, type Profile } from "../lib/profiles";
+import {
+  getOrCreateMainPortfolio,
+  type Portfolio,
+} from "../services/portfolioService";
+import { getHoldings, syncBackendHoldings } from "../services/holdingsService";
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  portfolio: Portfolio | null;
   loading: boolean;
   profileLoading: boolean;
+  portfolioLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshPortfolio: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,34 +28,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
 
   // Loads profile; for OAuth (Google) users with no profile yet, auto-creates one
   // from the name Google provides so they never need a manual name step.
+  const syncPortfolio = useCallback(async (u: User, p: Profile | null) => {
+    setPortfolioLoading(true);
+    try {
+      const mainPortfolio = await getOrCreateMainPortfolio(
+        u.id,
+        p?.default_currency ?? "CAD",
+      );
+      setPortfolio(mainPortfolio);
+      const savedHoldings = await getHoldings(mainPortfolio.id);
+      await syncBackendHoldings(savedHoldings);
+      window.dispatchEvent(new Event("holdings-changed"));
+    } finally {
+      setPortfolioLoading(false);
+    }
+  }, []);
+
   const syncProfile = useCallback(async (u: User) => {
     setProfileLoading(true);
     try {
-      let p = await fetchProfile(u.id);
-      if (!p) {
-        const oauthName =
-          (u.user_metadata?.full_name as string | undefined) ||
-          (u.user_metadata?.name as string | undefined);
-        if (oauthName) {
-          await upsertProfile(u.id, { email: u.email ?? null, full_name: oauthName });
-          p = {
-            id: u.id,
-            email: u.email ?? null,
-            full_name: oauthName,
-            created_at: new Date().toISOString(),
-          };
-        }
-      }
+      const p = await ensureProfile(u);
       setProfile(p);
+      void syncPortfolio(u, p);
     } finally {
       setProfileLoading(false);
     }
-  }, []);
+  }, [syncPortfolio]);
 
   // Used by SignupFlow after manually saving a name so the context reflects it immediately
   const refreshProfile = useCallback(async () => {
@@ -59,6 +72,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileLoading(false);
     }
   }, [user]);
+
+  const refreshPortfolio = useCallback(async () => {
+    if (!user) return;
+    await syncPortfolio(user, profile);
+  }, [profile, syncPortfolio, user]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -76,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void syncProfile(session.user);
       } else {
         setProfile(null);
+        setPortfolio(null);
       }
     });
 
@@ -94,7 +113,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, profileLoading, signIn, signOut, refreshProfile }}
+      value={{
+        user,
+        session,
+        profile,
+        portfolio,
+        loading,
+        profileLoading,
+        portfolioLoading,
+        signIn,
+        signOut,
+        refreshProfile,
+        refreshPortfolio,
+      }}
     >
       {children}
     </AuthContext.Provider>
