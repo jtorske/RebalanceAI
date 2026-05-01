@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
 
 const stripPreamble = (text: string): string =>
   text
@@ -62,10 +63,16 @@ function scoreColor(score: number): string {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+const INSIGHTS_CACHE_KEY = "key-insights";
+
 function KeyInsights() {
   const { settings } = useUserSettings();
-  const [data, setData] = useState<KeyInsightsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<KeyInsightsResponse | null>(
+    () => sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY),
+  );
+  const [isLoading, setIsLoading] = useState(
+    () => !sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY),
+  );
   const [error, setError] = useState<string | null>(null);
   const [earningsEvents, setEarningsEvents] = useState<EarningsEvent[]>([]);
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
@@ -77,7 +84,15 @@ function KeyInsights() {
   const maskDollar = (displayValue: string) =>
     settings.hideDollarAmounts ? "..." : displayValue;
 
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY);
+      if (cached) {
+        setData(cached);
+        setIsLoading(false);
+        return;
+      }
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -86,7 +101,9 @@ function KeyInsights() {
         throw new Error("Failed to load key insights.");
       }
       const json = (await response.json()) as KeyInsightsResponse;
-      setData({ ...json, summary: stripPreamble(json.summary ?? "") });
+      const cleaned = { ...json, summary: stripPreamble(json.summary ?? "") };
+      sessionCacheSet(INSIGHTS_CACHE_KEY, cleaned);
+      setData(cleaned);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load key insights.",
@@ -95,11 +112,17 @@ function KeyInsights() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadInsights();
-  }, []);
+  }, [loadInsights]);
+
+  useEffect(() => {
+    const handler = () => void loadInsights(true);
+    window.addEventListener("holdings-changed", handler);
+    return () => window.removeEventListener("holdings-changed", handler);
+  }, [loadInsights]);
 
   useEffect(() => {
     const loadEarnings = async () => {
@@ -134,7 +157,7 @@ function KeyInsights() {
             <button
               className="insights-refresh-button"
               type="button"
-              onClick={loadInsights}
+              onClick={() => void loadInsights(true)}
               disabled={isLoading}
             >
               {isLoading ? "Reading..." : "Refresh Insights"}

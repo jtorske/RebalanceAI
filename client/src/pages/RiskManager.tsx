@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
 
 const stripPreamble = (text: string): string =>
   text
@@ -341,14 +342,28 @@ function RiskDetailDialog({
   );
 }
 
+const RISK_CACHE_KEY = "risk-analysis";
+
 function RiskManager() {
-  const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(
+    () => sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY),
+  );
+  const [isLoading, setIsLoading] = useState(
+    () => !sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY),
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedConcern, setSelectedConcern] = useState<RiskConcern | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "high" | "medium" | "low">("all");
 
-  const loadRiskAnalysis = async () => {
+  const loadRiskAnalysis = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY);
+      if (cached) {
+        setAnalysis(cached);
+        setIsLoading(false);
+        return;
+      }
+    }
     setIsLoading(true);
     setError(null);
 
@@ -391,20 +406,22 @@ function RiskManager() {
         stockConcerns,
       );
 
-      setAnalysis({
+      const result: RiskAnalysisResponse = {
         ...data,
         summary: stripPreamble(data.summary ?? ""),
         dashboardSummary: stripPreamble(data.dashboardSummary ?? ""),
         concerns: mergedConcerns,
         holdingsAnalyzed: data.holdingsAnalyzed || holdingsCount,
-      });
+      };
+      sessionCacheSet(RISK_CACHE_KEY, result);
+      setAnalysis(result);
     } catch (err) {
       const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
       const stockConcerns = buildStockConcentrationConcerns(holdingsList);
       const allConcerns = mergeUniqueConcerns(sectorConcerns, stockConcerns);
 
       if (holdingsCount > 0) {
-        setAnalysis({
+        const fallback: RiskAnalysisResponse = {
           summary:
             allConcerns.length > 0
               ? `${allConcerns.length} concern${allConcerns.length > 1 ? "s" : ""} detected.`
@@ -413,7 +430,9 @@ function RiskManager() {
           concerns: allConcerns,
           holdingsAnalyzed: holdingsCount,
           generatedAt: new Date().toISOString(),
-        });
+        };
+        sessionCacheSet(RISK_CACHE_KEY, fallback);
+        setAnalysis(fallback);
       } else {
         setError(err instanceof Error ? err.message : "Failed to load risk analysis.");
         setAnalysis(null);
@@ -421,11 +440,17 @@ function RiskManager() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadRiskAnalysis();
-  }, []);
+  }, [loadRiskAnalysis]);
+
+  useEffect(() => {
+    const handler = () => void loadRiskAnalysis(true);
+    window.addEventListener("holdings-changed", handler);
+    return () => window.removeEventListener("holdings-changed", handler);
+  }, [loadRiskAnalysis]);
 
   const concernCounts = {
     high: analysis?.concerns.filter((c) => c.severity === "high").length ?? 0,
@@ -454,7 +479,7 @@ function RiskManager() {
             <button
               className="risk-refresh-button"
               type="button"
-              onClick={loadRiskAnalysis}
+              onClick={() => void loadRiskAnalysis(true)}
               disabled={isLoading}
             >
               {isLoading ? "Scanning..." : "Refresh Risk Scan"}

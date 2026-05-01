@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
 import DashboardNavbar from "../components/DashboardNavbar";
 import AuthGateModal from "../components/AuthGateModal";
 import AuthModal from "../components/AuthModal";
@@ -149,8 +150,35 @@ function Reweight() {
         .filter(([, v]) => v !== null),
     );
 
-  const fetchReweight = async (marketCapOverrides: Record<string, string> = {}) => {
+  const buildReweightCacheKey = (caps: Record<string, string> = {}) => {
+    const payload = {
+      targetMode,
+      cashCad,
+      driftThresholdPct,
+      minTradeCad,
+      maxSingleStockPct,
+      fractionalShares,
+      cashFirst,
+      noSell,
+      manualTargets: targetMode === "manual" ? manualTargetList : [],
+      manualMarketCaps: buildManualMarketCapPayload({ ...manualMarketCaps, ...caps }),
+    };
+    return `reweight:${JSON.stringify(payload)}`;
+  };
+
+  const fetchReweight = async (marketCapOverrides: Record<string, string> = {}, useCache = true) => {
     const marketCapsToSend = { ...manualMarketCaps, ...marketCapOverrides };
+    const cacheKey = buildReweightCacheKey(marketCapOverrides);
+
+    if (useCache) {
+      const cached = sessionCacheGet<ReweightResponse>(cacheKey);
+      if (cached) {
+        setData(cached);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -172,6 +200,7 @@ function Reweight() {
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const json = (await res.json()) as ReweightResponse;
+      sessionCacheSet(cacheKey, json);
       setData(json);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load reweight data");
@@ -181,7 +210,7 @@ function Reweight() {
   };
 
   useEffect(() => {
-    void fetchReweight();
+    void fetchReweight({}, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -259,7 +288,7 @@ function Reweight() {
             </div>
             <button
               className="rw-generate-btn"
-              onClick={() => requireAuth(() => void fetchReweight())}
+              onClick={() => requireAuth(() => void fetchReweight({}, false))}
               disabled={isLoading}
             >
               {isLoading ? "Generating…" : "Generate Plan"}
@@ -447,7 +476,7 @@ function Reweight() {
                 <button
                   className="rw-inline-action"
                   type="button"
-                  onClick={() => void fetchReweight()}
+                  onClick={() => void fetchReweight({}, false)}
                   disabled={isLoading}
                 >
                   {isLoading ? "Applying..." : "Apply manual cap"}

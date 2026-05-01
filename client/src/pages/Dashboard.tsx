@@ -3,6 +3,7 @@ import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
+import { TickerLogoBadge } from "../components/TickerLogoBadge";
 import DashboardOnboardingBanner from "../components/DashboardOnboardingBanner";
 import "./Dashboard.css";
 import { API_BASE_URL } from "../lib/constants";
@@ -12,6 +13,7 @@ import { useUserSettings } from "../lib/userSettings";
 import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
+import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
 import { loadMarketSummaryCache, saveMarketSummaryCache } from "../lib/dashboardCache";
 import type {
   ImportedHolding,
@@ -669,6 +671,13 @@ function Dashboard() {
         : null,
     [hoveredChipSymbol, donutSegments],
   );
+
+  // Enrich chart symbols — non-blocking, resolves from cache or background fetch
+  const chartSymbols = useMemo(
+    () => donutSegments.map((s) => s.symbol).filter((s) => s !== "OTHER"),
+    [donutSegments],
+  );
+  const chartMeta = useTickerEnrichment(chartSymbols);
 
   const donutStrokeSegments = useMemo(() => {
     const radius = 35;
@@ -1405,6 +1414,11 @@ function Dashboard() {
                             <span className="dashboard-donut-center-label">
                               {hoveredSegment.symbol}
                             </span>
+                            {chartMeta[hoveredSegment.symbol]?.name && (
+                              <span className="dashboard-donut-center-name">
+                                {chartMeta[hoveredSegment.symbol].name}
+                              </span>
+                            )}
                             <span
                               className="dashboard-donut-center-value"
                               style={{ fontSize: "clamp(16px, 2.8vw, 26px)" }}
@@ -1455,23 +1469,27 @@ function Dashboard() {
                         )}
                       </div>
                       {donutStrokeSegments.map((segment) => {
+                        const meta = chartMeta[segment.symbol];
+                        const tooltip = meta?.name
+                          ? `${segment.symbol} — ${meta.name}\n${segment.weight.toFixed(1)}% · ${formatCompactCad(segment.valueCad)}`
+                          : `${segment.symbol}\n${segment.weight.toFixed(1)}% · ${formatCompactCad(segment.valueCad)}`;
                         return (
                           <button
                             className={`dashboard-donut-chip dashboard-donut-chip-${segment.labelSide}`}
                             key={`${segment.symbol}-${segment.weight.toString()}-chip`}
                             style={segment.labelStyle}
                             type="button"
+                            title={tooltip}
                             onMouseEnter={() =>
                               setHoveredChipSymbol(segment.symbol)
                             }
                             onMouseLeave={() => setHoveredChipSymbol(null)}
                           >
-                            <span
+                            <TickerLogoBadge
+                              symbol={segment.symbol}
+                              color={segment.color}
                               className="dashboard-donut-chip-icon"
-                              style={{ backgroundColor: segment.color }}
-                            >
-                              {segment.symbol}
-                            </span>
+                            />
                             <span className="dashboard-donut-chip-weight">
                               {Math.round(segment.weight)}%
                             </span>
