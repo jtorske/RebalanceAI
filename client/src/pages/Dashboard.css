@@ -441,27 +441,27 @@
 .dashboard-donut-track,
 .dashboard-donut-slice {
   fill: none;
-  stroke-width: 16;
+  stroke-width: 9;
 }
 
 .dashboard-donut-track {
-  stroke: #202125;
+  stroke: #1e1f24;
 }
 
 .dashboard-donut-slice {
-  stroke-linecap: butt;
+  stroke-linecap: round;
   transition:
-    stroke-dasharray 180ms ease,
-    stroke-dashoffset 180ms ease;
+    stroke-dasharray 200ms ease,
+    stroke-dashoffset 200ms ease;
 }
 
 .dashboard-donut-core {
   position: absolute;
-  inset: 30%;
+  inset: 24%;
   background: #151618;
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 50%;
-  box-shadow: inset 0 0 0 10px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;

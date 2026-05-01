@@ -1,0 +1,180 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE_URL } from "../lib/constants";
+import {
+  computeHoldingsHash,
+  loadDashboardCache,
+  saveDashboardCache,
+} from "../lib/dashboardCache";
+import type {
+  RebalanceSummaryData,
+  RiskAlertData,
+  RiskConcernItem,
+} from "../lib/dashboardCache";
+import type { ImportedHolding } from "../lib/types";
+
+const repairText = (v: string) =>
+  v
+    .replaceAll("â", "'")
+    .replaceAll("â", "'")
+    .replaceAll("â", '"')
+    .replaceAll("â", '"')
+    .replaceAll("â", "-")
+    .replaceAll("â", "-");
+
+const stripPreamble = (text: string) =>
+  text
+    .replace(/^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i, "")
+    .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
+    .trim();
+
+async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
+  if (process.env.NODE_ENV === "development") console.time("computeRebalance");
+  const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`);
+  if (!res.ok) throw new Error("rebalance summary fetch failed");
+  const data = await (res.json() as Promise<{
+    summary?: string | null;
+    trimSymbols?: string[];
+    addSymbols?: string[];
+    overweights?: Array<{ symbol: string }>;
+    underweights?: Array<{ symbol: string }>;
+    totalBuyCad?: number;
+    totalSellCad?: number;
+    topTrades?: Array<{ symbol: string; action: "buy" | "sell" | "hold"; tradeCad: number }>;
+    tradeCount?: number;
+  }>);
+  if (process.env.NODE_ENV === "development") console.timeEnd("computeRebalance");
+  return {
+    summary: data.summary ? repairText(data.summary) : null,
+    trimSymbols: data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3),
+    addSymbols: data.addSymbols ?? (data.underweights ?? []).map((u) => u.symbol).slice(0, 3),
+    totalBuyCad: data.totalBuyCad ?? null,
+    totalSellCad: data.totalSellCad ?? null,
+    topTrades: data.topTrades ?? [],
+    tradeCount: data.tradeCount ?? 0,
+  };
+}
+
+async function fetchRiskAlert(): Promise<RiskAlertData> {
+  if (process.env.NODE_ENV === "development") console.time("computeRiskScan");
+  const res = await fetch(`${API_BASE_URL}/risk/analysis`);
+  if (!res.ok) throw new Error("risk analysis fetch failed");
+  const data = await (res.json() as Promise<{
+    dashboardSummary?: string | null;
+    concerns?: RiskConcernItem[];
+  }>);
+  if (process.env.NODE_ENV === "development") console.timeEnd("computeRiskScan");
+  const concerns = data.concerns ?? [];
+  return {
+    summary: data.dashboardSummary
+      ? stripPreamble(repairText(data.dashboardSummary))
+      : null,
+    concerns: concerns.slice(0, 5),
+    concernTotal: concerns.length,
+    severityCounts: {
+      high: concerns.filter((c) => c.severity === "high").length,
+      medium: concerns.filter((c) => c.severity === "medium").length,
+      low: concerns.filter((c) => c.severity === "low").length,
+    },
+  };
+}
+
+export interface DashboardSummaryState {
+  rebalance: RebalanceSummaryData | null;
+  risk: RiskAlertData | null;
+  isLoadingRebalance: boolean;
+  isLoadingRisk: boolean;
+  refreshAll: () => void;
+}
+
+export function useDashboardSummary(
+  holdings: ImportedHolding[],
+  userId: string | null | undefined,
+): DashboardSummaryState {
+  const [rebalance, setRebalance] = useState<RebalanceSummaryData | null>(null);
+  const [risk, setRisk] = useState<RiskAlertData | null>(null);
+  const [isLoadingRebalance, setIsLoadingRebalance] = useState(true);
+  const [isLoadingRisk, setIsLoadingRisk] = useState(true);
+
+  const uid = userId ?? null;
+  const holdingsHash = useMemo(() => computeHoldingsHash(holdings), [holdings]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeHashRef = useRef<string>("");
+
+  const loadSummaries = useCallback(
+    (hash: string, force = false) => {
+      if (!force) {
+        const cached = loadDashboardCache(uid);
+        if (cached && cached.holdingsHash === hash) {
+          if (cached.rebalance) setRebalance(cached.rebalance);
+          if (cached.risk) setRisk(cached.risk);
+          setIsLoadingRebalance(false);
+          setIsLoadingRisk(false);
+          return;
+        }
+      }
+
+      setIsLoadingRebalance(true);
+      setIsLoadingRisk(true);
+
+      fetchRebalanceSummary()
+        .then((data) => {
+          setRebalance(data);
+          saveDashboardCache(uid, hash, { rebalance: data });
+        })
+        .catch(() => {
+          /* leave previous value on error */
+        })
+        .finally(() => {
+          setIsLoadingRebalance(false);
+        });
+
+      fetchRiskAlert()
+        .then((data) => {
+          setRisk(data);
+          saveDashboardCache(uid, hash, { risk: data });
+        })
+        .catch(() => {
+          /* leave previous value on error */
+        })
+        .finally(() => {
+          setIsLoadingRisk(false);
+        });
+    },
+    [uid],
+  );
+
+  // Load from cache immediately on mount (before hash is even stable)
+  useEffect(() => {
+    const cached = loadDashboardCache(uid);
+    if (cached) {
+      if (cached.rebalance) setRebalance(cached.rebalance);
+      if (cached.risk) setRisk(cached.risk);
+      setIsLoadingRebalance(false);
+      setIsLoadingRisk(false);
+    }
+  }, [uid]);
+
+  // Debounced recompute when holdings/hash changes
+  useEffect(() => {
+    if (holdings.length === 0) {
+      setIsLoadingRebalance(false);
+      setIsLoadingRisk(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (activeHashRef.current === holdingsHash) return;
+      activeHashRef.current = holdingsHash;
+      loadSummaries(holdingsHash);
+    }, 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [holdingsHash, holdings.length, loadSummaries]);
+
+  const refreshAll = useCallback(() => {
+    loadSummaries(holdingsHash, true);
+  }, [holdingsHash, loadSummaries]);
+
+  return { rebalance, risk, isLoadingRebalance, isLoadingRisk, refreshAll };
+}

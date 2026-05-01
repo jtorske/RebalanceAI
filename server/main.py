@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from contextvars import ContextVar
 import json
 import logging
+import time
 import requests
 import yfinance as yf
 
@@ -898,31 +899,58 @@ def get_ai_summary(force: bool = False):
         return {"summary": None, "error": str(err), "date": today}
 
 
+def _fetch_market_cap_single(symbol: str) -> Optional[float]:
+    """Try fast_info then full .info to get market cap. Returns None only if both fail."""
+    try:
+        fast = yf.Ticker(symbol).fast_info
+        mc = getattr(fast, "market_cap", None)
+        if mc and float(mc) > 0:
+            return float(mc)
+        shares = getattr(fast, "shares", None)
+        price = getattr(fast, "last_price", None)
+        if shares and price and float(shares) > 0 and float(price) > 0:
+            return float(shares) * float(price)
+    except Exception:
+        pass
+
+    try:
+        info = yf.Ticker(symbol).info
+        mc = info.get("marketCap") or info.get("totalAssets")
+        if mc and float(mc) > 0:
+            return float(mc)
+        shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if shares and price and float(shares) > 0 and float(price) > 0:
+            return float(shares) * float(price)
+    except Exception:
+        pass
+
+    return None
+
+
 def _fetch_market_caps(symbols: List[str]) -> Dict[str, Optional[float]]:
     today = datetime.now(timezone.utc).date().isoformat()
-    cached = _market_cap_cache.get(today, {})
-    result: Dict[str, Optional[float]] = {}
+    # Evict stale date entries without touching today's successful cache
+    for stale in [d for d in list(_market_cap_cache.keys()) if d != today]:
+        del _market_cap_cache[stale]
+    cached = _market_cap_cache.setdefault(today, {})
 
+    # Only fetch symbols not yet successfully resolved; failed symbols (absent from cache)
+    # are retried on every request so transient yfinance errors self-heal.
     to_fetch = [s for s in symbols if s not in cached]
     for symbol in to_fetch:
-        try:
-            info = yf.Ticker(symbol).info
-            mc = info.get("marketCap") or info.get("totalAssets")
-            if not mc:
-                shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
-                price = info.get("currentPrice") or info.get("regularMarketPrice")
-                if shares and price:
-                    mc = float(shares) * float(price)
-            cached[symbol] = float(mc) if mc else None
-        except Exception:
-            cached[symbol] = None
+        mc = None
+        for attempt in range(3):
+            mc = _fetch_market_cap_single(symbol)
+            if mc is not None:
+                break
+            if attempt < 2:
+                time.sleep(0.4 * (attempt + 1))
+        if mc is not None:
+            cached[symbol] = mc
+        # Do NOT cache None — absent entry means "retry next call"
 
-    _market_cap_cache.clear()
-    _market_cap_cache[today] = cached
-
-    for symbol in symbols:
-        result[symbol] = cached.get(symbol)
-    return result
+    return {symbol: cached.get(symbol) for symbol in symbols}
 
 
 def _classify_asset(holding: Dict[str, Any], normalized_symbol: str) -> str:

@@ -11,6 +11,7 @@ import { convertToCad } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
 import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
+import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -21,22 +22,6 @@ import type {
 
 type AiSummaryResponse = {
   summary: string | null;
-};
-
-type RebalanceAiSummaryResponse = {
-  summary: string | null;
-  trimSymbols?: string[];
-  addSymbols?: string[];
-  overweights?: Array<{ symbol: string }>;
-  underweights?: Array<{ symbol: string }>;
-  totalBuyCad?: number;
-  totalSellCad?: number;
-  topTrades?: Array<{
-    symbol: string;
-    action: "buy" | "sell" | "hold";
-    tradeCad: number;
-  }>;
-  tradeCount?: number;
 };
 
 type SectorBreakdownEntry = {
@@ -56,11 +41,6 @@ type RiskConcernItem = {
   title?: string;
   symbol?: string;
   category?: string;
-};
-
-type RiskAnalysisResponse = {
-  dashboardSummary: string | null;
-  concerns: RiskConcernItem[];
 };
 
 const MAX_CARD_ACTION_ROWS = 5;
@@ -438,31 +418,11 @@ function Dashboard() {
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
-  const [rebalanceSummary, setRebalanceSummary] = useState<string | null>(null);
-  const [trimSymbols, setTrimSymbols] = useState<string[]>([]);
-  const [addSymbols, setAddSymbols] = useState<string[]>([]);
-  const [isLoadingRebalanceSummary, setIsLoadingRebalanceSummary] =
-    useState(true);
   const [sectorBreakdown, setSectorBreakdown] = useState<
     SectorBreakdownEntry[]
   >([]);
   const [isLoadingSectorBreakdown, setIsLoadingSectorBreakdown] =
     useState(true);
-  const [totalBuyCad, setTotalBuyCad] = useState<number | null>(null);
-  const [totalSellCad, setTotalSellCad] = useState<number | null>(null);
-  const [topTrades, setTopTrades] = useState<
-    Array<{ symbol: string; action: "buy" | "sell" | "hold"; tradeCad: number }>
-  >([]);
-  const [tradeCount, setTradeCount] = useState(0);
-  const [riskSummary, setRiskSummary] = useState<string | null>(null);
-  const [riskConcerns, setRiskConcerns] = useState<RiskConcernItem[]>([]);
-  const [riskConcernTotal, setRiskConcernTotal] = useState(0);
-  const [riskSeverityCounts, setRiskSeverityCounts] = useState({
-    high: 0,
-    medium: 0,
-    low: 0,
-  });
-  const [isLoadingRiskSummary, setIsLoadingRiskSummary] = useState(true);
   const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(
     null,
   );
@@ -563,59 +523,12 @@ function Dashboard() {
     void loadAiSummary();
   }, []);
 
-  useEffect(() => {
-    const loadRebalanceSummary = async () => {
-      setIsLoadingRebalanceSummary(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`);
-        if (!res.ok) throw new Error("rebalance ai-summary fetch failed");
-        const data = (await res.json()) as RebalanceAiSummaryResponse;
-        setRebalanceSummary(
-          data.summary ? repairTextEncoding(data.summary) : null,
-        );
-        setTrimSymbols(
-          data.trimSymbols ??
-            (data.overweights ?? []).map((o) => o.symbol).slice(0, 3),
-        );
-        setAddSymbols(
-          data.addSymbols ??
-            (data.underweights ?? []).map((u) => u.symbol).slice(0, 3),
-        );
-        setTotalBuyCad(data.totalBuyCad ?? null);
-        setTotalSellCad(data.totalSellCad ?? null);
-        setTopTrades(data.topTrades ?? []);
-        setTradeCount(data.tradeCount ?? 0);
-      } catch {
-        setTopTrades([]);
-        setTradeCount(0);
-        try {
-          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
-          if (!holdingsRes.ok) {
-            throw new Error("holdings fetch failed");
-          }
-          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
-          setRebalanceSummary(
-            getFallbackRebalanceSummary(holdingsData.holdings ?? []),
-          );
-        } catch {
-          setRebalanceSummary(null);
-        }
-      } finally {
-        setIsLoadingRebalanceSummary(false);
-      }
-    };
-
-    const refreshRebalanceSummary = () => {
-      void loadRebalanceSummary();
-    };
-
-    void loadRebalanceSummary();
-    window.addEventListener("holdings-changed", refreshRebalanceSummary);
-
-    return () => {
-      window.removeEventListener("holdings-changed", refreshRebalanceSummary);
-    };
-  }, []);
+  const {
+    rebalance: rebalanceData,
+    risk: riskData,
+    isLoadingRebalance: isLoadingRebalanceSummary,
+    isLoadingRisk: isLoadingRiskSummary,
+  } = useDashboardSummary(holdings, user?.id);
 
   useEffect(() => {
     const loadSectorBreakdown = async () => {
@@ -662,58 +575,6 @@ function Dashboard() {
     };
   }, []);
 
-  useEffect(() => {
-    const loadRiskSummary = async () => {
-      setIsLoadingRiskSummary(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/risk/analysis`);
-        if (!res.ok) throw new Error("risk analysis fetch failed");
-        const data = (await res.json()) as RiskAnalysisResponse;
-        setRiskSummary(
-          data.dashboardSummary
-            ? stripLlmPreamble(repairTextEncoding(data.dashboardSummary))
-            : null,
-        );
-        const allConcerns = data.concerns ?? [];
-        setRiskConcerns(allConcerns.slice(0, 5));
-        setRiskConcernTotal(allConcerns.length);
-        setRiskSeverityCounts({
-          high: allConcerns.filter((c) => c.severity === "high").length,
-          medium: allConcerns.filter((c) => c.severity === "medium").length,
-          low: allConcerns.filter((c) => c.severity === "low").length,
-        });
-      } catch {
-        try {
-          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
-          if (!holdingsRes.ok) {
-            throw new Error("holdings fetch failed");
-          }
-          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
-          const fallback = getFallbackRiskAnalysis(holdingsData.holdings ?? []);
-          setRiskSummary(fallback.summary);
-          setRiskConcernTotal(0);
-          setRiskSeverityCounts(fallback.severityCounts);
-        } catch {
-          setRiskSummary(null);
-          setRiskConcernTotal(0);
-          setRiskSeverityCounts({ high: 0, medium: 0, low: 0 });
-        }
-      } finally {
-        setIsLoadingRiskSummary(false);
-      }
-    };
-
-    const refreshRiskSummary = () => {
-      void loadRiskSummary();
-    };
-
-    void loadRiskSummary();
-    window.addEventListener("holdings-changed", refreshRiskSummary);
-
-    return () => {
-      window.removeEventListener("holdings-changed", refreshRiskSummary);
-    };
-  }, []);
 
   const totalMarketValueCad = useMemo(
     () =>
@@ -810,7 +671,7 @@ function Dashboard() {
   const donutStrokeSegments = useMemo(() => {
     const radius = 35;
     const circumference = 2 * Math.PI * radius;
-    const gap = donutSegments.length > 1 ? 1.8 : 0;
+    const gap = donutSegments.length > 1 ? 1.2 : 0;
     let offset = 0;
 
     return donutSegments.map((segment) => {
@@ -912,11 +773,17 @@ function Dashboard() {
     : "there";
 
   const suggestionCards = useMemo(() => {
-    const fallbackSummary =
-      "Import holdings to get a rebalance suggestion based on your current weights.";
-    const text = (rebalanceSummary ?? fallbackSummary).trim();
-    return { summary: text, trim: trimSymbols, add: addSymbols };
-  }, [rebalanceSummary, trimSymbols, addSymbols]);
+    const text = (
+      rebalanceData?.summary ??
+      (holdings.length > 0 ? getFallbackRebalanceSummary(holdings) : null) ??
+      "Import holdings to get a rebalance suggestion based on your current weights."
+    ).trim();
+    return {
+      summary: text,
+      trim: rebalanceData?.trimSymbols ?? [],
+      add: rebalanceData?.addSymbols ?? [],
+    };
+  }, [rebalanceData, holdings]);
 
   const fallbackActionRows = useMemo(
     () =>
@@ -932,6 +799,12 @@ function Dashboard() {
       ].slice(0, MAX_CARD_ACTION_ROWS),
     [suggestionCards],
   );
+
+  const riskSeverityCounts = useMemo(() => {
+    if (riskData?.severityCounts) return riskData.severityCounts;
+    if (holdings.length > 0) return getFallbackRiskAnalysis(holdings).severityCounts;
+    return { high: 0, medium: 0, low: 0 };
+  }, [riskData, holdings]);
 
   const riskScore = useMemo(
     () =>
@@ -1258,12 +1131,12 @@ function Dashboard() {
                         />
 
                         <div className="dashboard-card-table-section dashboard-action-list">
-                          {topTrades.length > 0 ? (
+                          {(rebalanceData?.topTrades ?? []).length > 0 ? (
                             <>
                               <span className="dashboard-action-label">
                                 Top Actions
                               </span>
-                              {topTrades
+                              {(rebalanceData?.topTrades ?? [])
                                 .slice(0, MAX_CARD_ACTION_ROWS)
                                 .map((trade) => (
                                   <div
@@ -1291,7 +1164,7 @@ function Dashboard() {
                                 className="dashboard-inline-link"
                                 to="/re-weight"
                               >
-                                View all {tradeCount} suggested trades →
+                                View all {rebalanceData?.tradeCount ?? 0} suggested trades →
                               </Link>
                             </>
                           ) : fallbackActionRows.length > 0 ? (
@@ -1333,7 +1206,7 @@ function Dashboard() {
                           <div className="dashboard-plan-snapshot-grid">
                             <div className="dashboard-plan-snapshot-item">
                               <span className="dashboard-plan-snapshot-value dashboard-positive">
-                                {maskDollar(formatCompactCad(totalBuyCad ?? 0))}
+                                {maskDollar(formatCompactCad(rebalanceData?.totalBuyCad ?? 0))}
                               </span>
                               <span className="dashboard-plan-snapshot-key">
                                 Buys
@@ -1342,7 +1215,7 @@ function Dashboard() {
                             <div className="dashboard-plan-snapshot-item">
                               <span className="dashboard-plan-snapshot-value dashboard-negative">
                                 {maskDollar(
-                                  formatCompactCad(totalSellCad ?? 0),
+                                  formatCompactCad(rebalanceData?.totalSellCad ?? 0),
                                 )}
                               </span>
                               <span className="dashboard-plan-snapshot-key">
@@ -1354,7 +1227,7 @@ function Dashboard() {
                                 {maskDollar(
                                   formatCompactCad(
                                     Math.abs(
-                                      (totalBuyCad ?? 0) - (totalSellCad ?? 0),
+                                      (rebalanceData?.totalBuyCad ?? 0) - (rebalanceData?.totalSellCad ?? 0),
                                     ),
                                   ),
                                 )}
@@ -1389,7 +1262,7 @@ function Dashboard() {
                       <>
                         <div className="dashboard-card-summary-block">
                           <p className="dashboard-risk-summary">
-                            {riskSummary ??
+                            {riskData?.summary ??
                               "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
                           </p>
                         </div>
@@ -1420,12 +1293,12 @@ function Dashboard() {
                         </div>
 
                         <div className="dashboard-card-table-section dashboard-risk-flags">
-                          {riskConcerns.length > 0 ? (
+                          {(riskData?.concerns ?? []).length > 0 ? (
                             <>
                               <span className="dashboard-action-label">
                                 Top Alerts
                               </span>
-                              {riskConcerns.map((concern, i) => (
+                              {(riskData?.concerns ?? []).map((concern, i) => (
                                 <div
                                   className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
                                   key={`${concern.symbol ?? ""}-${i}`}
@@ -1441,12 +1314,12 @@ function Dashboard() {
                                   </span>
                                 </div>
                               ))}
-                              {riskConcernTotal > riskConcerns.length && (
+                              {(riskData?.concernTotal ?? 0) > (riskData?.concerns ?? []).length && (
                                 <Link
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  View all {riskConcernTotal} items →
+                                  View all {riskData?.concernTotal ?? 0} items →
                                 </Link>
                               )}
                             </>
