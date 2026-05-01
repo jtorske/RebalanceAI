@@ -18,6 +18,7 @@ import {
 } from "../lib/holdingsUtils";
 import { useUserSettings } from "../lib/userSettings";
 import { useDemoMode } from "../lib/demoMode";
+import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
 import { useRequireAuth } from "../lib/useRequireAuth";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -307,6 +308,13 @@ function HoldingsPage() {
     if (showAllHoldings) return filteredHoldings;
     return filteredHoldings.slice(0, 10);
   }, [showAllHoldings, filteredHoldings]);
+
+  // Enrich all unique symbols — runs once, caches for 7 days, never blocks render
+  const allSymbols = useMemo(
+    () => previewHoldings.map((h) => h.symbol),
+    [previewHoldings],
+  );
+  const tickerMeta = useTickerEnrichment(allSymbols);
 
   const maskDollar = (displayValue: string) =>
     settings.hideDollarAmounts ? "..." : displayValue;
@@ -708,7 +716,16 @@ function HoldingsPage() {
                         key={`${holding.account_number}-${holding.symbol}-${index.toString()}`}
                       >
                         <td>{holding.account_name}</td>
-                        <td>{holding.symbol}</td>
+                        <td>
+                          <div className="import-symbol-cell">
+                            <span className="import-symbol-ticker">{holding.symbol}</span>
+                            {tickerMeta[holding.symbol.trim().toUpperCase()]?.name && (
+                              <span className="import-symbol-name">
+                                {tickerMeta[holding.symbol.trim().toUpperCase()]?.name}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td>{holding.security_type}</td>
                         <td>{holding.quantity.toFixed(4)}</td>
                         <td>{maskDollar(holding.market_price.toFixed(4))}</td>

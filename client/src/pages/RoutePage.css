@@ -380,6 +380,30 @@
   color: #646474;
 }
 
+.import-symbol-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.import-symbol-ticker {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.import-symbol-name {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+:root[data-theme="dark"] .import-symbol-name {
+  color: #555;
+}
+
 .import-table-empty {
   padding: 18px;
   font-size: 14px;

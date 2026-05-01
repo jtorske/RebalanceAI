@@ -10,6 +10,7 @@ import logging
 import time
 import requests
 import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger("rebalanceai")
 
@@ -17,6 +18,8 @@ _ai_summary_cache: Dict[str, Dict[str, Any]] = {}
 _market_cap_cache: Dict[str, Any] = {}  # keyed by date → {symbol: market_cap}
 _sector_cache: Dict[str, Dict[str, Any]] = {}
 _risk_profile_cache: Dict[str, Dict[str, Any]] = {}
+_ticker_metadata_cache: Dict[str, Dict[str, Any]] = {}  # symbol → {data, fetched_at}
+TICKER_METADATA_TTL = 7 * 24 * 3600  # 7 days
 AI_SUMMARY_PROMPT_VERSION = "summary-v5"
 
 app = FastAPI()
@@ -68,6 +71,10 @@ class HoldingsImportRequest(BaseModel):
 class ManualTarget(BaseModel):
     symbol: str
     targetWeight: float
+
+
+class EnrichRequest(BaseModel):
+    symbols: List[str]
 
 
 class RebalancePlanRequest(BaseModel):
@@ -951,6 +958,106 @@ def _fetch_market_caps(symbols: List[str]) -> Dict[str, Optional[float]]:
         # Do NOT cache None — absent entry means "retry next call"
 
     return {symbol: cached.get(symbol) for symbol in symbols}
+
+
+# ── Ticker enrichment ─────────────────────────────────────────────────────────
+
+def _enrich_ticker_single(symbol: str) -> Dict[str, Any]:
+    """Fetch metadata for one ticker via yfinance. Never raises."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    base: Dict[str, Any] = {
+        "symbol": symbol,
+        "status": "unresolved",
+        "source": "yfinance",
+        "updatedAt": now_iso,
+    }
+    try:
+        ticker = yf.Ticker(symbol)
+
+        # fast_info: lightweight, gets market cap + currency reliably
+        mc: Optional[float] = None
+        currency: Optional[str] = None
+        try:
+            fast = ticker.fast_info
+            raw_mc = getattr(fast, "market_cap", None)
+            mc = float(raw_mc) if raw_mc and float(raw_mc) > 0 else None
+            currency = getattr(fast, "currency", None)
+        except Exception:
+            pass
+
+        # .info: heavier, gets name / sector / exchange / asset type
+        name: Optional[str] = None
+        exchange: Optional[str] = None
+        sector: Optional[str] = None
+        asset_type: Optional[str] = None
+        try:
+            info = ticker.info
+            name = info.get("longName") or info.get("shortName")
+            exchange = info.get("exchange") or info.get("fullExchangeName")
+            sector = info.get("sector") or None
+            asset_type = info.get("quoteType") or None
+            if not mc:
+                raw_mc2 = info.get("marketCap") or info.get("totalAssets")
+                mc = float(raw_mc2) if raw_mc2 and float(raw_mc2) > 0 else None
+            if not currency:
+                currency = info.get("currency")
+        except Exception:
+            pass
+
+        result: Dict[str, Any] = {
+            **base,
+            "name": name,
+            "exchange": exchange,
+            "sector": sector,
+            "assetType": asset_type,
+            "marketCap": mc,
+            "currency": currency,
+        }
+
+        if name and exchange:
+            result["status"] = "resolved"
+        elif name or exchange or mc:
+            result["status"] = "partial"
+
+        return result
+    except Exception:
+        return base
+
+
+def _enrich_tickers_batch(symbols: List[str]) -> Dict[str, Any]:
+    """Enrich a list of symbols, returning cached results where available."""
+    now_ts = time.time()
+    result: Dict[str, Any] = {}
+    to_fetch: List[str] = []
+
+    for sym in symbols:
+        cached = _ticker_metadata_cache.get(sym)
+        if cached and now_ts - cached.get("fetched_at", 0) < TICKER_METADATA_TTL:
+            result[sym] = cached["data"]
+        else:
+            to_fetch.append(sym)
+
+    if not to_fetch:
+        return result
+
+    max_workers = min(10, len(to_fetch))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_enrich_ticker_single, sym): sym for sym in to_fetch}
+        for future in as_completed(futures, timeout=20):
+            sym = futures[future]
+            try:
+                data = future.result(timeout=15)
+            except Exception:
+                data = {
+                    "symbol": sym,
+                    "status": "unresolved",
+                    "source": "yfinance",
+                    "updatedAt": datetime.now(timezone.utc).isoformat(),
+                }
+            _ticker_metadata_cache[sym] = {"data": data, "fetched_at": now_ts}
+            result[sym] = data
+
+    return result
 
 
 def _classify_asset(holding: Dict[str, Any], normalized_symbol: str) -> str:
@@ -2233,6 +2340,14 @@ def get_sector_breakdown():
 @app.get("/risk/analysis")
 def get_risk_analysis():
     return _build_risk_analysis()
+
+
+@app.post("/tickers/enrich")
+def enrich_tickers_endpoint(request: EnrichRequest):
+    symbols = list({s.strip().upper() for s in request.symbols if s.strip()})
+    if not symbols:
+        return {}
+    return _enrich_tickers_batch(symbols)
 
 
 @app.post("/demo/enable")
