@@ -5,6 +5,7 @@ type Props = {
   month: Date;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  onToday?: () => void;
   title?: string;
   maxVisible?: number;
   yearLock?: number;
@@ -17,6 +18,7 @@ export function EarningsCalendar({
   month,
   onPrevMonth,
   onNextMonth,
+  onToday,
   title = "Portfolio Events",
   maxVisible = 2,
   yearLock,
@@ -24,15 +26,13 @@ export function EarningsCalendar({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay());
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-
   const year = month.getFullYear();
   const monthIdx = month.getMonth();
   const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, monthIdx, 1).getDay();
+
+  const isCurrentMonth =
+    today.getFullYear() === year && today.getMonth() === monthIdx;
 
   const eventMap = new Map<string, string[]>();
   for (const ev of events) {
@@ -42,7 +42,6 @@ export function EarningsCalendar({
   const monthName = month.toLocaleString("default", { month: "long", year: "numeric" });
   const days: (number | null)[] = [...Array(firstDayOfWeek).fill(null)];
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
-  // Pad to 42 cells (6 full weeks) so the grid height never changes between months
   while (days.length < 42) days.push(null);
 
   const canGoPrev = yearLock == null || year > yearLock || monthIdx > 0;
@@ -52,7 +51,7 @@ export function EarningsCalendar({
     <div className="ec-wrap">
       <div className="ec-header">
         <span className="ec-title">{title}</span>
-        <div className="ec-nav">
+        <div className="ec-controls">
           <button
             type="button"
             className="ec-nav-btn"
@@ -72,6 +71,16 @@ export function EarningsCalendar({
           >
             ›
           </button>
+          {onToday && !isCurrentMonth && (
+            <button
+              type="button"
+              className="ec-today-btn"
+              onClick={onToday}
+              aria-label="Go to today"
+            >
+              Today
+            </button>
+          )}
         </div>
       </div>
 
@@ -89,7 +98,6 @@ export function EarningsCalendar({
           const cellDate = new Date(year, monthIdx, day);
           cellDate.setHours(0, 0, 0, 0);
           const isToday = cellDate.getTime() === today.getTime();
-          const isThisWeek = cellDate >= weekStart && cellDate <= weekEnd;
           const symbols = eventMap.get(dateStr) ?? [];
           const visible = symbols.slice(0, maxVisible);
           const overflow = symbols.length - maxVisible;
@@ -97,18 +105,17 @@ export function EarningsCalendar({
           const cls = [
             "ec-cell",
             isToday ? "ec-cell-today" : "",
-            isThisWeek && symbols.length > 0 ? "ec-cell-thisweek" : "",
-            symbols.length > 0 ? "ec-cell-active" : "",
+            symbols.length > 0 ? "ec-cell-active" : "ec-cell-quiet",
           ].filter(Boolean).join(" ");
 
           return (
             <div key={dateStr} className={cls}>
               <span className="ec-day-num">{day}</span>
               {visible.map((sym) => (
-                <span key={sym} className="ec-chip">{sym}</span>
+                <span key={sym} className="ec-chip" title={sym}>{sym}</span>
               ))}
               {overflow > 0 && (
-                <span className="ec-chip ec-chip-overflow">+{overflow}</span>
+                <span className="ec-chip-more">+{overflow}</span>
               )}
             </div>
           );

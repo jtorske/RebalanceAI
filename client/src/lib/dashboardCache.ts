@@ -98,3 +98,60 @@ export function clearDashboardCache(userId: string | null): void {
     // ignore
   }
 }
+
+// ── Market summary cache (date-keyed, expires at midnight) ────────────────
+
+export interface BenchmarkQuoteCache {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePercent: number | null;
+}
+
+export interface MarketComparisonCache {
+  portfolioDailyPercent: number | null;
+  marketDailyPercent: number | null;
+  deltaPercent: number | null;
+  benchmarks: BenchmarkQuoteCache[];
+  perTicker?: Array<{ symbol: string; dailyPercent: number | null }>;
+}
+
+export interface MarketSummaryCache {
+  date: string; // ISO date "YYYY-MM-DD"
+  aiSummary: string | null;
+  marketComparison: MarketComparisonCache | null;
+}
+
+const MARKET_SUMMARY_KEY = "rebalancex:market-summary";
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function loadMarketSummaryCache(): MarketSummaryCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MARKET_SUMMARY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MarketSummaryCache;
+    if (parsed.date !== todayIso()) return null; // stale — new trading day
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function saveMarketSummaryCache(patch: Partial<MarketSummaryCache>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = loadMarketSummaryCache();
+    const next: MarketSummaryCache = {
+      date: todayIso(),
+      aiSummary: patch.aiSummary ?? existing?.aiSummary ?? null,
+      marketComparison: patch.marketComparison ?? existing?.marketComparison ?? null,
+    };
+    window.localStorage.setItem(MARKET_SUMMARY_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota errors
+  }
+}

@@ -280,6 +280,7 @@ function KeyInsights() {
                 onNextMonth={() =>
                   setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
                 }
+                onToday={() => setCalendarMonth(new Date())}
                 title="Upcoming Earnings"
                 maxVisible={2}
                 yearLock={CURRENT_YEAR}

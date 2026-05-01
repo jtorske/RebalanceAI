@@ -12,6 +12,7 @@ import { useUserSettings } from "../lib/userSettings";
 import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
+import { loadMarketSummaryCache, saveMarketSummaryCache } from "../lib/dashboardCache";
 import type {
   ImportedHolding,
   HoldingsResponse,
@@ -455,35 +456,35 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
+    // Restore from cache instantly — market data only changes per trading day
+    const cached = loadMarketSummaryCache();
+    if (cached?.marketComparison) {
+      setBenchmarks((cached.marketComparison.benchmarks as BenchmarkQuote[]) ?? []);
+      setMarketComparison(cached.marketComparison as MarketComparisonResponse);
+      setIsLoadingBenchmarks(false);
+      return; // skip network fetch for today
+    }
+
     const loadBenchmarks = async () => {
       setIsLoadingBenchmarks(true);
       const controller = new AbortController();
-      const abortTimeoutId = window.setTimeout(() => {
-        controller.abort();
-      }, 8000);
-      const loadingWatchdogId = window.setTimeout(() => {
-        setIsLoadingBenchmarks(false);
-      }, 10000);
+      const abortTimeoutId = window.setTimeout(() => controller.abort(), 8000);
+      const loadingWatchdogId = window.setTimeout(() => setIsLoadingBenchmarks(false), 10000);
 
       try {
         const response = (await Promise.race([
-          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, {
-            signal: controller.signal,
-          }),
+          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, { signal: controller.signal }),
           new Promise<Response>((_, reject) => {
-            window.setTimeout(() => {
-              reject(new Error("Benchmark request timed out."));
-            }, 8500);
+            window.setTimeout(() => reject(new Error("Benchmark request timed out.")), 8500);
           }),
         ])) as Response;
 
-        if (!response.ok) {
-          throw new Error("Failed to load market comparison.");
-        }
+        if (!response.ok) throw new Error("Failed to load market comparison.");
 
         const data = (await response.json()) as MarketComparisonResponse;
         setBenchmarks(data.benchmarks ?? []);
         setMarketComparison(data);
+        saveMarketSummaryCache({ marketComparison: data });
       } catch {
         setBenchmarks([]);
         setMarketComparison(null);
@@ -494,26 +495,27 @@ function Dashboard() {
       }
     };
 
-    const refreshMarketComparison = () => {
-      void loadBenchmarks();
-    };
-
     void loadBenchmarks();
-    window.addEventListener("holdings-changed", refreshMarketComparison);
-
-    return () => {
-      window.removeEventListener("holdings-changed", refreshMarketComparison);
-    };
+    // Note: market data is date-scoped — no need to re-fetch on holdings-changed
   }, []);
 
   useEffect(() => {
+    const cached = loadMarketSummaryCache();
+    if (cached?.aiSummary) {
+      setAiSummary(cached.aiSummary);
+      setIsLoadingAiSummary(false);
+      return;
+    }
+
     const loadAiSummary = async () => {
       setIsLoadingAiSummary(true);
       try {
         const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
         if (!res.ok) throw new Error("ai-summary fetch failed");
         const data = (await res.json()) as AiSummaryResponse;
-        setAiSummary(data.summary ? repairTextEncoding(data.summary) : null);
+        const summary = data.summary ? repairTextEncoding(data.summary) : null;
+        setAiSummary(summary);
+        saveMarketSummaryCache({ aiSummary: summary });
       } catch {
         setAiSummary(null);
       } finally {
@@ -981,6 +983,13 @@ function Dashboard() {
                           <div>
                             <p className="dashboard-ai-summary-title">
                               Welcome back {welcomeName}
+                            </p>
+                            <p className="dashboard-market-date">
+                              {new Date().toLocaleDateString("en-CA", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
                             </p>
                             {(() => {
                               const parts = (aiSummary ?? "").split(
