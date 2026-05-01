@@ -25,6 +25,8 @@ import type {
 
 type AiSummaryResponse = {
   summary: string | null;
+  source?: "llm" | "fallback";
+  cached?: boolean;
 };
 
 type SectorBreakdownEntry = {
@@ -40,6 +42,8 @@ type SectorBreakdownResponse = {
 };
 
 const MAX_CARD_ACTION_ROWS = 5;
+const MARKET_SUMMARY_FALLBACK =
+  "Market summary data is temporarily unavailable. Portfolio and benchmark cards will continue updating from the latest available dashboard data.";
 
 const repairTextEncoding = (value: string) =>
   value
@@ -499,11 +503,13 @@ function Dashboard() {
         const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
         if (!res.ok) throw new Error("ai-summary fetch failed");
         const data = (await res.json()) as AiSummaryResponse;
-        const summary = data.summary ? repairTextEncoding(data.summary) : null;
+        const summary = data.summary
+          ? repairTextEncoding(data.summary)
+          : MARKET_SUMMARY_FALLBACK;
         setAiSummary(summary);
         saveMarketSummaryCache({ aiSummary: summary });
       } catch {
-        setAiSummary(null);
+        setAiSummary(MARKET_SUMMARY_FALLBACK);
       } finally {
         setIsLoadingAiSummary(false);
       }

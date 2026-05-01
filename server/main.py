@@ -840,6 +840,69 @@ def _build_ai_summary(
     return f"{market_sentence} {portfolio_driver_sentence}"
 
 
+def _format_directional_percent(value: Optional[float]) -> str:
+    if value is None:
+        return "unavailable"
+    if value > 0:
+        return f"up {abs(value):.2f}%"
+    if value < 0:
+        return f"down {abs(value):.2f}%"
+    return "flat at 0.00%"
+
+
+def _build_fallback_ai_summary(snapshot: Dict[str, Any]) -> Optional[str]:
+    portfolio_daily = _to_float(snapshot.get("portfolioDailyPercent"))
+    market_daily = _to_float(snapshot.get("marketDailyPercent"))
+    movers = _get_portfolio_movers(snapshot)
+    driver_symbols = [
+        item["symbol"]
+        for item in sorted(
+            movers["leaders"] + movers["laggards"],
+            key=lambda item: abs(item.get("contributionPercent", 0)),
+            reverse=True,
+        )
+    ][:3]
+
+    if portfolio_daily is None and market_daily is None:
+        benchmark_parts = [
+            f"{item.get('symbol')} {_format_percent(_to_float(item.get('changePercent')))}"
+            for item in snapshot.get("benchmarks", [])
+            if _to_float(item.get("changePercent")) is not None
+        ][:3]
+        if not benchmark_parts:
+            return None
+        return (
+            "Benchmark data is available, but portfolio driver data is not available yet. "
+            f"Current benchmark moves include {', '.join(benchmark_parts)}."
+        )
+
+    if portfolio_daily is None:
+        return (
+            f"The benchmark average is {_format_directional_percent(market_daily)} today. "
+            "Portfolio driver data is not available yet."
+        )
+
+    if market_daily is None:
+        market_sentence = "benchmark data is not available yet"
+    else:
+        market_sentence = (
+            f"a benchmark average that is {_format_directional_percent(market_daily)}"
+        )
+
+    if driver_symbols:
+        driver_sentence = (
+            f"Main drivers include {', '.join(driver_symbols)} based on current holdings "
+            "and daily quote data."
+        )
+    else:
+        driver_sentence = "Ticker-level drivers are not available from current quote data."
+
+    return (
+        f"The portfolio is {_format_directional_percent(portfolio_daily)} today, "
+        f"compared with {market_sentence}. {driver_sentence}"
+    )
+
+
 @app.get("/market/ai-summary")
 def get_ai_summary(force: bool = False):
     today = datetime.now(timezone.utc).date().isoformat()
@@ -870,6 +933,7 @@ def get_ai_summary(force: bool = False):
         return {
             "summary": cached.get("summary"),
             "cached": True,
+            "source": cached.get("source", "llm"),
             "date": today,
             "portfolioDrivers": cached.get("portfolioDrivers", {"leaders": [], "laggards": []}),
         }
@@ -890,23 +954,42 @@ def get_ai_summary(force: bool = False):
         )
         resp.raise_for_status()
         commentary = resp.json().get("response", "").strip()
+        if not commentary:
+            raise ValueError("LLM returned an empty summary")
         summary = _build_ai_summary(
             commentary,
             _build_portfolio_driver_sentence(portfolio_snapshot),
         )
         _ai_summary_cache[cache_key] = {
             "summary": summary,
+            "source": "llm",
             "portfolioDrivers": _get_portfolio_movers(portfolio_snapshot),
         }
         return {
             "summary": summary,
             "cached": False,
+            "source": "llm",
             "date": today,
             "portfolioDrivers": _get_portfolio_movers(portfolio_snapshot),
         }
     except Exception as err:
-        logger.error("AI summary failed: %s", err)
-        return {"summary": None, "error": str(err), "date": today}
+        logger.warning("AI summary unavailable; using fallback: %s", err)
+        summary = _build_fallback_ai_summary(portfolio_snapshot)
+        portfolio_drivers = _get_portfolio_movers(portfolio_snapshot)
+        if summary:
+            _ai_summary_cache[cache_key] = {
+                "summary": summary,
+                "source": "fallback",
+                "portfolioDrivers": portfolio_drivers,
+            }
+        return {
+            "summary": summary,
+            "cached": False,
+            "source": "fallback",
+            "error": str(err),
+            "date": today,
+            "portfolioDrivers": portfolio_drivers,
+        }
 
 
 def _fetch_market_cap_single(symbol: str) -> Optional[float]:

@@ -1,5 +1,7 @@
-export const API_BASE_URL =
+const rawApiBaseUrl =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8002";
+
+export const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, "");
 
 export const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",

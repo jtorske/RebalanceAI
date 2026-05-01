@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getTickerLogoUrl } from "../lib/tickerLogoMap";
 
 interface Props {
@@ -13,6 +13,12 @@ export function TickerLogoBadge({ symbol, logoUrl, color, className, style }: Pr
   const resolvedUrl = logoUrl ?? getTickerLogoUrl(symbol);
   const [imgFailed, setImgFailed] = useState(false);
   const showLogo = !!resolvedUrl && !imgFailed;
+  const label = symbol.trim().toUpperCase();
+  const fallbackText = label.slice(0, 4) || "?";
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [resolvedUrl]);
 
   return (
     <span
@@ -31,13 +37,13 @@ export function TickerLogoBadge({ symbol, logoUrl, color, className, style }: Pr
       {showLogo ? (
         <img
           src={resolvedUrl}
-          alt={symbol}
+          alt={`${label} logo`}
           loading="lazy"
           style={{ width: "62%", height: "62%", objectFit: "contain", display: "block" }}
           onError={() => setImgFailed(true)}
         />
       ) : (
-        symbol
+        fallbackText
       )}
     </span>
   );
