@@ -39,13 +39,6 @@ type SectorBreakdownResponse = {
   generatedAt: string;
 };
 
-type RiskConcernItem = {
-  severity: "high" | "medium" | "low";
-  title?: string;
-  symbol?: string;
-  category?: string;
-};
-
 const MAX_CARD_ACTION_ROWS = 5;
 
 const repairTextEncoding = (value: string) =>
@@ -56,15 +49,6 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u009d", '"')
     .replaceAll("\u00e2\u0080\u0093", "-")
     .replaceAll("\u00e2\u0080\u0094", "-");
-
-const stripLlmPreamble = (text: string): string =>
-  text
-    .replace(
-      /^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i,
-      "",
-    )
-    .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
-    .trim();
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
   if (holdings.length === 0) {

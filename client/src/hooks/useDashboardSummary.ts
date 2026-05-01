@@ -28,7 +28,7 @@ const stripPreamble = (text: string) =>
     .trim();
 
 async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
-  if (process.env.NODE_ENV === "development") console.time("computeRebalance");
+  if (import.meta.env.DEV) console.time("computeRebalance");
   const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`);
   if (!res.ok) throw new Error("rebalance summary fetch failed");
   const data = await (res.json() as Promise<{
@@ -42,7 +42,7 @@ async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
     topTrades?: Array<{ symbol: string; action: "buy" | "sell" | "hold"; tradeCad: number }>;
     tradeCount?: number;
   }>);
-  if (process.env.NODE_ENV === "development") console.timeEnd("computeRebalance");
+  if (import.meta.env.DEV) console.timeEnd("computeRebalance");
   return {
     summary: data.summary ? repairText(data.summary) : null,
     trimSymbols: data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3),
@@ -55,14 +55,14 @@ async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
 }
 
 async function fetchRiskAlert(): Promise<RiskAlertData> {
-  if (process.env.NODE_ENV === "development") console.time("computeRiskScan");
+  if (import.meta.env.DEV) console.time("computeRiskScan");
   const res = await fetch(`${API_BASE_URL}/risk/analysis`);
   if (!res.ok) throw new Error("risk analysis fetch failed");
   const data = await (res.json() as Promise<{
     dashboardSummary?: string | null;
     concerns?: RiskConcernItem[];
   }>);
-  if (process.env.NODE_ENV === "development") console.timeEnd("computeRiskScan");
+  if (import.meta.env.DEV) console.timeEnd("computeRiskScan");
   const concerns = data.concerns ?? [];
   return {
     summary: data.dashboardSummary
