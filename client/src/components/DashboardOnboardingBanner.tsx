@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useDemoMode } from "../lib/demoMode";
 import "./DashboardOnboardingBanner.css";
 
-const STORAGE_KEY = "rebalanceai:dashboard-onboarding-dismissed";
+const STORAGE_KEY = "rebalancex:dashboard-onboarding-dismissed";
 
 export default function DashboardOnboardingBanner() {
   const { isDemoMode } = useDemoMode();

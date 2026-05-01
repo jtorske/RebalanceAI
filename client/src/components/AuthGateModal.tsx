@@ -27,7 +27,7 @@ export default function AuthGateModal({ onClose, onLogin, onSignup }: Props) {
       >
         <div className="auth-topbar">
           <span className="auth-wordmark">
-            Rebalance<span>AI</span>
+            Rebalance<span>X</span>
           </span>
           <button
             className="auth-icon-btn"
@@ -49,7 +49,7 @@ export default function AuthGateModal({ onClose, onLogin, onSignup }: Props) {
           </h2>
           <p className="auth-subtitle">
             Create a free account to save your work and unlock the full
-            RebalanceAI experience.
+            RebalanceX experience.
           </p>
 
           <ul className="auth-gate-benefits">

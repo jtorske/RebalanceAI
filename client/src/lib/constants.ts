@@ -5,8 +5,8 @@ export const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",
 );
 
-export const DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache-v2";
-export const LEGACY_DAILY_CHANGE_CACHE_KEY = "rebalanceai-holdings-daily-change-cache";
+export const DAILY_CHANGE_CACHE_KEY = "rebalancex-holdings-daily-change-cache-v2";
+export const LEGACY_DAILY_CHANGE_CACHE_KEY = "rebalancex-holdings-daily-change-cache";
 
 export const EXPECTED_HEADERS = [
   "Account Name",

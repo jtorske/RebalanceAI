@@ -30,7 +30,7 @@ type UserSettingsContextValue = {
   clearSettingsStatus: () => void;
 };
 
-const STORAGE_KEY = "rebalanceai:user-settings";
+const STORAGE_KEY = "rebalancex:user-settings";
 
 const defaultSettings: UserSettings = {
   displayName: "",

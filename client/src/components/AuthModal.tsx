@@ -53,7 +53,7 @@ export default function AuthModal({ mode: initialMode, onClose }: Props) {
         {/* ── Top bar ─────────────────────────────────────────── */}
         <div className="auth-topbar">
           <span className="auth-wordmark">
-            Rebalance<span>AI</span>
+            Rebalance<span>X</span>
           </span>
           <button
             className="auth-icon-btn"

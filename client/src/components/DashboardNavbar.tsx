@@ -126,7 +126,7 @@ function DashboardNavbar() {
   return (
     <header className="dashboard-navbar">
       <Link className="dashboard-navbar-brand" to="/">
-        Rebalance<span className="dashboard-navbar-brand-accent">AI</span>
+        Rebalance<span className="dashboard-navbar-brand-accent">X</span>
         {isDemoMode && <span className="demo-mode-badge">Demo</span>}
       </Link>
 

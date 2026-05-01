@@ -54,7 +54,7 @@ export default function AuthCallback() {
       <section className="auth-modal auth-callback-card" aria-live="polite">
         <div className="auth-view">
           <span className="auth-wordmark">
-            Rebalance<span>AI</span>
+            Rebalance<span>X</span>
           </span>
           <h1 className="auth-title">
             {error ? "Confirmation failed" : "Confirming your account"}
