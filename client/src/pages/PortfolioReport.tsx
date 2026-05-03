@@ -262,32 +262,33 @@ export default function PortfolioReport() {
         <DashboardNavbar />
       </div>
       <main className="report-page">
-        <header className="report-header">
-          <div>
-            <span className="report-eyebrow">Portfolio Report</span>
-            <h1>RebalanceX Portfolio Report</h1>
-            <p>Generated {generatedAt}</p>
-          </div>
-          <div className="report-actions">
-            <Link to="/" className="report-secondary">
-              Back to dashboard
-            </Link>
-            <button
-              className="report-primary"
-              type="button"
-              onClick={() => window.print()}
-            >
-              Print / Save PDF
-            </button>
-          </div>
-        </header>
+        <div className="report-container max-w-6xl mx-auto px-4 md:px-6">
+          <header className="report-header">
+            <div className="report-header-copy">
+              <span className="report-eyebrow">Portfolio Report</span>
+              <h1>RebalanceX Portfolio Report</h1>
+              <p>Generated {generatedAt}</p>
+            </div>
+            <div className="report-actions">
+              <Link to="/" className="report-secondary">
+                Back to dashboard
+              </Link>
+              <button
+                className="report-primary"
+                type="button"
+                onClick={() => window.print()}
+              >
+                Print / Save PDF
+              </button>
+            </div>
+          </header>
 
-        {isLoading ? (
-          <section className="report-card">
-            <p className="report-empty">Preparing portfolio report...</p>
-          </section>
-        ) : (
-          <>
+          {isLoading ? (
+            <section className="report-card">
+              <p className="report-empty">Preparing portfolio report...</p>
+            </section>
+          ) : (
+            <div className="report-content space-y-8">
             {executiveSummary && (
               <section className="report-card report-exec-summary">
                 <span className="report-label">Portfolio Summary</span>
@@ -503,8 +504,9 @@ export default function PortfolioReport() {
               RebalanceX provides educational portfolio analysis based on your
               selected assumptions. It is not financial advice.
             </p>
-          </>
-        )}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );
