@@ -1,0 +1,47 @@
+.api-status-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  min-height: 36px;
+  background: #24222e;
+  color: #eeeafc;
+  border-bottom: 1px solid rgba(138, 110, 240, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.api-status-banner-error {
+  background: #302124;
+  border-bottom-color: rgba(239, 68, 68, 0.22);
+}
+
+.api-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a996ff;
+  box-shadow: 0 0 0 5px rgba(138, 110, 240, 0.12);
+  flex: 0 0 auto;
+}
+
+.api-status-banner-error .api-status-dot {
+  background: #ff6b6b;
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.12);
+}
+
+.api-status-banner button {
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}

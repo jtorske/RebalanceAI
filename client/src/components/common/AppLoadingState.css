@@ -1,0 +1,127 @@
+.app-loading-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(138, 110, 240, 0.14), transparent 34%),
+    #18181b;
+  color: #f8f8fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.app-loading-panel {
+  width: min(480px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(31, 31, 36, 0.92);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  padding: 28px;
+}
+
+.app-loading-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.app-loading-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #8a6ef0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.app-loading-copy {
+  margin-top: 24px;
+}
+
+.app-loading-copy h1 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.app-loading-copy p {
+  margin: 12px 0 0;
+  color: #b8b8c4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.app-loading-steps {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-loading-step {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  color: #dedee8;
+  font-size: 13px;
+}
+
+.app-loading-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8a6ef0;
+  box-shadow: 0 0 0 5px rgba(138, 110, 240, 0.12);
+}
+
+.app-loading-step strong {
+  margin-left: auto;
+  color: #a996ff;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-loading-spinner {
+  margin-top: 24px;
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.13);
+  border-top-color: #8a6ef0;
+  border-radius: 50%;
+  animation: app-loading-spin 0.9s linear infinite;
+}
+
+.app-loading-retry {
+  margin-top: 22px;
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: #8a6ef0;
+  color: #ffffff;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@keyframes app-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

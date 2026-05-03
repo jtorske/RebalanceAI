@@ -431,6 +431,15 @@ def root():
     return {"message": "Portfolio API running"}
 
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "rebalancex-analytics",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/debug/quote-test")
 def debug_quote_test():
     """Verify yfinance can reach Yahoo Finance. Hit this in your browser to diagnose -- issues."""
