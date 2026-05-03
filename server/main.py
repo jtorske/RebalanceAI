@@ -19,7 +19,7 @@ _sector_cache: Dict[str, Dict[str, Any]] = {}
 _risk_profile_cache: Dict[str, Dict[str, Any]] = {}
 _ticker_metadata_cache: Dict[str, Dict[str, Any]] = {}  # symbol → {data, fetched_at}
 TICKER_METADATA_TTL = 7 * 24 * 3600  # 7 days
-AI_SUMMARY_PROMPT_VERSION = "summary-v5"
+AI_SUMMARY_PROMPT_VERSION = "summary-v6"
 OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 
 app = FastAPI()
@@ -551,6 +551,32 @@ def _strip_llm_preamble(text: str) -> str:
     return text.strip()
 
 
+def _is_market_summary_usable(text: Optional[str]) -> bool:
+    if not text:
+        return False
+    import re
+
+    cleaned = text.strip()
+    artifact_patterns = [
+        r"\bhere(?:'s| is)\s+(?:the\s+)?(?:polished\s+)?summary\b",
+        r"\balternatively\b",
+        r"\ba more concise version\b",
+        r"\boption\s+\d+\b",
+        r"\bversion\s+\d+\b",
+        r"\bsummary to polish\b",
+        r"\bbenchmark context\b",
+    ]
+    if any(re.search(pattern, cleaned, flags=re.IGNORECASE) for pattern in artifact_patterns):
+        return False
+    if cleaned.count("\n") >= 2 and re.search(
+        r"\b(summary|version|option|alternatively)\b",
+        cleaned,
+        flags=re.IGNORECASE,
+    ):
+        return False
+    return True
+
+
 def _is_local_ollama_enabled() -> bool:
     env_name = (
         os.getenv("APP_ENV")
@@ -871,6 +897,8 @@ def _get_ai_summary_response(
         f"Summary to polish:\n{fallback_summary}"
     )
     polished = _try_ollama_polish(prompt, timeout=12)
+    if not _is_market_summary_usable(polished):
+        polished = None
     summary = polished or fallback_summary
     source = "ollama" if polished else "fallback"
 

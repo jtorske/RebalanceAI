@@ -34,6 +34,19 @@ type AiSummaryResponse = {
   cached?: boolean;
 };
 
+type MarketDriver = {
+  symbol: string;
+  contributionPercent: number;
+  dailyPercent: number | null;
+};
+
+type FormattedMarketSummary = {
+  headline: string;
+  date: string;
+  body: string[];
+  contributors: MarketDriver[];
+};
+
 type SectorBreakdownEntry = {
   sector: string;
   valueCad: number;
@@ -95,14 +108,255 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u0093", "-")
     .replaceAll("\u00e2\u0080\u0094", "-");
 
-const sanitizeAiSummary = (text: string): string =>
-  repairTextEncoding(text)
-    .replace(
-      /^(Sure[,!]?\s+|Certainly[,!]?\s+|Here is\s+.*?:\s*|Here's\s+.*?:\s*|Of course[,!]?\s+|Absolutely[,!]?\s+)/i,
-      "",
-    )
+const MARKET_SUMMARY_META_PATTERNS = [
+  /\bhere(?:'s| is)\s+(?:the\s+)?(?:polished\s+)?summary\b/i,
+  /\balternatively\b/i,
+  /\ba more concise version\b/i,
+  /\boption\s+\d+\b/i,
+  /\bversion\s+\d+\b/i,
+  /\bsummary to polish\b/i,
+  /\bbenchmark context\b/i,
+  /\bi can\b/i,
+];
+
+const hasMarketSummaryMetaArtifacts = (text: string) =>
+  MARKET_SUMMARY_META_PATTERNS.some((pattern) => pattern.test(text)) ||
+  ((text.match(/\n/g) ?? []).length >= 2 &&
+    /\b(summary|version|option|alternatively)\b/i.test(text));
+
+const sanitizeAiSummary = (text: string): string | null => {
+  const repaired = repairTextEncoding(text)
     .replace(/\*\*/g, "")
+    .replace(/^[-*\d.\s]*(?:summary|option|version)\s*\d*\s*:\s*/i, "")
     .trim();
+
+  if (!repaired || hasMarketSummaryMetaArtifacts(repaired)) {
+    return null;
+  }
+
+  const firstLine = repaired
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  if (!firstLine || hasMarketSummaryMetaArtifacts(firstLine)) {
+    return null;
+  }
+
+  return firstLine;
+};
+
+const formatSymbolList = (symbols: string[]) => {
+  const cleaned = symbols.map((symbol) => symbol.trim()).filter(Boolean);
+  if (cleaned.length === 0) return "";
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, and ${
+    cleaned[cleaned.length - 1]
+  }`;
+};
+
+const stripTickerWeights = (symbols: string[]) =>
+  symbols.map((symbol) => symbol.replace(/\s*\([^)]*\)\s*$/g, "").trim());
+
+const getPerformanceHeadline = (portfolioDailyPercent: number | null) => {
+  if (portfolioDailyPercent === null) return "Today's market update";
+  const sign = portfolioDailyPercent >= 0 ? "+" : "";
+  if (portfolioDailyPercent >= 0.5) {
+    return `Portfolio up ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
+  }
+  if (portfolioDailyPercent <= -0.5) {
+    return `Portfolio down ${portfolioDailyPercent.toFixed(2)}% today`;
+  }
+  return `Portfolio roughly flat at ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
+};
+
+const getTopMarketContributors = (
+  marketData: MarketComparisonResponse | null,
+  weightedHoldings: WeightedHolding[],
+  totalMarketValueCad: number,
+): MarketDriver[] => {
+  if (!marketData?.perTicker || weightedHoldings.length === 0) {
+    return [];
+  }
+
+  const dailyBySymbol = new Map<string, number[]>();
+  for (const item of marketData.perTicker) {
+    if (typeof item.dailyPercent !== "number") continue;
+    const symbol = item.symbol.trim().toUpperCase();
+    dailyBySymbol.set(symbol, [
+      ...(dailyBySymbol.get(symbol) ?? []),
+      item.dailyPercent,
+    ]);
+  }
+
+  const valueBySymbol = new Map<string, number>();
+  for (const holding of weightedHoldings) {
+    const symbol = holding.symbol.trim().toUpperCase();
+    valueBySymbol.set(
+      symbol,
+      (valueBySymbol.get(symbol) ?? 0) + holding.marketValueCad,
+    );
+  }
+
+  return [...dailyBySymbol.entries()]
+    .map(([symbol, dailyValues]) => {
+      const marketValueCad = valueBySymbol.get(symbol) ?? 0;
+      const dailyPercent =
+        dailyValues.reduce((sum, value) => sum + value, 0) /
+        dailyValues.length;
+      return {
+        symbol,
+        dailyPercent,
+        contributionPercent:
+          totalMarketValueCad > 0
+            ? (marketValueCad / totalMarketValueCad) * dailyPercent
+            : 0,
+      };
+    })
+    .filter(
+      (item) =>
+        item.contributionPercent !== 0 ||
+        (item.dailyPercent !== null && item.dailyPercent !== 0),
+    )
+    .sort(
+      (a, b) =>
+        Math.abs(b.contributionPercent) - Math.abs(a.contributionPercent),
+    )
+    .slice(0, 3);
+};
+
+const formatMarketDriverImpact = (driver: MarketDriver) => {
+  if (Number.isFinite(driver.contributionPercent)) {
+    return `${driver.contributionPercent >= 0 ? "+" : ""}${driver.contributionPercent.toFixed(2)}%`;
+  }
+
+  if (driver.dailyPercent !== null && Number.isFinite(driver.dailyPercent)) {
+    return `${driver.dailyPercent >= 0 ? "+" : ""}${driver.dailyPercent.toFixed(1)}%`;
+  }
+
+  return null;
+};
+
+const getPortfolioDailyFromTickerData = (
+  marketData: MarketComparisonResponse | null,
+  weightedHoldings: WeightedHolding[],
+  totalMarketValueCad: number,
+): number | null => {
+  if (!marketData?.perTicker || totalMarketValueCad <= 0) {
+    return null;
+  }
+
+  const valueBySymbol = new Map<string, number>();
+  for (const holding of weightedHoldings) {
+    const symbol = holding.symbol.trim().toUpperCase();
+    valueBySymbol.set(
+      symbol,
+      (valueBySymbol.get(symbol) ?? 0) + holding.marketValueCad,
+    );
+  }
+
+  let weightedDailySum = 0;
+  let coveredValueCad = 0;
+  for (const item of marketData.perTicker) {
+    if (typeof item.dailyPercent !== "number") continue;
+    const valueCad = valueBySymbol.get(item.symbol.trim().toUpperCase()) ?? 0;
+    if (valueCad <= 0) continue;
+    weightedDailySum += (valueCad / totalMarketValueCad) * item.dailyPercent;
+    coveredValueCad += valueCad;
+  }
+
+  return coveredValueCad > 0 ? weightedDailySum : null;
+};
+
+const hasUsableMarketComparison = (
+  marketData: MarketComparisonResponse | null,
+) =>
+  !!marketData &&
+  (marketData.portfolioDailyPercent !== null ||
+    marketData.marketDailyPercent !== null ||
+    (marketData.benchmarks ?? []).some(
+      (item) => typeof item.changePercent === "number",
+    ) ||
+    (marketData.perTicker ?? []).some(
+      (item) => typeof item.dailyPercent === "number",
+    ));
+
+const formatMarketSummary = (
+  rawSummary: string | null,
+  marketData: MarketComparisonResponse | null,
+  weightedHoldings: WeightedHolding[],
+  totalMarketValueCad: number,
+): FormattedMarketSummary => {
+  const portfolioDailyPercent =
+    marketData?.portfolioDailyPercent ??
+    getPortfolioDailyFromTickerData(
+      marketData,
+      weightedHoldings,
+      totalMarketValueCad,
+    );
+  const marketDailyPercent = marketData?.marketDailyPercent ?? null;
+  const safeRawSummary = rawSummary ? sanitizeAiSummary(rawSummary) : null;
+  const contributors = getTopMarketContributors(
+    marketData,
+    weightedHoldings,
+    totalMarketValueCad,
+  );
+
+  if (portfolioDailyPercent !== null && marketDailyPercent !== null) {
+    const spread = portfolioDailyPercent - marketDailyPercent;
+    if (Math.abs(spread) < 0.005) {
+      return {
+        headline: getPerformanceHeadline(portfolioDailyPercent),
+        date: new Date().toLocaleDateString("en-CA", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        body: [
+          "Matched the benchmark today.",
+          "Portfolio holdings moved broadly in line with benchmark averages.",
+        ],
+        contributors,
+      };
+    }
+
+    const verb = spread >= 0 ? "Outperformed" : "Underperformed";
+    const reason =
+      spread >= 0
+        ? "Stronger relative performance across core holdings widened the lead."
+        : "Weaker relative performance across core holdings drove the gap.";
+
+    return {
+      headline: getPerformanceHeadline(portfolioDailyPercent),
+      date: new Date().toLocaleDateString("en-CA", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      body: [
+        `${verb} the benchmark by ${Math.abs(spread).toFixed(2)}%.`,
+        reason,
+      ],
+      contributors,
+    };
+  }
+
+  return {
+    headline: getPerformanceHeadline(portfolioDailyPercent),
+    date: new Date().toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    body: [
+      safeRawSummary ??
+        buildMarketSummaryFallback(marketData) ??
+        "Market summary will appear once portfolio and benchmark data are available.",
+    ],
+    contributors,
+  };
+};
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
   if (holdings.length === 0) {
@@ -458,7 +712,6 @@ function Dashboard() {
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(true);
   const [sectorBreakdown, setSectorBreakdown] = useState<
     SectorBreakdownEntry[]
   >([]);
@@ -510,7 +763,11 @@ function Dashboard() {
     const cached = loadMarketSummaryCache();
     if (shouldWaitForSyncedHoldings) return;
 
-    if (cached?.marketComparison && cached.holdingsHash === holdingsHash) {
+    if (
+      cached?.marketComparison &&
+      cached.holdingsHash === holdingsHash &&
+      hasUsableMarketComparison(cached.marketComparison as MarketComparisonResponse)
+    ) {
       setBenchmarks((cached.marketComparison.benchmarks as BenchmarkQuote[]) ?? []);
       setMarketComparison(cached.marketComparison as MarketComparisonResponse);
       setIsLoadingBenchmarks(false);
@@ -539,12 +796,15 @@ function Dashboard() {
         if (!response.ok) throw new Error("Failed to load market comparison.");
 
         const data = (await response.json()) as MarketComparisonResponse;
+        if (!hasUsableMarketComparison(data)) {
+          throw new Error("Market comparison returned no usable daily data.");
+        }
         setBenchmarks(data.benchmarks ?? []);
         setMarketComparison(data);
         saveMarketSummaryCache({ holdingsHash, marketComparison: data });
       } catch {
-        setBenchmarks([]);
-        setMarketComparison(null);
+        setBenchmarks((currentBenchmarks) => currentBenchmarks);
+        setMarketComparison((currentComparison) => currentComparison);
       } finally {
         window.clearTimeout(abortTimeoutId);
         window.clearTimeout(loadingWatchdogId);
@@ -560,13 +820,20 @@ function Dashboard() {
     if (shouldWaitForSyncedHoldings) return;
 
     if (cached?.aiSummary && cached.holdingsHash === holdingsHash) {
-      setAiSummary(cached.aiSummary);
-      setIsLoadingAiSummary(false);
+      const cachedSummary = sanitizeAiSummary(cached.aiSummary);
+      if (!cachedSummary) {
+        setAiSummary(null);
+      } else {
+        setAiSummary(cachedSummary);
+        return;
+      }
+    }
+
+    if (cached?.marketComparison && cached.holdingsHash === holdingsHash) {
       return;
     }
 
     const loadAiSummary = async () => {
-      setIsLoadingAiSummary(true);
       try {
         const res = await fetch(`${API_BASE_URL}/market/ai-summary`, {
           method: "POST",
@@ -575,15 +842,13 @@ function Dashboard() {
         });
         if (!res.ok) throw new Error("ai-summary fetch failed");
         const data = (await res.json()) as AiSummaryResponse;
-        const summary = data.summary
-          ? repairTextEncoding(data.summary)
-          : buildMarketSummaryFallback(marketComparison);
-        setAiSummary(summary);
-        saveMarketSummaryCache({ holdingsHash, aiSummary: summary });
+        const summary = data.summary ? sanitizeAiSummary(data.summary) : null;
+        setAiSummary((currentSummary) => summary ?? currentSummary);
+        if (summary) {
+          saveMarketSummaryCache({ holdingsHash, aiSummary: summary });
+        }
       } catch {
-        setAiSummary(buildMarketSummaryFallback(marketComparison));
-      } finally {
-        setIsLoadingAiSummary(false);
+        setAiSummary((currentSummary) => currentSummary);
       }
     };
     void loadAiSummary();
@@ -777,7 +1042,13 @@ function Dashboard() {
     [sectorBreakdown],
   );
 
-  const portfolioDailyPercent = marketComparison?.portfolioDailyPercent ?? null;
+  const portfolioDailyPercent =
+    marketComparison?.portfolioDailyPercent ??
+    getPortfolioDailyFromTickerData(
+      marketComparison,
+      weightedHoldings,
+      totalMarketValueCad,
+    );
   const marketDailyPercent = marketComparison?.marketDailyPercent ?? null;
 
   const portfolioDailyAmountCad = useMemo(() => {
@@ -836,15 +1107,21 @@ function Dashboard() {
       ? null
       : marketDailyPercent - portfolioDailyPercent;
 
-  const performanceHeadline: string = (() => {
-    if (portfolioDailyPercent === null) return "Today's market update";
-    const sign = portfolioDailyPercent >= 0 ? "+" : "";
-    if (portfolioDailyPercent >= 0.5)
-      return `Portfolio up ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
-    if (portfolioDailyPercent <= -0.5)
-      return `Portfolio down ${portfolioDailyPercent.toFixed(2)}% today`;
-    return `Portfolio roughly flat at ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
-  })();
+  const formattedMarketSummary = useMemo(
+    () =>
+      formatMarketSummary(
+        aiSummary,
+        marketComparison,
+        weightedHoldings,
+        totalMarketValueCad,
+      ),
+    [aiSummary, marketComparison, totalMarketValueCad, weightedHoldings],
+  );
+
+  const isMarketSummaryLoading =
+    !marketComparison
+      ? isLoadingBenchmarks || !marketComparison
+      : portfolioDailyPercent === null || marketDailyPercent === null;
 
   const suggestionCards = useMemo(() => {
     const text = (
@@ -858,6 +1135,24 @@ function Dashboard() {
       add: rebalanceData?.addSymbols ?? [],
     };
   }, [rebalanceData, holdings]);
+
+  const compactRebalanceInsight = useMemo(() => {
+    const overweights = stripTickerWeights(suggestionCards.trim).slice(0, 3);
+    const underweights = stripTickerWeights(suggestionCards.add).slice(0, 3);
+
+    if (overweights.length === 0 && underweights.length === 0) {
+      return [
+        "Portfolio weights are close to the current target range.",
+        "Suggested rebalance keeps allocations broadly unchanged.",
+      ];
+    }
+
+    return [
+      `Overweight: ${formatSymbolList(overweights) || "None"}`,
+      `Underweight: ${formatSymbolList(underweights) || "None"}`,
+      "Suggested rebalance trims concentration and improves diversification.",
+    ];
+  }, [suggestionCards.add, suggestionCards.trim]);
 
   const fallbackActionRows = useMemo(
     () =>
@@ -1043,118 +1338,141 @@ function Dashboard() {
                   </div>
 
                   <div className="dashboard-card-content dashboard-market-content">
-                    {(isLoadingAiSummary || aiSummary) && (
-                      <div className="dashboard-ai-summary">
-                        {isLoadingAiSummary ? (
-                          <div className="dashboard-ai-summary-loading">
-                            <span className="dashboard-ai-summary-dot" />
-                            <span className="dashboard-ai-summary-dot" />
-                            <span className="dashboard-ai-summary-dot" />
+                    <div className="dashboard-ai-summary">
+                      {isMarketSummaryLoading ? (
+                        <div className="dashboard-ai-summary-loading">
+                          <span className="dashboard-ai-summary-dot" />
+                          <span className="dashboard-ai-summary-dot" />
+                          <span className="dashboard-ai-summary-dot" />
+                          <span>Preparing market summary...</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="dashboard-ai-summary-title">
+                            {formattedMarketSummary.headline}
+                          </p>
+                          <p className="dashboard-market-date">
+                            {formattedMarketSummary.date}
+                          </p>
+                          <div className="dashboard-market-insight-lines">
+                            {formattedMarketSummary.body.map((line) => (
+                              <p
+                                className="dashboard-ai-summary-text"
+                                key={line}
+                              >
+                                {line}
+                              </p>
+                            ))}
                           </div>
-                        ) : (
-                          <div>
-                            <p className="dashboard-ai-summary-title">
-                              {performanceHeadline}
-                            </p>
-                            <p className="dashboard-market-date">
-                              {new Date().toLocaleDateString("en-CA", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </p>
-                            <p className="dashboard-ai-summary-text">
-                              {sanitizeAiSummary(aiSummary ?? "")}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          {formattedMarketSummary.contributors.length > 0 && (
+                            <div className="dashboard-market-drivers">
+                              <span className="dashboard-market-drivers-label">
+                                Top contributors
+                              </span>
+                              <div className="dashboard-market-driver-chips">
+                                {formattedMarketSummary.contributors.map(
+                                  (driver) => {
+                                    const impact =
+                                      formatMarketDriverImpact(driver);
+                                    const chipTone =
+                                      driver.contributionPercent < 0
+                                        ? "dashboard-market-driver-chip-negative"
+                                        : "dashboard-market-driver-chip-positive";
+                                    return (
+                                    <span
+                                      className={`dashboard-market-driver-chip ${chipTone}`}
+                                      key={driver.symbol}
+                                    >
+                                      <span>{driver.symbol}</span>
+                                      {impact && <strong>{impact}</strong>}
+                                    </span>
+                                    );
+                                  },
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="dashboard-comparison-table">
                       <div className="dashboard-comparison-head">
                         <span>Asset</span>
                         <span>Daily</span>
-                        <span>vs You</span>
+                        <span>vs Portfolio</span>
                       </div>
 
-                      <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
-                        <span>Portfolio</span>
-                        <span
-                          className={
-                            portfolioDailyPercent === null
-                              ? "dashboard-comparison-muted"
-                              : "dashboard-positive"
-                          }
-                        >
-                          {formatPercent(portfolioDailyPercent)}
-                        </span>
-                        <span className="dashboard-comparison-muted">Base</span>
-                      </div>
-
-                      <div className="dashboard-comparison-row">
-                        <span>Benchmark average</span>
-                        <span
-                          className={
-                            marketDailyPercent === null
-                              ? "dashboard-comparison-muted"
-                              : marketDailyPercent >= 0
-                                ? "dashboard-positive"
-                                : "dashboard-negative"
-                          }
-                        >
-                          {formatPercent(marketDailyPercent)}
-                        </span>
-                        <span
-                          className={getVsPortfolioClass(
-                            marketVsPortfolioDelta,
-                          )}
-                        >
-                          {formatSpread(marketDailyPercent)}
-                        </span>
-                      </div>
-
-                      {isLoadingBenchmarks ? (
+                      {isMarketSummaryLoading ? (
                         <div className="dashboard-comparison-row dashboard-comparison-row-loading">
-                          <span>Loading benchmark daily changes...</span>
+                          <span>Loading portfolio and benchmark comparison...</span>
                         </div>
                       ) : benchmarks.length === 0 ? (
                         <div className="dashboard-comparison-row dashboard-comparison-row-loading">
                           <span>Benchmark data unavailable right now.</span>
                         </div>
                       ) : (
-                        benchmarks.map((item) => {
-                          const spread =
-                            item.changePercent === null ||
-                            portfolioDailyPercent === null
-                              ? null
-                              : item.changePercent - portfolioDailyPercent;
+                        <>
+                          <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
+                            <span>Portfolio</span>
+                            <span className="dashboard-positive">
+                              {formatPercent(portfolioDailyPercent)}
+                            </span>
+                            <span className="dashboard-comparison-muted">Base</span>
+                          </div>
 
-                          return (
-                            <div
-                              className="dashboard-comparison-row"
-                              key={item.symbol}
+                          <div className="dashboard-comparison-row">
+                            <span>Benchmark average</span>
+                            <span
+                              className={
+                                marketDailyPercent! >= 0
+                                  ? "dashboard-positive"
+                                  : "dashboard-negative"
+                              }
                             >
-                              <span>{item.symbol}</span>
-                              <span
-                                className={
-                                  item.changePercent === null
-                                    ? "dashboard-comparison-muted"
-                                    : item.changePercent >= 0
-                                      ? "dashboard-positive"
-                                      : "dashboard-negative"
-                                }
+                              {formatPercent(marketDailyPercent)}
+                            </span>
+                            <span
+                              className={getVsPortfolioClass(
+                                marketVsPortfolioDelta,
+                              )}
+                            >
+                              {formatSpread(marketDailyPercent)}
+                            </span>
+                          </div>
+
+                          {benchmarks.map((item) => {
+                            const spread =
+                              item.changePercent === null
+                                ? null
+                                : item.changePercent - portfolioDailyPercent!;
+
+                            return (
+                              <div
+                                className="dashboard-comparison-row"
+                                key={item.symbol}
                               >
-                                {formatPercent(item.changePercent)}
-                              </span>
-                              <span className={getVsPortfolioClass(spread)}>
-                                {spread === null
-                                  ? "--"
-                                  : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
-                              </span>
-                            </div>
-                          );
-                        })
+                                <span>{item.symbol}</span>
+                                <span
+                                  className={
+                                    item.changePercent === null
+                                      ? "dashboard-comparison-muted"
+                                      : item.changePercent >= 0
+                                        ? "dashboard-positive"
+                                        : "dashboard-negative"
+                                  }
+                                >
+                                  {formatPercent(item.changePercent)}
+                                </span>
+                                <span className={getVsPortfolioClass(spread)}>
+                                  {spread === null
+                                    ? "--"
+                                    : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1178,9 +1496,16 @@ function Dashboard() {
                     ) : (
                       <>
                         <div className="dashboard-card-summary-block">
-                          <p className="dashboard-suggestion-text">
-                            {suggestionCards.summary}
-                          </p>
+                          <div className="dashboard-suggestion-insights">
+                            {compactRebalanceInsight.map((line) => (
+                              <p
+                                className="dashboard-suggestion-text"
+                                key={line}
+                              >
+                                {line}
+                              </p>
+                            ))}
+                          </div>
                         </div>
 
                         <div
