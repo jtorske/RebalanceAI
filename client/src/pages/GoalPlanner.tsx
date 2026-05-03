@@ -225,6 +225,8 @@ export default function GoalPlanner() {
   const yLabels = [0, 0.25, 0.5, 0.75, 1].map((f) => f * yMax);
 
   const mask = (s: string) => (settings.hideDollarAmounts ? "···" : s);
+  const maskGoalText = (s: string) =>
+    settings.hideDollarAmounts ? s.replace(/CA\$[\d.,]+[Mk]?/g, "···") : s;
 
   return (
     <div className="goal-shell">
@@ -446,9 +448,9 @@ export default function GoalPlanner() {
             <section className="goal-card goal-guidance-card">
               <div className="goal-guidance-main">
                 <span className="goal-section-title">Planning Summary</span>
-                <p>{mask(planSummary.summary)}</p>
+                <p>{maskGoalText(planSummary.summary)}</p>
                 <p className="goal-guidance-note">
-                  {mask(planSummary.inflationNote)}
+                  {maskGoalText(planSummary.inflationNote)}
                 </p>
                 <div className="goal-assumption-row">
                   <span>Bear {Math.max(0, annualReturn - RISK_SPREAD[riskProfile]).toFixed(1)}%</span>
@@ -461,7 +463,7 @@ export default function GoalPlanner() {
                 <span className="goal-section-title">What would make this realistic?</span>
                 <ul>
                   {planSummary.alternatives.map((item) => (
-                    <li key={item}>{mask(item)}</li>
+                    <li key={item}>{maskGoalText(item)}</li>
                   ))}
                 </ul>
               </div>

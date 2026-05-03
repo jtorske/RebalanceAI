@@ -300,6 +300,61 @@
   overflow: visible;
 }
 
+/* ── Planning guidance ────────────────────────────── */
+.goal-guidance-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(260px, 0.88fr);
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 14px 16px;
+}
+
+.goal-guidance-main,
+.goal-guidance-side {
+  min-width: 0;
+}
+
+.goal-guidance-main p {
+  margin: 8px 0 0;
+  color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.goal-guidance-note {
+  color: var(--app-muted) !important;
+  font-size: 12px !important;
+}
+
+.goal-assumption-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goal-assumption-row span {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-soft-surface);
+  color: var(--app-muted);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.goal-guidance-side ul {
+  margin: 8px 0 0;
+  padding-left: 17px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.goal-guidance-side li + li {
+  margin-top: 4px;
+}
+
 /* ── Outcome cards ── */
 .goal-outcomes {
   display: grid;
