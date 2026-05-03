@@ -19,6 +19,7 @@ import { useDemoMode } from "../lib/demoMode";
 import { computeHoldingsHash } from "../lib/dashboardCache";
 import { loadActiveHoldings } from "../services/activeHoldings";
 import type { ImportedHolding } from "../lib/types";
+import { buildRiskAction } from "../lib/riskActions";
 
 type RiskMetrics = {
   beta?: number;
@@ -269,8 +270,13 @@ function RiskDetailDialog({
         <h2 className="risk-dialog-title">{concern.title}</h2>
 
         <div className="risk-dialog-section">
-          <span className="risk-card-label">Explanation</span>
+          <span className="risk-card-label">Why it matters</span>
           <p>{concern.detail}</p>
+        </div>
+
+        <div className="risk-dialog-section">
+          <span className="risk-card-label">Suggested action</span>
+          <p className="risk-dialog-action-text">{buildRiskAction(concern)}</p>
         </div>
 
         <div className="risk-dialog-metrics">
@@ -614,11 +620,21 @@ function RiskManager() {
                       </span>
                     </div>
                     <h3>{concern.title}</h3>
-                    <p>{concern.detail}</p>
+
+                    <div className="risk-why-block">
+                      <span className="risk-section-label">Why it matters</span>
+                      <p>{concern.detail}</p>
+                    </div>
+
+                    <div className="risk-action-block">
+                      <span className="risk-section-label">Suggested action</span>
+                      <p className="risk-action-text">{buildRiskAction(concern)}</p>
+                    </div>
+
                     <div className="risk-meta-row">
                       <span>{concern.category}</span>
                       {concern.weight !== null && (
-                        <span>{concern.weight.toFixed(1)}% weight</span>
+                        <span className="risk-meta-weight">{concern.weight.toFixed(1)}% of portfolio</span>
                       )}
                     </div>
                     <div className="risk-card-cta">View details →</div>

@@ -180,6 +180,47 @@
   font-weight: 700;
 }
 
+.risk-section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--app-muted, #9999a8);
+  margin-bottom: 4px;
+}
+
+.risk-why-block {
+  margin-top: 10px;
+}
+
+.risk-why-block p {
+  margin: 0;
+  color: var(--app-text-soft, #303039);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.risk-action-block {
+  margin-top: 10px;
+  padding: 9px 11px;
+  background: rgba(138, 110, 240, 0.06);
+  border-left: 3px solid #8a6ef0;
+  border-radius: 0 6px 6px 0;
+}
+
+.risk-action-text {
+  margin: 0;
+  color: var(--app-text-soft, #303039);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.risk-meta-weight {
+  font-weight: 700;
+  color: var(--app-muted, #767680);
+}
+
 .risk-card-cta {
   margin-top: 10px;
   color: #8a6ef0;
@@ -399,6 +440,17 @@
 .risk-dialog-severity-medium { color: #9a6500; }
 .risk-dialog-severity-low { color: #235d9d; }
 
+.risk-dialog-action-text {
+  margin: 8px 0 0;
+  color: var(--app-text-soft, #303039);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: rgba(138, 110, 240, 0.06);
+  border-left: 3px solid #8a6ef0;
+  border-radius: 0 6px 6px 0;
+}
+
 .risk-dialog-links {
   display: flex;
   flex-direction: column;
@@ -488,6 +540,15 @@
 :root[data-theme="dark"] .risk-dialog-severity-high { color: #ff9b9b; }
 :root[data-theme="dark"] .risk-dialog-severity-medium { color: #ffd27a; }
 :root[data-theme="dark"] .risk-dialog-severity-low { color: #9fccff; }
+
+:root[data-theme="dark"] .risk-action-block {
+  background: rgba(138, 110, 240, 0.1);
+  border-left-color: #7c6af5;
+}
+
+:root[data-theme="dark"] .risk-dialog-action-text {
+  color: #ccccdd;
+}
 
 :root[data-theme="dark"] .risk-concern-card:hover {
   border-color: #8a6ef0;
