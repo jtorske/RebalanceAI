@@ -1,77 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
-
-const stripPreamble = (text: string): string =>
-  text
-    .replace(
-      /^here (?:are|is) (?:two|2|some|a few) (?:concise )?sentences?[^:]*:\s*/i,
-      "",
-    )
-    .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
-    .trim();
 import DashboardNavbar from "../components/DashboardNavbar.tsx";
 import "./RoutePage.css";
 import "./RiskManager.css";
 import { API_BASE_URL } from "../lib/constants";
-import { convertToCad } from "../lib/holdingsUtils";
 import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { computeHoldingsHash } from "../lib/dashboardCache";
 import { loadActiveHoldings } from "../services/activeHoldings";
 import type { ImportedHolding } from "../lib/types";
 import { buildRiskAction } from "../lib/riskActions";
+import {
+  buildFallbackRiskAnalysis,
+  normalizeRiskAnalysis,
+  type NormalizedRiskAnalysis,
+  type RiskAnalysisApiResponse,
+  type RiskConcern,
+} from "../lib/riskAnalysis";
 
-type RiskMetrics = {
-  beta?: number;
-  marketCap?: number;
-  marketCapLabel?: string;
-  earningsDate?: string;
-  earningsInDays?: number;
-};
-
-type RiskConcern = {
-  symbol: string;
-  title: string;
-  detail: string;
-  severity: "high" | "medium" | "low";
-  category: string;
-  weight: number | null;
-  metrics?: RiskMetrics;
-};
-
-type RiskAnalysisResponse = {
-  summary: string;
-  dashboardSummary: string;
-  concerns: RiskConcern[];
-  holdingsAnalyzed: number;
-  generatedAt: string;
-};
-
-type SectorBreakdownEntry = {
-  sector: string;
-  valueCad: number;
-  weight: number;
-};
-
-type SectorBreakdownResponse = {
-  sectors: SectorBreakdownEntry[];
-  totalValueCad: number;
-  generatedAt: string;
-};
-
-// Broad diversified ETFs that should NOT trigger concentration risk
-const BROAD_ETF_SYMBOLS = new Set([
-  "XEQT", "VEQT", "VGRO", "VBAL", "XGRO", "XCNS",
-  "ZAG", "VAB", "XIC", "XIU", "XAW", "VUN",
-  "SPY", "QQQ", "VTI", "ITOT", "SCHB", "IVV",
-  "VWO", "EFA", "AGG", "BND", "BNDX", "VXUS",
-]);
-
-const SEVERITY_ORDER: Record<RiskConcern["severity"], number> = {
-  high: 0,
-  medium: 1,
-  low: 2,
-};
+type RiskAnalysisResponse = NormalizedRiskAnalysis;
 
 const CATEGORY_ICONS: Record<string, string> = {
   "Concentration": "◎",
@@ -84,150 +31,6 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 const getCategoryIcon = (category: string) =>
   CATEGORY_ICONS[category] ?? "●";
-
-const normalizeTickerForSector = (symbol: string) =>
-  symbol.trim().toUpperCase().replace(/\s+/g, "");
-
-const inferSectorFromHolding = (holding: ImportedHolding): string => {
-  const securityType = holding.security_type.trim().toUpperCase();
-  const symbol = normalizeTickerForSector(holding.symbol);
-  const name = (holding.name ?? "").trim().toUpperCase();
-
-  if (securityType.includes("OPTION")) return "Derivatives";
-  if (securityType.includes("BOND")) return "Fixed Income";
-  if (securityType.includes("FUND") || securityType.includes("ETF")) {
-    return "ETF / Diversified";
-  }
-
-  const symbolSectorMap: Record<string, string> = {
-    AMD: "Technology",
-    GOOG: "Communication Services",
-    MU: "Technology",
-    WDC: "Technology",
-    SNDK: "Technology",
-    CEG: "Utilities",
-    ETN: "Industrials",
-    VST: "Utilities",
-    SLS: "Healthcare",
-    ONDS: "Technology",
-    HG: "Materials",
-    GDX: "Materials",
-    XEQT: "ETF / Diversified",
-  };
-
-  if (symbolSectorMap[symbol]) return symbolSectorMap[symbol];
-
-  if (name.includes("TECH") || name.includes("SEMICONDUCTOR")) return "Technology";
-  if (name.includes("HEALTH") || name.includes("PHARMA") || name.includes("BIO")) return "Healthcare";
-  if (name.includes("ENERGY") || name.includes("POWER") || name.includes("OIL")) return "Energy";
-  if (name.includes("BANK") || name.includes("FINANC") || name.includes("INSURANCE")) return "Financials";
-  if (name.includes("MINING") || name.includes("GOLD") || name.includes("METAL")) return "Materials";
-  if (name.includes("REIT") || name.includes("REAL ESTATE")) return "Real Estate";
-  if (name.includes("COMM") || name.includes("MEDIA")) return "Communication Services";
-
-  return "Other";
-};
-
-const buildSectorBreakdownFromHoldings = (
-  holdings: ImportedHolding[],
-): SectorBreakdownEntry[] => {
-  const bySector = new Map<string, number>();
-  let totalValueCad = 0;
-
-  for (const holding of holdings) {
-    const valueCad = convertToCad(holding.market_value, holding.market_value_currency);
-    if (valueCad <= 0) continue;
-    const sector = inferSectorFromHolding(holding);
-    totalValueCad += valueCad;
-    bySector.set(sector, (bySector.get(sector) ?? 0) + valueCad);
-  }
-
-  if (totalValueCad <= 0) return [];
-
-  return [...bySector.entries()]
-    .map(([sector, valueCad]) => ({
-      sector,
-      valueCad,
-      weight: (valueCad / totalValueCad) * 100,
-    }))
-    .sort((a, b) => b.valueCad - a.valueCad);
-};
-
-// Excludes "ETF / Diversified" — broad ETFs are not concentration risks
-const buildSectorConcentrationConcerns = (
-  sectors: SectorBreakdownEntry[],
-): RiskConcern[] => {
-  return sectors
-    .filter((s) => s.weight >= 30 && s.sector !== "ETF / Diversified")
-    .map((sector) => ({
-      symbol: "Portfolio",
-      title: `${sector.sector} concentration`,
-      detail: `${sector.sector} represents ${sector.weight.toFixed(1)}% of the portfolio. High sector concentration amplifies drawdown risk during sector-wide corrections.`,
-      severity: sector.weight >= 45 ? "high" : "medium",
-      category: "Sector concentration",
-      weight: sector.weight,
-    }));
-};
-
-// Flags individual non-diversified holdings above 20% of portfolio
-const buildStockConcentrationConcerns = (
-  holdings: ImportedHolding[],
-): RiskConcern[] => {
-  let totalValueCad = 0;
-  const items: Array<{ symbol: string; valueCad: number; isBroad: boolean }> = [];
-
-  for (const holding of holdings) {
-    const valueCad = convertToCad(holding.market_value, holding.market_value_currency);
-    if (valueCad <= 0) continue;
-    const sym = normalizeTickerForSector(holding.symbol);
-    const secType = holding.security_type.trim().toUpperCase();
-    const isBroad =
-      BROAD_ETF_SYMBOLS.has(sym) ||
-      (secType.includes("ETF") && BROAD_ETF_SYMBOLS.has(sym));
-    totalValueCad += valueCad;
-    items.push({ symbol: sym, valueCad, isBroad });
-  }
-
-  if (totalValueCad <= 0) return [];
-
-  return items
-    .filter((h) => !h.isBroad && (h.valueCad / totalValueCad) * 100 >= 20)
-    .map((h) => {
-      const weight = (h.valueCad / totalValueCad) * 100;
-      return {
-        symbol: h.symbol,
-        title: `${h.symbol} position overweight`,
-        detail: `${h.symbol} represents ${weight.toFixed(1)}% of total portfolio value. Single-position concentration above 20% significantly increases idiosyncratic drawdown risk.`,
-        severity: (weight >= 35 ? "high" : weight >= 25 ? "medium" : "low") as RiskConcern["severity"],
-        category: "Concentration",
-        weight,
-      };
-    });
-};
-
-const mergeUniqueConcerns = (
-  concerns: RiskConcern[],
-  extraConcerns: RiskConcern[],
-): RiskConcern[] => {
-  const existing = new Set(
-    concerns.map((item) => `${item.title}|${item.category}|${item.severity}`),
-  );
-
-  const merged = [...concerns];
-  for (const concern of extraConcerns) {
-    const key = `${concern.title}|${concern.category}|${concern.severity}`;
-    if (!existing.has(key)) {
-      existing.add(key);
-      merged.push(concern);
-    }
-  }
-
-  return merged.sort(
-    (a, b) =>
-      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-      (b.weight ?? 0) - (a.weight ?? 0),
-  );
-};
 
 const severityLabel: Record<RiskConcern["severity"], string> = {
   high: "High",
@@ -352,7 +155,7 @@ function RiskDetailDialog({
   );
 }
 
-const RISK_CACHE_KEY = "risk-analysis-v2";
+const RISK_CACHE_KEY = "risk-analysis-v4";
 
 function RiskManager() {
   const { portfolio } = useAuth();
@@ -369,7 +172,8 @@ function RiskManager() {
 
     let holdingsCount = 0;
     let holdingsList: ImportedHolding[] = [];
-    let sectorBreakdown: SectorBreakdownEntry[] = [];
+    const cacheKeyFromHoldings = (items: ImportedHolding[]) =>
+      `${RISK_CACHE_KEY}:${computeHoldingsHash(items)}`;
 
     try {
       holdingsList = await loadActiveHoldings({
@@ -377,31 +181,12 @@ function RiskManager() {
         isDemoMode,
       });
       holdingsCount = holdingsList.length;
-      const cacheKey = `${RISK_CACHE_KEY}:${computeHoldingsHash(holdingsList)}`;
       if (!force) {
-        const cached = sessionCacheGet<RiskAnalysisResponse>(cacheKey);
+        const cached = sessionCacheGet<RiskAnalysisResponse>(
+          cacheKeyFromHoldings(holdingsList),
+        );
         if (cached) {
           setAnalysis(cached);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      if (holdingsList.length > 0) {
-        const sectorRes = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ holdings: holdingsList }),
-        });
-        if (sectorRes.ok) {
-          const sectorData = (await sectorRes.json()) as SectorBreakdownResponse;
-          if ((sectorData.sectors ?? []).length > 0) {
-            sectorBreakdown = sectorData.sectors;
-          }
-        }
-
-        if (sectorBreakdown.length === 0) {
-          sectorBreakdown = buildSectorBreakdownFromHoldings(holdingsList);
         }
       }
     } catch {
@@ -415,40 +200,15 @@ function RiskManager() {
         body: JSON.stringify({ holdings: holdingsList }),
       });
       if (!response.ok) throw new Error("Failed to load risk analysis.");
-      const data = (await response.json()) as RiskAnalysisResponse;
-
-      const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
-      const stockConcerns = buildStockConcentrationConcerns(holdingsList);
-      const mergedConcerns = mergeUniqueConcerns(
-        mergeUniqueConcerns(data.concerns, sectorConcerns),
-        stockConcerns,
-      );
-
-      const result: RiskAnalysisResponse = {
-        ...data,
-        summary: stripPreamble(data.summary ?? ""),
-        dashboardSummary: stripPreamble(data.dashboardSummary ?? ""),
-        concerns: mergedConcerns,
-        holdingsAnalyzed: data.holdingsAnalyzed || holdingsCount,
-      };
-      sessionCacheSet(`${RISK_CACHE_KEY}:${computeHoldingsHash(holdingsList)}`, result);
+      const data = (await response.json()) as RiskAnalysisApiResponse;
+      const result = normalizeRiskAnalysis(data, holdingsList);
+      sessionCacheSet(cacheKeyFromHoldings(holdingsList), result);
       setAnalysis(result);
     } catch {
-      const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
-      const stockConcerns = buildStockConcentrationConcerns(holdingsList);
-      const allConcerns = mergeUniqueConcerns(sectorConcerns, stockConcerns);
-
-      const fallback: RiskAnalysisResponse = {
-        summary:
-          allConcerns.length > 0
-            ? `${allConcerns.length} concern${allConcerns.length > 1 ? "s" : ""} detected.`
-            : "Risk analysis is temporarily unavailable.",
-        dashboardSummary: "",
-        concerns: allConcerns,
-        holdingsAnalyzed: holdingsCount,
-        generatedAt: new Date().toISOString(),
-      };
-      if (holdingsCount > 0) sessionCacheSet(RISK_CACHE_KEY, fallback);
+      const fallback = buildFallbackRiskAnalysis(holdingsList);
+      if (holdingsCount > 0) {
+        sessionCacheSet(cacheKeyFromHoldings(holdingsList), fallback);
+      }
       setAnalysis(fallback);
     } finally {
       setIsLoading(false);
@@ -466,15 +226,15 @@ function RiskManager() {
   }, [loadRiskAnalysis]);
 
   const concernCounts = {
-    high: analysis?.concerns.filter((c) => c.severity === "high").length ?? 0,
-    medium: analysis?.concerns.filter((c) => c.severity === "medium").length ?? 0,
-    low: analysis?.concerns.filter((c) => c.severity === "low").length ?? 0,
+    high: analysis?.severityCounts.high ?? 0,
+    medium: analysis?.severityCounts.medium ?? 0,
+    low: analysis?.severityCounts.low ?? 0,
   };
 
   const filteredConcerns =
     activeFilter === "all"
-      ? (analysis?.concerns ?? [])
-      : (analysis?.concerns ?? []).filter((c) => c.severity === activeFilter);
+      ? (analysis?.mainConcerns ?? [])
+      : (analysis?.mainConcerns ?? []).filter((c) => c.severity === activeFilter);
 
   return (
     <div className="route-page">
@@ -506,7 +266,7 @@ function RiskManager() {
               <span className="risk-card-label">Risk Summary</span>
               {isLoading ? (
                 <p>Scanning holdings for possible risk signals...</p>
-              ) : !analysis || analysis.concerns.length === 0 ? (
+              ) : !analysis || analysis.mainConcerns.length === 0 ? (
                 <p>No major concerns found from the current data.</p>
               ) : (
                 <div className="risk-chips-row">
@@ -537,7 +297,7 @@ function RiskManager() {
                       ● {concernCounts.low} Watch
                     </button>
                   )}
-                  {[...new Set(analysis.concerns.map((c) => c.category))].map((cat) => (
+                  {[...new Set(analysis.mainConcerns.map((c) => c.category))].map((cat) => (
                     <span key={cat} className="risk-chip risk-chip-category">
                       {getCategoryIcon(cat)} {cat}
                     </span>
@@ -560,6 +320,12 @@ function RiskManager() {
               <strong>{concernCounts.medium + concernCounts.low}</strong>
             </div>
           </div>
+
+          {!isLoading && analysis?.dataQualityMessage && (
+            <div className="risk-data-quality-note">
+              {analysis.dataQualityMessage}
+            </div>
+          )}
 
           <div className="risk-concern-panel">
             <div className="risk-panel-header">

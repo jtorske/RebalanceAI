@@ -37,6 +37,16 @@
   font-size: 14px;
 }
 
+.risk-data-quality-note {
+  border: 1px solid var(--app-border, #e8e8ef);
+  border-radius: 8px;
+  background: rgba(138, 110, 240, 0.08);
+  color: var(--app-text-soft, #303039);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .risk-summary-grid {
   display: grid;
   grid-template-columns: 2fr repeat(3, minmax(150px, 1fr));

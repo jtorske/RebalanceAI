@@ -172,11 +172,23 @@ KNOWN_SECTOR_BY_SYMBOL = {
     "SLS": "Healthcare",
     "SNDK": "Technology",
     "SU": "Energy",
+    "TD": "Financials",
     "TSM": "Technology",
     "VFV": "ETF / Diversified",
+    "VRT": "Industrials",
     "VST": "Utilities",
     "WDC": "Technology",
     "XEQT": "ETF / Diversified",
+}
+NON_SECTOR_BUCKETS = {
+    "Unknown",
+    "Other",
+    "ETF / Diversified",
+    "Fund / Diversified",
+    "Derivatives",
+    "Fixed Income",
+    "Cash",
+    "Crypto",
 }
 
 
@@ -197,11 +209,11 @@ def _run_yfinance_with_timeout(
     try:
         return future.result(timeout=timeout)
     except TimeoutError:
-        logger.warning("yfinance call timed out after %ss", timeout)
+        logger.warning("risk_debug yfinance timeout after %ss", timeout)
         future.cancel()
         return fallback
     except Exception as err:
-        logger.debug("yfinance call failed: %s", err)
+        logger.warning("risk_debug yfinance failure: %s", err)
         return fallback
 
 
@@ -1439,10 +1451,10 @@ def _sector_for_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
         sector = (
             KNOWN_SECTOR_BY_SYMBOL.get(base_symbol)
             or _infer_sector_from_name(name)
-            or "Other"
+            or "Unknown"
         )
         _sector_cache.setdefault(normalized_symbol, {"sector": sector})
-        source = "known" if sector != "Other" else "fallback"
+        source = "known" if sector != "Unknown" else "unavailable"
     elif asset_class == "etf":
         sector = "ETF / Diversified"
         source = "asset_class"
@@ -1462,7 +1474,7 @@ def _sector_for_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
         sector = "Crypto"
         source = "asset_class"
     else:
-        sector = "Other"
+        sector = "Unknown"
         source = "fallback"
 
     return {
@@ -1518,6 +1530,26 @@ def _build_sector_breakdown(
         "totalValueCad": round(total_value_cad, 2),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _risk_debug_symbol_snapshot(holdings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    snapshot: List[Dict[str, Any]] = []
+    for holding in holdings:
+        raw_symbol = str(holding.get("symbol", "")).strip().upper()
+        normalized = _normalize_symbol_for_quote(holding)
+        asset_class = _classify_asset(holding, normalized or raw_symbol)
+        sector_info = _sector_for_holding(holding)
+        snapshot.append(
+            {
+                "symbol": raw_symbol,
+                "quoteSymbol": normalized,
+                "assetClass": asset_class,
+                "sector": sector_info.get("sector"),
+                "sectorSource": sector_info.get("source"),
+                "securityType": str(holding.get("security_type", "")).strip(),
+            }
+        )
+    return snapshot
 
 
 def _extract_earnings_date(info: Dict[str, Any]) -> Optional[str]:
@@ -1630,11 +1662,21 @@ def _add_risk(
     )
 
 
+def _confirmed_risk_concerns(concerns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        item
+        for item in concerns
+        if str(item.get("category", "")).strip().lower() != "data quality"
+        and not (item.get("metrics") or {}).get("dataQuality")
+    ]
+
+
 def _fallback_risk_summary(concerns: List[Dict[str, Any]]) -> str:
-    if not concerns:
+    confirmed = _confirmed_risk_concerns(concerns)
+    if not confirmed:
         return "No major portfolio risks stand out from the current holdings data, but keep monitoring concentration, earnings dates, and liquidity."
 
-    top = concerns[:3]
+    top = confirmed[:3]
     readable = ", ".join(
         f"{item['symbol']} ({item['category'].lower()})" for item in top
     )
@@ -1667,12 +1709,13 @@ def _ai_risk_summary(
     holdings_count: int,
 ) -> Tuple[str, str]:
     fallback = _fallback_risk_summary(concerns)
-    if not concerns:
+    confirmed = _confirmed_risk_concerns(concerns)
+    if not confirmed:
         return fallback, "fallback"
 
     concern_lines = [
         f"- {item['symbol']}: {item['title']} | {item['detail']} | severity={item['severity']}"
-        for item in concerns[:8]
+        for item in confirmed[:8]
     ]
     prompt = (
         "Write exactly 2 concise prose sentences for a portfolio risk dashboard. "
@@ -1695,9 +1738,22 @@ def _build_risk_analysis(
     positions = _prepare_rebalance_positions(holdings)
     total_value = sum(item["currentValueCad"] for item in positions)
     concerns: List[Dict[str, Any]] = []
+    missing_market_cap_candidates: List[Dict[str, Any]] = []
+
+    logger.info(
+        "risk_debug holdings_count=%s raw_symbols=%s",
+        len(holdings),
+        [str(item.get("symbol", "")).strip().upper() for item in holdings],
+    )
+    logger.info("risk_debug symbol_snapshot=%s", _risk_debug_symbol_snapshot(holdings))
 
     sector_data = _build_sector_breakdown(holdings)
+    logger.info("risk_debug sector_breakdown=%s", sector_data.get("perTicker", []))
     for sector in sector_data.get("sectors", []):
+        sector_name = str(sector.get("sector") or "").strip()
+        if sector_name in NON_SECTOR_BUCKETS:
+            continue
+
         weight = _to_float(sector.get("weight")) or 0.0
         if weight >= 45:
             _add_risk(
@@ -1747,6 +1803,13 @@ def _build_risk_analysis(
                 logger.warning("Risk profile batch timed out for %s", risk_symbols)
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
+    logger.info(
+        "risk_debug market_caps=%s",
+        {
+            symbol: risk_profiles.get(symbol, {}).get("marketCap")
+            for symbol in risk_symbols
+        },
+    )
 
     for item in positions:
         if total_value <= 0 or item["currentValueCad"] <= 0:
@@ -1790,14 +1853,12 @@ def _build_risk_analysis(
         earnings_days = _days_until(earnings_date)
 
         if market_cap is None:
-            _add_risk(
-                concerns,
-                symbol,
-                "Missing market-cap data",
-                "The app could not confirm market cap, so liquidity and size risk need manual review.",
-                "low",
-                "Data quality",
-                weight,
+            missing_market_cap_candidates.append(
+                {
+                    "symbol": symbol,
+                    "weight": weight,
+                    "detail": "Market-cap metadata is temporarily unavailable for this ticker.",
+                }
             )
         elif market_cap < 300_000_000 and weight >= 2:
             _add_risk(
@@ -1884,8 +1945,25 @@ def _build_risk_analysis(
                 )
                 break
 
+    for item in sorted(
+        missing_market_cap_candidates,
+        key=lambda value: value.get("weight") or 0,
+        reverse=True,
+    )[:3]:
+        _add_risk(
+            concerns,
+            item["symbol"],
+            "Ticker metadata temporarily unavailable",
+            item["detail"],
+            "low",
+            "Data quality",
+            item["weight"],
+            {"dataQuality": True},
+        )
+
     concerns.sort(
         key=lambda item: (
+            str(item.get("category")) == "Data quality",
             _risk_severity_rank(str(item.get("severity"))),
             -(item.get("weight") or 0),
         )
@@ -1896,11 +1974,41 @@ def _build_risk_analysis(
     if not _is_risk_summary_usable(dashboard_summary):
         dashboard_summary = _fallback_risk_summary(concerns)
 
+    data_quality = {
+        "metadataIncomplete": any(
+            str(item.get("category")) == "Data quality" for item in concerns
+        ),
+        "message": (
+            "Some ticker metadata is temporarily unavailable, so risk analysis is based on available holdings data."
+            if any(str(item.get("category")) == "Data quality" for item in concerns)
+            else None
+        ),
+    }
+    if data_quality["metadataIncomplete"] and not _confirmed_risk_concerns(concerns):
+        summary = data_quality["message"] or _fallback_risk_summary(concerns)
+        dashboard_summary = summary
+        summary_source = "fallback"
+
+    logger.info(
+        "risk_debug final_concerns=%s",
+        [
+            {
+                "symbol": item.get("symbol"),
+                "title": item.get("title"),
+                "severity": item.get("severity"),
+                "category": item.get("category"),
+                "weight": item.get("weight"),
+            }
+            for item in concerns
+        ],
+    )
+
     return {
         "summary": summary,
         "dashboardSummary": dashboard_summary,
         "source": summary_source,
         "concerns": concerns,
+        "dataQuality": data_quality,
         "holdingsAnalyzed": len(positions),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
@@ -2748,6 +2856,10 @@ def create_risk_analysis(payload: HoldingsSummaryRequest):
             "dashboardSummary": "Risk analysis is temporarily unavailable.",
             "source": "fallback",
             "concerns": [],
+            "dataQuality": {
+                "metadataIncomplete": True,
+                "message": "Some ticker metadata is temporarily unavailable, so risk analysis is based on available holdings data.",
+            },
             "holdingsAnalyzed": 0,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
         }

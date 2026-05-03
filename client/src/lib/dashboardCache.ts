@@ -52,7 +52,7 @@ export function computeHoldingsHash(holdings: ImportedHolding[]): string {
 }
 
 function cacheKey(userId: string | null): string {
-  return `rebalancex:dashboard-cache-v2:${userId ?? "demo"}`;
+  return `rebalancex:dashboard-cache-v3:${userId ?? "demo"}`;
 }
 
 export function loadDashboardCache(userId: string | null): DashboardSummaryCache | null {
