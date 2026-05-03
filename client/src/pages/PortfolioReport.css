@@ -1,15 +1,17 @@
 .report-shell {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--app-bg, #151516);
   color: var(--app-text, #f2f2f0);
-  overflow-x: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .report-page {
   width: 100%;
   max-width: 100%;
+  min-height: 100%;
   padding: 32px 0 56px;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .report-container,

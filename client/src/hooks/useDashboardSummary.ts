@@ -63,6 +63,102 @@ function deriveRiskSummary(concerns: RiskConcernItem[]): string {
   return `The main risks to review are ${symbols.join(", ")} based on current portfolio signals.`;
 }
 
+function buildFallbackRiskAlert(holdings: ImportedHolding[]): RiskAlertData {
+  const severityCounts = { high: 0, medium: 0, low: 0 };
+  const concerns: RiskConcernItem[] = [];
+
+  const valueBySymbol = new Map<string, number>();
+  let totalValueCad = 0;
+  let optionValueCad = 0;
+
+  for (const holding of holdings) {
+    const symbol = holding.symbol.trim().toUpperCase();
+    const valueCad = Number.isFinite(holding.market_value)
+      ? holding.market_value *
+        (holding.market_value_currency?.trim().toUpperCase() === "USD"
+          ? 1.37
+          : 1)
+      : 0;
+    if (!symbol || valueCad <= 0) continue;
+
+    totalValueCad += valueCad;
+    valueBySymbol.set(symbol, (valueBySymbol.get(symbol) ?? 0) + valueCad);
+    if (holding.security_type.toUpperCase().includes("OPTION")) {
+      optionValueCad += valueCad;
+    }
+  }
+
+  const weighted = [...valueBySymbol.entries()]
+    .map(([symbol, valueCad]) => ({
+      symbol,
+      weight: totalValueCad > 0 ? (valueCad / totalValueCad) * 100 : 0,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+
+  const top = weighted[0];
+  if (top?.weight >= 30) {
+    severityCounts.high += 1;
+    concerns.push({
+      severity: "high",
+      symbol: top.symbol,
+      title: "Large single-position weight",
+      category: "Concentration",
+    });
+  } else if (top?.weight >= 18) {
+    severityCounts.medium += 1;
+    concerns.push({
+      severity: "medium",
+      symbol: top.symbol,
+      title: "Meaningful single-position weight",
+      category: "Concentration",
+    });
+  }
+
+  const topThreeWeight = weighted
+    .slice(0, 3)
+    .reduce((sum, item) => sum + item.weight, 0);
+  if (topThreeWeight >= 60) {
+    severityCounts.medium += 1;
+    concerns.push({
+      severity: "medium",
+      symbol: "Portfolio",
+      title: "Top holdings concentration",
+      category: "Concentration",
+    });
+  }
+
+  const optionWeight = totalValueCad > 0 ? (optionValueCad / totalValueCad) * 100 : 0;
+  if (optionWeight >= 10) {
+    severityCounts.high += 1;
+    concerns.push({
+      severity: "high",
+      symbol: "Options",
+      title: "Options exposure",
+      category: "Derivatives",
+    });
+  } else if (optionWeight >= 2) {
+    severityCounts.low += 1;
+    concerns.push({
+      severity: "low",
+      symbol: "Options",
+      title: "Options exposure",
+      category: "Derivatives",
+    });
+  }
+
+  const summary =
+    concerns.length > 0
+      ? deriveRiskSummary(concerns)
+      : "No major portfolio risks stand out from current holdings.";
+
+  return {
+    summary,
+    concerns: concerns.slice(0, 5),
+    concernTotal: concerns.length,
+    severityCounts,
+  };
+}
+
 async function fetchRebalanceSummary(
   holdings: ImportedHolding[],
 ): Promise<RebalanceSummaryData> {
@@ -113,18 +209,30 @@ async function fetchRiskAlert(holdings: ImportedHolding[]): Promise<RiskAlertDat
   const rawSummary = data.dashboardSummary
     ? stripPreamble(repairText(data.dashboardSummary))
     : null;
-  const summary = isUsableSummary(rawSummary)
+  let summary = isUsableSummary(rawSummary)
     ? rawSummary
     : deriveRiskSummary(concerns);
+  let nextConcerns = concerns;
+  let nextSeverityCounts = {
+    high: concerns.filter((c) => c.severity === "high").length,
+    medium: concerns.filter((c) => c.severity === "medium").length,
+    low: concerns.filter((c) => c.severity === "low").length,
+  };
+
+  if (holdings.length > 0 && concerns.length === 0) {
+    const fallback = buildFallbackRiskAlert(holdings);
+    if (fallback.concernTotal > 0) {
+      summary = fallback.summary ?? deriveRiskSummary(fallback.concerns);
+      nextConcerns = fallback.concerns;
+      nextSeverityCounts = fallback.severityCounts;
+    }
+  }
+
   return {
     summary,
-    concerns: concerns.slice(0, 5),
-    concernTotal: concerns.length,
-    severityCounts: {
-      high: concerns.filter((c) => c.severity === "high").length,
-      medium: concerns.filter((c) => c.severity === "medium").length,
-      low: concerns.filter((c) => c.severity === "low").length,
-    },
+    concerns: nextConcerns.slice(0, 5),
+    concernTotal: nextConcerns.length,
+    severityCounts: nextSeverityCounts,
   };
 }
 
@@ -157,9 +265,6 @@ export function useDashboardSummary(
         if (cached && cached.holdingsHash === hash) {
           if (cached.rebalance) setRebalance(cached.rebalance);
           if (cached.risk) setRisk(cached.risk);
-          setIsLoadingRebalance(false);
-          setIsLoadingRisk(false);
-          return;
         }
       }
 
@@ -184,7 +289,9 @@ export function useDashboardSummary(
           saveDashboardCache(uid, hash, { risk: data });
         })
         .catch(() => {
-          /* leave previous value on error */
+          const fallback = buildFallbackRiskAlert(holdings);
+          setRisk(fallback);
+          saveDashboardCache(uid, hash, { risk: fallback });
         })
         .finally(() => {
           setIsLoadingRisk(false);

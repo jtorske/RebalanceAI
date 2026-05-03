@@ -538,6 +538,72 @@ def _compute_portfolio_vs_market(
     }
     return snapshot
 
+
+def _fallback_portfolio_vs_market(
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
+    total_current_cad = 0.0
+    total_previous_cad = 0.0
+    per_ticker: List[Dict[str, Any]] = []
+
+    for holding in holdings:
+        symbol = str(holding.get("symbol", "")).strip().upper()
+        quantity = _to_float(holding.get("quantity"))
+        current_price = _to_float(holding.get("market_price"))
+        market_value = _to_float(holding.get("market_value"))
+        total_change = _to_float(holding.get("market_unrealized_returns"))
+        currency = str(
+            holding.get("market_value_currency")
+            or holding.get("market_price_currency")
+            or ""
+        )
+        if not symbol:
+            continue
+
+        if market_value is not None and market_value > 0:
+            total_current_cad += _convert_to_cad(market_value, currency)
+            if total_change is not None:
+                total_previous_cad += _convert_to_cad(
+                    max(market_value - total_change, 0),
+                    currency,
+                )
+        elif quantity and current_price:
+            total_current_cad += _convert_to_cad(quantity * current_price, currency)
+
+        per_ticker.append(
+            {
+                "symbol": symbol,
+                "quoteSymbol": _normalize_symbol_for_quote(holding) or symbol,
+                "dailyPercent": None,
+                "price": current_price,
+                "previousClose": None,
+            }
+        )
+
+    portfolio_daily_percent: Optional[float] = None
+    if total_previous_cad > 0:
+        portfolio_daily_percent = (
+            (total_current_cad - total_previous_cad) / total_previous_cad
+        ) * 100
+
+    now = datetime.now(timezone.utc)
+    return {
+        "date": now.date().isoformat(),
+        "capturedAt": now.isoformat(),
+        "portfolioDailyPercent": portfolio_daily_percent,
+        "marketDailyPercent": 0.0,
+        "deltaPercent": portfolio_daily_percent,
+        "comparisonSource": "fallback-imported-values",
+        "marketSource": "fallback-zero",
+        "quotesMatched": 0,
+        "benchmarks": [
+            {"symbol": item["symbol"], "name": item["name"], "price": None, "changePercent": None}
+            for item in BENCHMARKS
+        ],
+        "perTicker": per_ticker,
+    }
+
 @app.on_event("startup")
 async def log_routes():
     print("=== RebalanceX API routes ===", flush=True)
@@ -605,23 +671,12 @@ def get_portfolio_vs_market():
 
 @app.post("/market/portfolio-vs-market")
 def create_portfolio_vs_market(payload: HoldingsSummaryRequest):
+    holdings = _serialize_holdings(payload.holdings)
     try:
-        return _compute_portfolio_vs_market(_serialize_holdings(payload.holdings))
+        return _compute_portfolio_vs_market(holdings)
     except Exception as exc:
         logger.error("Error in POST /market/portfolio-vs-market: %s", exc, exc_info=True)
-        now = datetime.now(timezone.utc)
-        return {
-            "date": now.date().isoformat(),
-            "capturedAt": now.isoformat(),
-            "portfolioDailyPercent": None,
-            "marketDailyPercent": None,
-            "deltaPercent": None,
-            "comparisonSource": "unavailable",
-            "marketSource": "unavailable",
-            "quotesMatched": 0,
-            "benchmarks": [],
-            "perTicker": [],
-        }
+        return _fallback_portfolio_vs_market(holdings)
 
 
 @app.get("/market/portfolio-performance-history")

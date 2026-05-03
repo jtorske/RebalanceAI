@@ -884,7 +884,16 @@ function Dashboard() {
         saveMarketSummaryCache({ holdingsHash, marketComparison: data });
       } catch {
         setBenchmarks((currentBenchmarks) => currentBenchmarks);
-        setMarketComparison((currentComparison) => currentComparison);
+        setMarketComparison(
+          (currentComparison) =>
+            currentComparison ?? {
+              portfolioDailyPercent: null,
+              marketDailyPercent: null,
+              deltaPercent: null,
+              benchmarks: [],
+              perTicker: [],
+            },
+        );
       } finally {
         window.clearTimeout(loadingWatchdogId);
         setIsLoadingBenchmarks(false);
