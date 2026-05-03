@@ -450,7 +450,7 @@ const buildSectorBreakdownFromHoldings = (
 
 function Dashboard() {
   const { settings } = useUserSettings();
-  const { user, profile, portfolio, hasHoldings, portfolioLoading } = useAuth();
+  const { user, portfolio, hasHoldings, portfolioLoading } = useAuth();
   const { isDemoMode, enableDemoMode } = useDemoMode();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);

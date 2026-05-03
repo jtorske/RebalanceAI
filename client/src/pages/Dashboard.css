@@ -243,12 +243,11 @@
 }
 
 .dashboard-structured-card {
-  --dashboard-card-header-height: 44px;
-  --dashboard-card-summary-height: 168px;
-  --dashboard-card-middle-height: 80px;
   --dashboard-card-row-height: 36px;
-  --dashboard-card-table-height: calc((var(--dashboard-card-row-height) * 5) + (4px * 7) + 38px);
-  --dashboard-card-footer-height: 124px;
+  /* Shared fixed heights — both insight cards use the same values so their
+     list sections and footers align at identical vertical positions. */
+  --insight-list-height: 246px;
+  --insight-footer-height: 68px;
 }
 
 .dashboard-card-title-row {
@@ -299,23 +298,20 @@
 }
 
 .dashboard-structured-card-content {
+  /* 4-row grid keeps both insight cards structurally identical:
+     summary (auto) → spacer/gauge (1fr) → list (fixed) → footer (fixed)
+     The 1fr row absorbs leftover height so the list and footer always
+     anchor to the same position from the bottom of the card. */
   margin-top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* Summary and middle: natural content height, no grid-row stretching */
-.dashboard-structured-card-content > .dashboard-card-summary-block,
-.dashboard-structured-card-content > .dashboard-card-middle-block {
-  flex-shrink: 0;
-  height: auto;
-}
-
-/* Table list: natural height inside flex (was height:100% for grid context) */
-.dashboard-structured-card-content .dashboard-action-list,
-.dashboard-structured-card-content .dashboard-risk-flags {
-  height: auto;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows:
+    auto
+    1fr
+    var(--insight-list-height)
+    var(--insight-footer-height);
+  row-gap: 8px;
 }
 
 .dashboard-market-content {
@@ -792,9 +788,9 @@
 
 .dashboard-card-summary-block {
   min-height: 0;
-  height: 100%;
   display: flex;
   align-items: flex-start;
+  overflow: hidden;
 }
 
 .dashboard-action-list,
@@ -802,10 +798,10 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 0;
   min-height: 0;
-  height: 100%;
+  overflow: hidden;
   justify-content: flex-start;
+  align-self: stretch;
 }
 
 .dashboard-action-label {
@@ -887,15 +883,13 @@
   line-height: 1.55;
 }
 
-.dashboard-risk-flags {
-  flex: 0 0 auto;
-  overflow: hidden;
-}
+/* .dashboard-risk-flags shares layout rules with .dashboard-action-list above */
 
 .dashboard-card-middle-block {
   min-height: 0;
-  height: 100%;
   display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard-risk-flag-high { background: rgba(239, 68, 68, 0.07); }
@@ -942,11 +936,11 @@
 .dashboard-severity-mix {
   border-top: 1px solid var(--app-border, #e7e7ef);
   padding-top: 12px;
-  flex-shrink: 0;
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  align-self: stretch;
+  overflow: hidden;
 }
 
 .dashboard-plan-snapshot-grid,
