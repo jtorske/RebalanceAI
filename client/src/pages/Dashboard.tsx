@@ -1194,11 +1194,10 @@ function Dashboard() {
     [suggestionCards],
   );
 
-  const riskSeverityCounts = useMemo(() => {
-    if (riskData?.severityCounts) return riskData.severityCounts;
-    if (holdings.length > 0) return getFallbackRiskAnalysis(holdings).severityCounts;
-    return { high: 0, medium: 0, low: 0 };
-  }, [riskData, holdings]);
+  const riskSeverityCounts = useMemo(
+    () => riskData?.severityCounts ?? { high: 0, medium: 0, low: 0 },
+    [riskData],
+  );
 
   const riskScore = useMemo(
     () =>
@@ -1703,7 +1702,9 @@ function Dashboard() {
                         <div className="dashboard-card-summary-block">
                           <p className="dashboard-risk-summary">
                             {riskData?.summary ??
-                              "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks."}
+                              (holdings.length > 0 && !isLoadingRiskSummary
+                                ? "Risk analysis is temporarily unavailable."
+                                : "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.")}
                           </p>
                         </div>
 

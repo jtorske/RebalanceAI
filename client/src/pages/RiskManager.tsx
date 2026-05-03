@@ -433,28 +433,23 @@ function RiskManager() {
       };
       sessionCacheSet(`${RISK_CACHE_KEY}:${computeHoldingsHash(holdingsList)}`, result);
       setAnalysis(result);
-    } catch (err) {
+    } catch {
       const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
       const stockConcerns = buildStockConcentrationConcerns(holdingsList);
       const allConcerns = mergeUniqueConcerns(sectorConcerns, stockConcerns);
 
-      if (holdingsCount > 0) {
-        const fallback: RiskAnalysisResponse = {
-          summary:
-            allConcerns.length > 0
-              ? `${allConcerns.length} concern${allConcerns.length > 1 ? "s" : ""} detected.`
-              : "No major concerns detected from current holdings.",
-          dashboardSummary: "",
-          concerns: allConcerns,
-          holdingsAnalyzed: holdingsCount,
-          generatedAt: new Date().toISOString(),
-        };
-        sessionCacheSet(RISK_CACHE_KEY, fallback);
-        setAnalysis(fallback);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to load risk analysis.");
-        setAnalysis(null);
-      }
+      const fallback: RiskAnalysisResponse = {
+        summary:
+          allConcerns.length > 0
+            ? `${allConcerns.length} concern${allConcerns.length > 1 ? "s" : ""} detected.`
+            : "Risk analysis is temporarily unavailable.",
+        dashboardSummary: "",
+        concerns: allConcerns,
+        holdingsAnalyzed: holdingsCount,
+        generatedAt: new Date().toISOString(),
+      };
+      if (holdingsCount > 0) sessionCacheSet(RISK_CACHE_KEY, fallback);
+      setAnalysis(fallback);
     } finally {
       setIsLoading(false);
     }
