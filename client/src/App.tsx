@@ -9,7 +9,7 @@ import RiskManager from "./pages/RiskManager";
 import GoalPlanner from "./pages/GoalPlanner";
 import PortfolioReport from "./pages/PortfolioReport";
 import { UserSettingsProvider } from "./lib/userSettings";
-import { DemoModeProvider, useDemoMode } from "./lib/demoMode";
+import { DemoModeProvider } from "./lib/demoMode";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppLoadingState } from "./components/common/AppLoadingState";
 import { ApiStatusBanner } from "./components/common/ApiStatusBanner";
@@ -23,18 +23,16 @@ function HomeRoute() {
 
 function AppRoutes() {
   const apiHealth = useApiHealth();
-  const { user, loading } = useAuth();
-  const { isDemoMode } = useDemoMode();
-  const shouldBlockForApi =
+
+  // Block the entire app shell until the hosted API is confirmed ready.
+  // No exceptions for demo mode, unauthenticated users, or any other state —
+  // all routes depend on the backend, so nothing mounts until /health + /ready pass.
+  if (
     apiHealth.isHostedApi &&
-    !loading &&
-    !!user &&
-    !isDemoMode &&
     (apiHealth.status === "checking" ||
       apiHealth.status === "warming" ||
-      apiHealth.status === "error");
-
-  if (shouldBlockForApi) {
+      apiHealth.status === "error")
+  ) {
     return (
       <AppLoadingState
         key={apiHealth.attempt}
