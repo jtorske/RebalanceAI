@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
+import re
 import time
 import requests
 import yfinance as yf
@@ -787,6 +788,9 @@ def _first_sentence(text: str) -> str:
     cleaned = " ".join(text.split())
     if not cleaned:
         return ""
+    # Strip leading numbered-list / bullet markers so "1. Foo bar." → "Foo bar."
+    cleaned = re.sub(r'^\d+[\.\)]\s+', '', cleaned)
+    cleaned = re.sub(r'^[-*•]\s+', '', cleaned).strip()
 
     for marker in (". ", "! ", "? "):
         if marker in cleaned:
@@ -1417,6 +1421,23 @@ def _fallback_risk_summary(concerns: List[Dict[str, Any]]) -> str:
     return f"The main risks to review are {readable}. Check whether these positions are intentional, especially if they combine high weight, small market cap, volatility, or near-term catalysts."
 
 
+def _is_risk_summary_usable(text: Optional[str]) -> bool:
+    """Return True only when the text is a real prose sentence, not a list fragment."""
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) < 20:
+        return False
+    # Reject if the text opens with a numbered or bulleted list marker
+    if re.match(r'^\d+[\.\)]\s', stripped) or re.match(r'^[-*•]\s', stripped):
+        return False
+    # Reject if the first clause (before the first ". ") is too short to be a sentence
+    first_clause = stripped.split(". ", 1)[0].strip() if ". " in stripped else stripped
+    if len(first_clause) < 12:
+        return False
+    return True
+
+
 def _ai_risk_summary(
     concerns: List[Dict[str, Any]],
     holdings_count: int,
@@ -1430,14 +1451,17 @@ def _ai_risk_summary(
         for item in concerns[:8]
     ]
     prompt = (
-        "Write exactly 2 concise sentences for a portfolio risk dashboard. "
+        "Write exactly 2 concise prose sentences for a portfolio risk dashboard. "
+        "Do NOT use numbered lists, bullet points, or markdown. "
         "Do not give financial advice, do not say buy or sell, and only use the facts below. "
         f"The portfolio has {holdings_count} holdings.\n"
         + "\n".join(concern_lines)
     )
 
     polished = _try_ollama_polish(prompt, timeout=12)
-    return (polished, "ollama") if polished else (fallback, "fallback")
+    if _is_risk_summary_usable(polished):
+        return polished, "ollama"
+    return fallback, "fallback"
 
 
 def _build_risk_analysis(

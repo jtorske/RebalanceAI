@@ -27,6 +27,25 @@ const stripPreamble = (text: string) =>
     .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
     .trim();
 
+function isUsableSummary(s: string | null | undefined): s is string {
+  if (!s) return false;
+  const t = s.trim();
+  return t.length >= 15 && !/^\d+\.?\s*$/.test(t);
+}
+
+function deriveRiskSummary(concerns: RiskConcernItem[]): string {
+  if (concerns.length === 0) {
+    return "No major portfolio risks stand out from current holdings.";
+  }
+  const symbols = [
+    ...new Set(concerns.slice(0, 3).map((c) => c.symbol).filter(Boolean)),
+  ] as string[];
+  if (symbols.length === 0) {
+    return `${concerns.length} risk signal${concerns.length > 1 ? "s" : ""} detected across the portfolio.`;
+  }
+  return `The main risks to review are ${symbols.join(", ")} based on current portfolio signals.`;
+}
+
 async function fetchRebalanceSummary(
   holdings: ImportedHolding[],
 ): Promise<RebalanceSummaryData> {
@@ -74,10 +93,14 @@ async function fetchRiskAlert(holdings: ImportedHolding[]): Promise<RiskAlertDat
   }>);
   if (import.meta.env.DEV) console.timeEnd("computeRiskScan");
   const concerns = data.concerns ?? [];
+  const rawSummary = data.dashboardSummary
+    ? stripPreamble(repairText(data.dashboardSummary))
+    : null;
+  const summary = isUsableSummary(rawSummary)
+    ? rawSummary
+    : deriveRiskSummary(concerns);
   return {
-    summary: data.dashboardSummary
-      ? stripPreamble(repairText(data.dashboardSummary))
-      : null,
+    summary,
     concerns: concerns.slice(0, 5),
     concernTotal: concerns.length,
     severityCounts: {

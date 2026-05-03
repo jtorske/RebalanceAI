@@ -1194,10 +1194,19 @@ function Dashboard() {
     [suggestionCards],
   );
 
-  const riskSeverityCounts = useMemo(
-    () => riskData?.severityCounts ?? { high: 0, medium: 0, low: 0 },
-    [riskData],
-  );
+  const riskSeverityCounts = useMemo(() => {
+    if (riskData?.severityCounts) return riskData.severityCounts;
+    if (holdings.length > 0) return getFallbackRiskAnalysis(holdings).severityCounts;
+    return { high: 0, medium: 0, low: 0 };
+  }, [riskData, holdings]);
+
+  const riskSummaryText = useMemo(() => {
+    if (riskData?.summary) return riskData.summary;
+    if (!isLoadingRiskSummary && holdings.length > 0) {
+      return "Risk analysis is temporarily unavailable.";
+    }
+    return "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.";
+  }, [riskData, isLoadingRiskSummary, holdings.length]);
 
   const riskScore = useMemo(
     () =>
@@ -1701,10 +1710,7 @@ function Dashboard() {
                       <>
                         <div className="dashboard-card-summary-block">
                           <p className="dashboard-risk-summary">
-                            {riskData?.summary ??
-                              (holdings.length > 0 && !isLoadingRiskSummary
-                                ? "Risk analysis is temporarily unavailable."
-                                : "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.")}
+                            {riskSummaryText}
                           </p>
                         </div>
 
