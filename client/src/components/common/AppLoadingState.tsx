@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import "./AppLoadingState.css";
 import type { ApiHealthStatus } from "../../hooks/useApiHealth";
 
@@ -13,7 +14,12 @@ const steps = [
 ];
 
 export function AppLoadingState({ status, onRetry }: AppLoadingStateProps) {
-  const isError = status === "error";
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setHasTimedOut(true), 60000);
+    return () => clearTimeout(timer);
+  }, []);
+  const isError = status === "error" && hasTimedOut;
 
   return (
     <main className="app-loading-shell">
@@ -32,7 +38,7 @@ export function AppLoadingState({ status, onRetry }: AppLoadingStateProps) {
           <p>
             {isError
               ? "Please refresh or try again shortly."
-              : "This can take up to a minute on the hosted demo while the API wakes up."}
+              : "Check back in a minute or so while the analytics engine starts up."}
           </p>
         </div>
 
