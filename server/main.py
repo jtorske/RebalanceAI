@@ -508,7 +508,23 @@ def get_portfolio_vs_market():
 
 @app.post("/market/portfolio-vs-market")
 def create_portfolio_vs_market(payload: HoldingsSummaryRequest):
-    return _compute_portfolio_vs_market(_serialize_holdings(payload.holdings))
+    try:
+        return _compute_portfolio_vs_market(_serialize_holdings(payload.holdings))
+    except Exception as exc:
+        logger.error("Error in POST /market/portfolio-vs-market: %s", exc, exc_info=True)
+        now = datetime.now(timezone.utc)
+        return {
+            "date": now.date().isoformat(),
+            "capturedAt": now.isoformat(),
+            "portfolioDailyPercent": None,
+            "marketDailyPercent": None,
+            "deltaPercent": None,
+            "comparisonSource": "unavailable",
+            "marketSource": "unavailable",
+            "quotesMatched": 0,
+            "benchmarks": [],
+            "perTicker": [],
+        }
 
 
 @app.get("/market/portfolio-performance-history")
@@ -951,10 +967,20 @@ def get_ai_summary(force: bool = False):
 
 @app.post("/market/ai-summary")
 def create_ai_summary(payload: HoldingsSummaryRequest, force: bool = False):
-    return _get_ai_summary_response(
-        force=force,
-        holdings_override=_serialize_holdings(payload.holdings),
-    )
+    try:
+        return _get_ai_summary_response(
+            force=force,
+            holdings_override=_serialize_holdings(payload.holdings),
+        )
+    except Exception as exc:
+        logger.error("Error in POST /market/ai-summary: %s", exc, exc_info=True)
+        return {
+            "summary": "Market summary is temporarily unavailable.",
+            "cached": False,
+            "source": "fallback",
+            "date": datetime.now(timezone.utc).date().isoformat(),
+            "portfolioDrivers": {"leaders": [], "laggards": []},
+        }
 
 
 def _fetch_market_cap_single(symbol: str) -> Optional[float]:
@@ -2373,20 +2399,32 @@ def get_rebalance_ai_summary():
 
 @app.post("/reweight/ai-summary")
 def create_rebalance_ai_summary(payload: HoldingsSummaryRequest):
-    plan = _build_rebalance_plan(
-        RebalancePlanRequest(
-            targetMode="capped_market_cap",
-            cashCad=0.0,
-            driftThresholdPct=2.0,
-            minTradeCad=50.0,
-            maxSingleStockPct=20.0,
-            fractionalShares=True,
-            cashFirst=True,
-            noSell=False,
-        ),
-        holdings_override=_serialize_holdings(payload.holdings),
-    )
-    return _build_rebalance_summary(plan)
+    try:
+        plan = _build_rebalance_plan(
+            RebalancePlanRequest(
+                targetMode="capped_market_cap",
+                cashCad=0.0,
+                driftThresholdPct=2.0,
+                minTradeCad=50.0,
+                maxSingleStockPct=20.0,
+                fractionalShares=True,
+                cashFirst=True,
+                noSell=False,
+            ),
+            holdings_override=_serialize_holdings(payload.holdings),
+        )
+        return _build_rebalance_summary(plan)
+    except Exception as exc:
+        logger.error("Error in POST /reweight/ai-summary: %s", exc, exc_info=True)
+        return {
+            "summary": "Rebalance summary is temporarily unavailable.",
+            "source": "fallback",
+            "mode": "capped_market_cap",
+            "overweights": [],
+            "underweights": [],
+            "topTrades": [],
+            "tradeCount": 0,
+        }
 
 
 @app.get("/portfolio/sector-breakdown")
@@ -2412,7 +2450,18 @@ def get_risk_analysis():
 
 @app.post("/risk/analysis")
 def create_risk_analysis(payload: HoldingsSummaryRequest):
-    return _build_risk_analysis(_serialize_holdings(payload.holdings))
+    try:
+        return _build_risk_analysis(_serialize_holdings(payload.holdings))
+    except Exception as exc:
+        logger.error("Error in POST /risk/analysis: %s", exc, exc_info=True)
+        return {
+            "summary": "Risk analysis is temporarily unavailable.",
+            "dashboardSummary": "Risk analysis is temporarily unavailable.",
+            "source": "fallback",
+            "concerns": [],
+            "holdingsAnalyzed": 0,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 @app.post("/tickers/enrich")
