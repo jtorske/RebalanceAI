@@ -1854,8 +1854,8 @@ function Dashboard() {
                       {donutStrokeSegments.map((segment) => {
                         const meta = chartMeta[segment.symbol];
                         const tooltip = meta?.name
-                          ? `${segment.symbol} — ${meta.name}\n${segment.weight.toFixed(1)}% · ${formatCompactCad(segment.valueCad)}`
-                          : `${segment.symbol}\n${segment.weight.toFixed(1)}% · ${formatCompactCad(segment.valueCad)}`;
+                          ? `${segment.symbol} — ${meta.name}\n${segment.weight.toFixed(1)}% · ${maskDollar(formatCompactCad(segment.valueCad))}`
+                          : `${segment.symbol}\n${segment.weight.toFixed(1)}% · ${maskDollar(formatCompactCad(segment.valueCad))}`;
                         return (
                           <button
                             className={`dashboard-donut-chip dashboard-donut-chip-${segment.labelSide}`}

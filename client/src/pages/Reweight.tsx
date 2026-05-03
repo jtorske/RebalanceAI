@@ -422,7 +422,9 @@ function Reweight() {
                 <span className="rw-rule-badge rw-rule-badge-warn">⚠ No-sell mode</span>
               )}
               <span className="rw-rule-badge">✓ Drift ≥ {driftThresholdPct}%</span>
-              <span className="rw-rule-badge">✓ Min trade CA${minTradeCad}</span>
+              <span className="rw-rule-badge">
+                ✓ Min trade {maskDollar(`CA$${minTradeCad}`)}
+              </span>
               {data?.notes.map((note) => (
                 <span className="rw-rule-badge rw-rule-badge-info" key={note}>
                   ↳ {note}
