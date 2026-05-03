@@ -1,0 +1,209 @@
+/* ── Wrapper ─────────────────────────────────────── */
+
+.ac-wrap {
+  background: var(--app-surface, #fff);
+  border: 1px solid var(--app-border, #ededf2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ac-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--app-border, #ededf2);
+}
+
+.ac-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text, #1a1a1d);
+}
+
+.ac-toggle-btn {
+  background: none;
+  border: 1px solid var(--app-border, #e0e0ea);
+  border-radius: 7px;
+  color: var(--app-muted, #888);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ac-toggle-btn:hover {
+  border-color: #8a6ef0;
+  color: #8a6ef0;
+}
+
+/* ── Table ───────────────────────────────────────── */
+
+.ac-table-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.ac-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 580px;
+  table-layout: fixed;
+}
+
+.ac-col-symbol { width: 28%; }
+.ac-col-pct    { width: 18%; }
+.ac-col-drift  { width: 10%; }
+
+.ac-table th {
+  background: var(--app-soft-surface, #f7f7fb);
+  color: var(--app-muted-strong, #4a4a55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 9px 14px;
+  text-align: left;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--app-border, #ededf2);
+}
+
+.ac-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--app-border, #f0f0f5);
+  vertical-align: top;
+}
+
+.ac-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ac-table tbody tr:hover td {
+  background: var(--app-soft-surface, #f7f7fb);
+}
+
+/* ── Symbol cell ─────────────────────────────────── */
+
+.ac-cell-symbol {
+  min-width: 0;
+}
+
+.ac-symbol {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text, #181818);
+}
+
+.ac-name {
+  display: block;
+  font-size: 11px;
+  color: var(--app-muted, #888);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Percentage cells ────────────────────────────── */
+
+.ac-cell-pct {
+  min-width: 0;
+}
+
+.ac-pct-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text, #181818);
+  font-variant-numeric: tabular-nums;
+}
+
+.ac-bar-track {
+  height: 4px;
+  background: var(--app-soft-surface, #ededf2);
+  border-radius: 2px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.ac-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.35s ease;
+}
+
+.ac-bar-current      { background: #6366f1; }
+.ac-bar-target       { background: #8a6ef0; }
+.ac-bar-after-buy    { background: #22c55e; }
+.ac-bar-after-sell   { background: #ef4444; }
+.ac-bar-after-hold   { background: #94a3b8; }
+
+/* ── Drift cell ──────────────────────────────────── */
+
+.ac-cell-drift {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ac-drift-neutral { color: var(--app-muted, #94a3b8); }
+.ac-drift-over    { color: #c0392b; }
+.ac-drift-under   { color: #1a8a3a; }
+
+/* ── Legend ──────────────────────────────────────── */
+
+.ac-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--app-border, #ededf2);
+  background: var(--app-soft-surface, #f7f7fb);
+}
+
+.ac-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--app-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ac-legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.ac-legend-current::before    { background: #6366f1; }
+.ac-legend-target::before     { background: #8a6ef0; }
+.ac-legend-after-buy::before  { background: #22c55e; }
+.ac-legend-after-sell::before { background: #ef4444; }
+.ac-legend-after-hold::before { background: #94a3b8; }
+
+/* ── Dark theme ──────────────────────────────────── */
+
+:root[data-theme="dark"] .ac-pct-value,
+:root[data-theme="dark"] .ac-symbol {
+  color: #eeeeea;
+}
+
+:root[data-theme="dark"] .ac-bar-track {
+  background: #2a2a3a;
+}
+
+:root[data-theme="dark"] .ac-table tbody tr:hover td {
+  background: rgba(124, 106, 245, 0.07);
+}
+
+:root[data-theme="dark"] .ac-drift-over  { color: #f87171; }
+:root[data-theme="dark"] .ac-drift-under { color: #4ade80; }

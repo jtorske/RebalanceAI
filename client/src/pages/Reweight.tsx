@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { computeHoldingsHash } from "../lib/dashboardCache";
 import { loadActiveHoldings } from "../services/activeHoldings";
+import { AllocationComparison, type AllocationRow } from "../components/rebalance/AllocationComparison";
 
 type TargetMode =
   | "capped_market_cap"
@@ -264,6 +265,31 @@ function Reweight() {
     );
   }, [data]);
 
+  const allocationRows = useMemo((): AllocationRow[] => {
+    if (!data) return [];
+    const newTotal = data.items.reduce(
+      (sum, item) => sum + item.currentValueCad + (item.tradeCad ?? 0),
+      0,
+    );
+    return data.items.map((item) => {
+      const afterValueCad = item.currentValueCad + (item.tradeCad ?? 0);
+      const afterPct = newTotal > 0 ? (afterValueCad / newTotal) * 100 : null;
+      const driftAfter =
+        afterPct !== null && item.targetWeight !== null
+          ? afterPct - item.targetWeight
+          : null;
+      return {
+        symbol: item.symbol,
+        name: item.name,
+        currentPct: item.currentWeight,
+        targetPct: item.targetWeight,
+        afterPct,
+        driftAfter,
+        action: item.action,
+      };
+    });
+  }, [data]);
+
   const handleSort = (key: ReweightSortKey) => {
     if (sortKey !== key || !sortDirection) { setSortKey(key); setSortDirection("desc"); return; }
     if (sortDirection === "desc") { setSortDirection("asc"); return; }
@@ -474,6 +500,14 @@ function Reweight() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── Allocation Comparison ── */}
+          {data && !hasNoHoldings && allocationRows.length > 0 && (
+            <AllocationComparison
+              rows={allocationRows}
+              maskPercent={settings.hideDollarAmounts}
+            />
           )}
 
           {/* ── Missing market cap warning ── */}
