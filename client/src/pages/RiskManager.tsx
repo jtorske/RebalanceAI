@@ -621,15 +621,7 @@ function RiskManager() {
                     </div>
                     <h3>{concern.title}</h3>
 
-                    <div className="risk-why-block">
-                      <span className="risk-section-label">Why it matters</span>
-                      <p>{concern.detail}</p>
-                    </div>
-
-                    <div className="risk-action-block">
-                      <span className="risk-section-label">Suggested action</span>
-                      <p className="risk-action-text">{buildRiskAction(concern)}</p>
-                    </div>
+                    <p className="risk-concern-detail">{concern.detail}</p>
 
                     <div className="risk-meta-row">
                       <span>{concern.category}</span>

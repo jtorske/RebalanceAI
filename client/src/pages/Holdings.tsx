@@ -36,6 +36,8 @@ import type {
   SortKey,
   SortDirection,
 } from "../lib/types";
+import { saveDataStatus } from "../lib/dataStatus";
+import { DataStatusPanel } from "../components/common/DataStatusPanel";
 
 function HoldingsPage() {
   const { settings } = useUserSettings();
@@ -113,6 +115,17 @@ function HoldingsPage() {
       window.removeEventListener("holdings-changed", loadPersistedHoldings);
     };
   }, [isDemoMode, portfolio, portfolioLoading, user]);
+
+  useEffect(() => {
+    if (persisted) {
+      saveDataStatus({
+        sourceFileName: persisted.source_file_name,
+        importedAt: persisted.imported_at,
+        holdingsCount: persisted.holdings.length,
+        fxRate: USD_TO_CAD_RATE,
+      });
+    }
+  }, [persisted]);
 
   useEffect(() => {
     clearLegacyDailyChangeCache();
@@ -591,6 +604,15 @@ function HoldingsPage() {
               </span>
             </article>
           </section>
+
+          <DataStatusPanel
+            override={{
+              sourceFileName: persisted?.source_file_name ?? null,
+              importedAt: persisted?.imported_at ?? null,
+              holdingsCount: persisted?.holdings.length ?? 0,
+              fxRate: USD_TO_CAD_RATE,
+            }}
+          />
 
           <section className="import-table-wrap">
             <div className="import-section-title-row">

@@ -246,10 +246,10 @@
 .dashboard-structured-card {
   --dashboard-card-header-height: 44px;
   --dashboard-card-summary-height: 168px;
-  --dashboard-card-middle-height: 120px;
+  --dashboard-card-middle-height: 80px;
   --dashboard-card-row-height: 36px;
   --dashboard-card-table-height: calc((var(--dashboard-card-row-height) * 5) + (4px * 7) + 38px);
-  --dashboard-card-footer-height: 78px;
+  --dashboard-card-footer-height: 124px;
 }
 
 .dashboard-card-title-row {
@@ -301,13 +301,22 @@
 
 .dashboard-structured-card-content {
   margin-top: 0;
-  display: grid;
-  grid-template-rows:
-    var(--dashboard-card-summary-height)
-    var(--dashboard-card-middle-height)
-    var(--dashboard-card-table-height)
-    var(--dashboard-card-footer-height);
+  display: flex;
+  flex-direction: column;
   gap: 14px;
+}
+
+/* Summary and middle: natural content height, no grid-row stretching */
+.dashboard-structured-card-content > .dashboard-card-summary-block,
+.dashboard-structured-card-content > .dashboard-card-middle-block {
+  flex-shrink: 0;
+  height: auto;
+}
+
+/* Table list: natural height inside flex (was height:100% for grid context) */
+.dashboard-structured-card-content .dashboard-action-list,
+.dashboard-structured-card-content .dashboard-risk-flags {
+  height: auto;
 }
 
 .dashboard-market-content {
@@ -930,12 +939,12 @@
 .dashboard-plan-snapshot,
 .dashboard-severity-mix {
   border-top: 1px solid var(--app-border, #e7e7ef);
-  padding-top: 10px;
+  padding-top: 12px;
   flex-shrink: 0;
-  min-height: 78px;
+  margin-top: auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .dashboard-plan-snapshot-grid,

@@ -15,6 +15,7 @@ import { useDemoMode } from "../lib/demoMode";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
 import { loadActiveHoldings } from "../services/activeHoldings";
+import { DataStatusPanel } from "../components/common/DataStatusPanel";
 import {
   computeHoldingsHash,
   loadMarketSummaryCache,
@@ -1569,6 +1570,7 @@ function Dashboard() {
               </div>
             </div>
           </section>
+          <DataStatusPanel />
         </main>
       </div>
     </div>
