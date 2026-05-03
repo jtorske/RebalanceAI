@@ -1,8 +1,4 @@
-export const tickerLogoMap: Record<string, string> = {
-  AMD: "/logos/amd.svg",
-  ANET: "/logos/anet.svg",
-  ETN: "/logos/etn.svg",
-};
+export const tickerLogoMap: Record<string, string> = {};
 
 export function getTickerLogoUrl(symbol: string): string | null {
   return tickerLogoMap[symbol.toUpperCase()] ?? null;

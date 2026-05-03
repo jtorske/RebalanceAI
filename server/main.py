@@ -24,12 +24,16 @@ OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 
 app = FastAPI()
 
+_CORS_ORIGINS_ENV = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:5174",
+)
+_cors_origins = [o.strip() for o in _CORS_ORIGINS_ENV.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://localhost:5173",
-    "https://your-vercel-app.vercel.app",
-],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -425,6 +429,15 @@ def _compute_portfolio_vs_market(
         "perTicker": per_ticker,
     }
     return snapshot
+
+@app.on_event("startup")
+async def log_routes():
+    print("=== RebalanceX API routes ===", flush=True)
+    for route in app.routes:
+        methods = ",".join(sorted(getattr(route, "methods", None) or []))
+        print(f"  {methods or '?':8s}  {getattr(route, 'path', route)}", flush=True)
+    print("=============================", flush=True)
+
 
 @app.get("/")
 def root():
