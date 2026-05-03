@@ -1,4 +1,3 @@
-import { API_BASE_URL } from "../lib/constants";
 import { supabase } from "../lib/supabase";
 import type { HoldingsResponse, ImportedHolding } from "../lib/types";
 import {
@@ -143,24 +142,4 @@ export function buildHoldingsResponse(
     imported_at: new Date().toISOString(),
     holdings,
   };
-}
-
-export async function syncBackendHoldings(
-  holdings: ImportedHolding[],
-  sourceFileName = "Supabase",
-): Promise<void> {
-  if (holdings.length === 0) {
-    await fetch(`${API_BASE_URL}/holdings`, { method: "DELETE" }).catch(() => {});
-    return;
-  }
-
-  await fetch(`${API_BASE_URL}/holdings/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      source_file_name: sourceFileName,
-      as_of: null,
-      holdings,
-    }),
-  }).catch(() => {});
 }

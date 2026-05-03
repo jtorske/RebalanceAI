@@ -12,6 +12,10 @@ import "./RoutePage.css";
 import "./KeyInsights.css";
 import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings } from "../lib/userSettings";
+import { useAuth } from "../context/AuthContext";
+import { useDemoMode } from "../lib/demoMode";
+import { computeHoldingsHash } from "../lib/dashboardCache";
+import { loadActiveHoldings } from "../services/activeHoldings";
 
 type Insight = {
   title: string;
@@ -63,16 +67,14 @@ function scoreColor(score: number): string {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const INSIGHTS_CACHE_KEY = "key-insights";
+const INSIGHTS_CACHE_KEY = "key-insights-v2";
 
 function KeyInsights() {
   const { settings } = useUserSettings();
-  const [data, setData] = useState<KeyInsightsResponse | null>(
-    () => sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY),
-  );
-  const [isLoading, setIsLoading] = useState(
-    () => !sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY),
-  );
+  const { portfolio } = useAuth();
+  const { isDemoMode } = useDemoMode();
+  const [data, setData] = useState<KeyInsightsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [earningsEvents, setEarningsEvents] = useState<EarningsEvent[]>([]);
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
@@ -85,24 +87,33 @@ function KeyInsights() {
     settings.hideDollarAmounts ? "..." : displayValue;
 
   const loadInsights = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = sessionCacheGet<KeyInsightsResponse>(INSIGHTS_CACHE_KEY);
-      if (cached) {
-        setData(cached);
-        setIsLoading(false);
-        return;
-      }
-    }
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/portfolio/key-insights`);
+      const holdings = await loadActiveHoldings({
+        portfolioId: portfolio?.id,
+        isDemoMode,
+      });
+      const cacheKey = `${INSIGHTS_CACHE_KEY}:${computeHoldingsHash(holdings)}`;
+      if (!force) {
+        const cached = sessionCacheGet<KeyInsightsResponse>(cacheKey);
+        if (cached) {
+          setData(cached);
+          setIsLoading(false);
+          return;
+        }
+      }
+      const response = await fetch(`${API_BASE_URL}/portfolio/key-insights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holdings }),
+      });
       if (!response.ok) {
         throw new Error("Failed to load key insights.");
       }
       const json = (await response.json()) as KeyInsightsResponse;
       const cleaned = { ...json, summary: stripPreamble(json.summary ?? "") };
-      sessionCacheSet(INSIGHTS_CACHE_KEY, cleaned);
+      sessionCacheSet(cacheKey, cleaned);
       setData(cleaned);
     } catch (err) {
       setError(
@@ -112,7 +123,7 @@ function KeyInsights() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isDemoMode, portfolio]);
 
   useEffect(() => {
     void loadInsights();
@@ -127,7 +138,15 @@ function KeyInsights() {
   useEffect(() => {
     const loadEarnings = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`);
+        const holdings = await loadActiveHoldings({
+          portfolioId: portfolio?.id,
+          isDemoMode,
+        });
+        const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holdings }),
+        });
         if (res.ok) {
           const d = (await res.json()) as { events: EarningsEvent[] };
           setEarningsEvents(d.events ?? []);
@@ -139,7 +158,7 @@ function KeyInsights() {
     void loadEarnings();
     window.addEventListener("holdings-changed", loadEarnings);
     return () => window.removeEventListener("holdings-changed", loadEarnings);
-  }, []);
+  }, [isDemoMode, portfolio]);
 
   return (
     <div className="route-page">

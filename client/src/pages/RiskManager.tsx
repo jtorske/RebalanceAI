@@ -14,7 +14,11 @@ import "./RoutePage.css";
 import "./RiskManager.css";
 import { API_BASE_URL } from "../lib/constants";
 import { convertToCad } from "../lib/holdingsUtils";
-import type { HoldingsResponse, ImportedHolding } from "../lib/types";
+import { useAuth } from "../context/AuthContext";
+import { useDemoMode } from "../lib/demoMode";
+import { computeHoldingsHash } from "../lib/dashboardCache";
+import { loadActiveHoldings } from "../services/activeHoldings";
+import type { ImportedHolding } from "../lib/types";
 
 type RiskMetrics = {
   beta?: number;
@@ -342,28 +346,18 @@ function RiskDetailDialog({
   );
 }
 
-const RISK_CACHE_KEY = "risk-analysis";
+const RISK_CACHE_KEY = "risk-analysis-v2";
 
 function RiskManager() {
-  const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(
-    () => sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY),
-  );
-  const [isLoading, setIsLoading] = useState(
-    () => !sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY),
-  );
+  const { portfolio } = useAuth();
+  const { isDemoMode } = useDemoMode();
+  const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedConcern, setSelectedConcern] = useState<RiskConcern | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "high" | "medium" | "low">("all");
 
   const loadRiskAnalysis = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = sessionCacheGet<RiskAnalysisResponse>(RISK_CACHE_KEY);
-      if (cached) {
-        setAnalysis(cached);
-        setIsLoading(false);
-        return;
-      }
-    }
     setIsLoading(true);
     setError(null);
 
@@ -372,13 +366,27 @@ function RiskManager() {
     let sectorBreakdown: SectorBreakdownEntry[] = [];
 
     try {
-      const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
-      if (holdingsRes.ok) {
-        const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
-        holdingsCount = holdingsData.holdings.length;
-        holdingsList = holdingsData.holdings;
+      holdingsList = await loadActiveHoldings({
+        portfolioId: portfolio?.id,
+        isDemoMode,
+      });
+      holdingsCount = holdingsList.length;
+      const cacheKey = `${RISK_CACHE_KEY}:${computeHoldingsHash(holdingsList)}`;
+      if (!force) {
+        const cached = sessionCacheGet<RiskAnalysisResponse>(cacheKey);
+        if (cached) {
+          setAnalysis(cached);
+          setIsLoading(false);
+          return;
+        }
+      }
 
-        const sectorRes = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`);
+      if (holdingsList.length > 0) {
+        const sectorRes = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holdings: holdingsList }),
+        });
         if (sectorRes.ok) {
           const sectorData = (await sectorRes.json()) as SectorBreakdownResponse;
           if ((sectorData.sectors ?? []).length > 0) {
@@ -395,7 +403,11 @@ function RiskManager() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/risk/analysis`);
+      const response = await fetch(`${API_BASE_URL}/risk/analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holdings: holdingsList }),
+      });
       if (!response.ok) throw new Error("Failed to load risk analysis.");
       const data = (await response.json()) as RiskAnalysisResponse;
 
@@ -413,7 +425,7 @@ function RiskManager() {
         concerns: mergedConcerns,
         holdingsAnalyzed: data.holdingsAnalyzed || holdingsCount,
       };
-      sessionCacheSet(RISK_CACHE_KEY, result);
+      sessionCacheSet(`${RISK_CACHE_KEY}:${computeHoldingsHash(holdingsList)}`, result);
       setAnalysis(result);
     } catch (err) {
       const sectorConcerns = buildSectorConcentrationConcerns(sectorBreakdown);
@@ -440,7 +452,7 @@ function RiskManager() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isDemoMode, portfolio]);
 
   useEffect(() => {
     void loadRiskAnalysis();

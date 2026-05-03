@@ -6,7 +6,7 @@ import {
   getOrCreateMainPortfolio,
   type Portfolio,
 } from "../services/portfolioService";
-import { getHoldings, syncBackendHoldings } from "../services/holdingsService";
+import { getHoldings } from "../services/holdingsService";
 
 type AuthContextType = {
   user: User | null;
@@ -48,7 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPortfolio(mainPortfolio);
       const savedHoldings = await getHoldings(mainPortfolio.id);
       setSavedHoldingsCount(savedHoldings.length);
-      await syncBackendHoldings(savedHoldings);
       window.dispatchEvent(new Event("holdings-changed"));
     } finally {
       setPortfolioLoading(false);

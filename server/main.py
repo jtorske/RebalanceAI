@@ -1,12 +1,11 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-from pathlib import Path
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta, timezone
-from contextvars import ContextVar
 import json
 import logging
+import os
 import time
 import requests
 import yfinance as yf
@@ -21,6 +20,7 @@ _risk_profile_cache: Dict[str, Dict[str, Any]] = {}
 _ticker_metadata_cache: Dict[str, Dict[str, Any]] = {}  # symbol → {data, fetched_at}
 TICKER_METADATA_TTL = 7 * 24 * 3600  # 7 days
 AI_SUMMARY_PROMPT_VERSION = "summary-v5"
+OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 
 app = FastAPI()
 
@@ -71,6 +71,10 @@ class HoldingsImportRequest(BaseModel):
     holdings: List[ImportedHolding]
 
 
+class HoldingsSummaryRequest(BaseModel):
+    holdings: List[ImportedHolding] = []
+
+
 class ManualTarget(BaseModel):
     symbol: str
     targetWeight: float
@@ -93,9 +97,10 @@ class RebalancePlanRequest(BaseModel):
     manualMarketCaps: Dict[str, float] = {}
 
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
-HOLDINGS_STORE_FILE = DATA_DIR / "holdings_store.json"
-PORTFOLIO_DAILY_PERF_FILE = DATA_DIR / "portfolio_daily_performance.json"
+class RebalancePlanWithHoldingsRequest(RebalancePlanRequest):
+    holdings: List[ImportedHolding] = []
+
+
 BENCHMARKS = [
     {"symbol": "VT", "name": "Total World Stock Market"},
     {"symbol": "VTI", "name": "Total US Stock Market"},
@@ -123,153 +128,6 @@ ETF_SYMBOLS = {
     "XIU",
     "ZAG",
 }
-
-
-def _default_store() -> Dict[str, Any]:
-    return {
-        "source_file_name": None,
-        "as_of": None,
-        "imported_at": None,
-        "holdings": [],
-    }
-
-
-_demo_mode_active = False
-
-_DEMO_STORE: Dict[str, Any] = {
-    "source_file_name": "demo-portfolio.csv",
-    "as_of": "2026-04-25",
-    "imported_at": "2026-04-25T00:00:00Z",
-    "holdings": [
-        {
-            "account_name": "TFSA", "account_type": "TFSA",
-            "account_classification": "Tax-Free Savings Account", "account_number": "DEMO-001",
-            "symbol": "XEQT", "exchange": "TSX", "mic": "XTSE",
-            "name": "iShares Core Equity ETF Portfolio", "security_type": "ETF",
-            "quantity": 120.0, "position_direction": "Long",
-            "market_price": 32.85, "market_price_currency": "CAD",
-            "book_value_cad": 3600.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 3600.0, "book_value_currency_market": "CAD",
-            "market_value": 3942.0, "market_value_currency": "CAD",
-            "market_unrealized_returns": 342.0, "market_unrealized_returns_currency": "CAD",
-        },
-        {
-            "account_name": "RRSP", "account_type": "RRSP",
-            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
-            "symbol": "AAPL", "exchange": "NASDAQ", "mic": "XNAS",
-            "name": "Apple Inc.", "security_type": "Common Stock",
-            "quantity": 25.0, "position_direction": "Long",
-            "market_price": 187.50, "market_price_currency": "USD",
-            "book_value_cad": 5200.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 3800.0, "book_value_currency_market": "USD",
-            "market_value": 4687.50, "market_value_currency": "USD",
-            "market_unrealized_returns": 887.50, "market_unrealized_returns_currency": "USD",
-        },
-        {
-            "account_name": "RRSP", "account_type": "RRSP",
-            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
-            "symbol": "MSFT", "exchange": "NASDAQ", "mic": "XNAS",
-            "name": "Microsoft Corporation", "security_type": "Common Stock",
-            "quantity": 12.0, "position_direction": "Long",
-            "market_price": 415.00, "market_price_currency": "USD",
-            "book_value_cad": 5800.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 4200.0, "book_value_currency_market": "USD",
-            "market_value": 4980.00, "market_value_currency": "USD",
-            "market_unrealized_returns": 780.00, "market_unrealized_returns_currency": "USD",
-        },
-        {
-            "account_name": "Margin", "account_type": "Margin",
-            "account_classification": "Margin Account", "account_number": "DEMO-003",
-            "symbol": "AMD", "exchange": "NASDAQ", "mic": "XNAS",
-            "name": "Advanced Micro Devices Inc.", "security_type": "Common Stock",
-            "quantity": 40.0, "position_direction": "Long",
-            "market_price": 125.00, "market_price_currency": "USD",
-            "book_value_cad": 5100.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 3700.0, "book_value_currency_market": "USD",
-            "market_value": 5000.00, "market_value_currency": "USD",
-            "market_unrealized_returns": 1300.00, "market_unrealized_returns_currency": "USD",
-        },
-        {
-            "account_name": "TFSA", "account_type": "TFSA",
-            "account_classification": "Tax-Free Savings Account", "account_number": "DEMO-001",
-            "symbol": "TD", "exchange": "TSX", "mic": "XTSE",
-            "name": "Toronto-Dominion Bank", "security_type": "Common Stock",
-            "quantity": 50.0, "position_direction": "Long",
-            "market_price": 78.40, "market_price_currency": "CAD",
-            "book_value_cad": 3600.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 3600.0, "book_value_currency_market": "CAD",
-            "market_value": 3920.00, "market_value_currency": "CAD",
-            "market_unrealized_returns": 320.00, "market_unrealized_returns_currency": "CAD",
-        },
-        {
-            "account_name": "Margin", "account_type": "Margin",
-            "account_classification": "Margin Account", "account_number": "DEMO-003",
-            "symbol": "CEG", "exchange": "NASDAQ", "mic": "XNAS",
-            "name": "Constellation Energy Corporation", "security_type": "Common Stock",
-            "quantity": 8.0, "position_direction": "Long",
-            "market_price": 265.00, "market_price_currency": "USD",
-            "book_value_cad": 2400.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 1750.0, "book_value_currency_market": "USD",
-            "market_value": 2120.00, "market_value_currency": "USD",
-            "market_unrealized_returns": 370.00, "market_unrealized_returns_currency": "USD",
-        },
-        {
-            "account_name": "RRSP", "account_type": "RRSP",
-            "account_classification": "Registered Retirement Savings Plan", "account_number": "DEMO-002",
-            "symbol": "GOOG", "exchange": "NASDAQ", "mic": "XNAS",
-            "name": "Alphabet Inc.", "security_type": "Common Stock",
-            "quantity": 20.0, "position_direction": "Long",
-            "market_price": 168.00, "market_price_currency": "USD",
-            "book_value_cad": 3100.0, "book_value_currency_cad": "CAD",
-            "book_value_market": 2250.0, "book_value_currency_market": "USD",
-            "market_value": 3360.00, "market_value_currency": "USD",
-            "market_unrealized_returns": 1110.00, "market_unrealized_returns_currency": "USD",
-        },
-    ],
-}
-
-
-def _default_perf_store() -> Dict[str, Any]:
-    return {
-        "snapshots": [],
-    }
-
-
-def _load_store() -> Dict[str, Any]:
-    if _demo_mode_active:
-        return _DEMO_STORE
-
-    if not HOLDINGS_STORE_FILE.exists():
-        return _default_store()
-
-    try:
-        with HOLDINGS_STORE_FILE.open("r", encoding="utf-8") as file_handle:
-            return json.load(file_handle)
-    except (json.JSONDecodeError, OSError):
-        return _default_store()
-
-
-def _save_store(store: Dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with HOLDINGS_STORE_FILE.open("w", encoding="utf-8") as file_handle:
-        json.dump(store, file_handle, indent=2)
-
-
-def _load_perf_store() -> Dict[str, Any]:
-    if not PORTFOLIO_DAILY_PERF_FILE.exists():
-        return _default_perf_store()
-
-    try:
-        with PORTFOLIO_DAILY_PERF_FILE.open("r", encoding="utf-8") as file_handle:
-            return json.load(file_handle)
-    except (json.JSONDecodeError, OSError):
-        return _default_perf_store()
-
-
-def _save_perf_store(store: Dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with PORTFOLIO_DAILY_PERF_FILE.open("w", encoding="utf-8") as file_handle:
-        json.dump(store, file_handle, indent=2)
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -427,21 +285,17 @@ def _fetch_benchmark_quotes() -> List[Dict[str, Any]]:
     return quotes
 
 
-def _upsert_daily_snapshot(snapshot: Dict[str, Any]) -> None:
-    store = _load_perf_store()
-    snapshots = store.get("snapshots", [])
-    day_key = snapshot.get("date")
-
-    filtered = [item for item in snapshots if item.get("date") != day_key]
-    filtered.append(snapshot)
-    filtered.sort(key=lambda item: item.get("date", ""))
-    store["snapshots"] = filtered[-120:]
-    _save_perf_store(store)
+def _serialize_holdings(holdings: List[Any]) -> List[Dict[str, Any]]:
+    return [
+        holding.model_dump() if isinstance(holding, BaseModel) else dict(holding)
+        for holding in holdings
+    ]
 
 
-def _compute_portfolio_vs_market() -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _compute_portfolio_vs_market(
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
     quote_symbol_to_original: Dict[str, str] = {}
 
     for holding in holdings:
@@ -570,8 +424,6 @@ def _compute_portfolio_vs_market() -> Dict[str, Any]:
         "benchmarks": benchmarks,
         "perTicker": per_ticker,
     }
-    _upsert_daily_snapshot(snapshot)
-
     return snapshot
 
 @app.get("/")
@@ -610,7 +462,10 @@ def debug_source_file():
 
 @app.get("/holdings")
 def get_holdings():
-    return _load_store()
+    raise HTTPException(
+        status_code=410,
+        detail="Backend JSON holdings storage has been removed. Load holdings from Supabase in the frontend and POST them to calculation endpoints.",
+    )
 
 
 @app.get("/market/benchmarks")
@@ -620,37 +475,39 @@ def get_market_benchmarks():
 
 @app.get("/market/portfolio-vs-market")
 def get_portfolio_vs_market():
-    return _compute_portfolio_vs_market()
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /market/portfolio-vs-market with holdings in the request body.",
+    )
+
+
+@app.post("/market/portfolio-vs-market")
+def create_portfolio_vs_market(payload: HoldingsSummaryRequest):
+    return _compute_portfolio_vs_market(_serialize_holdings(payload.holdings))
 
 
 @app.get("/market/portfolio-performance-history")
 def get_portfolio_performance_history():
-    store = _load_perf_store()
-    return {
-        "snapshots": store.get("snapshots", []),
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Backend file-based performance history has been removed.",
+    )
 
 
 @app.post("/holdings/import")
 def import_holdings(payload: HoldingsImportRequest):
-    store = {
-        "source_file_name": payload.source_file_name,
-        "as_of": payload.as_of,
-        "imported_at": datetime.now(timezone.utc).isoformat(),
-        "holdings": [holding.model_dump() for holding in payload.holdings],
-    }
-    _save_store(store)
-
-    return {
-        "message": "Holdings imported and saved.",
-        "count": len(payload.holdings),
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Backend JSON holdings imports have been removed. Save holdings to Supabase from the frontend.",
+    )
 
 
 @app.delete("/holdings")
 def clear_holdings():
-    _save_store(_default_store())
-    return {"message": "Saved holdings cleared."}
+    raise HTTPException(
+        status_code=410,
+        detail="Backend JSON holdings storage has been removed. Delete holdings through Supabase from the frontend.",
+    )
 
 def _repair_text_encoding(value: str) -> str:
     value = value.replace(chr(0x00E2) + chr(0x0080) + chr(0x0099), "'")
@@ -694,6 +551,42 @@ def _strip_llm_preamble(text: str) -> str:
     return text.strip()
 
 
+def _is_local_ollama_enabled() -> bool:
+    env_name = (
+        os.getenv("APP_ENV")
+        or os.getenv("ENV")
+        or os.getenv("FASTAPI_ENV")
+        or ""
+    ).strip().lower()
+    if os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"):
+        return False
+    if env_name in {"production", "prod"}:
+        return False
+    if os.getenv("DISABLE_OLLAMA", "").strip().lower() in {"1", "true", "yes"}:
+        return False
+    return True
+
+
+def _try_ollama_polish(prompt: str, timeout: int = 12) -> Optional[str]:
+    if not _is_local_ollama_enabled():
+        return None
+
+    try:
+        resp = requests.post(
+            OLLAMA_GENERATE_URL,
+            json={"model": "llama3.2", "prompt": prompt, "stream": False},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        text = _strip_llm_preamble(
+            _repair_text_encoding(resp.json().get("response", "").strip())
+        )
+        return text or None
+    except Exception as err:
+        logger.debug("Local Ollama polish skipped: %s", err)
+        return None
+
+
 def _format_percent(value: Optional[float]) -> str:
     if value is None:
         return "N/A"
@@ -706,9 +599,12 @@ def _format_percentage_points(value: Optional[float]) -> str:
     return f"{value:+.2f} pp"
 
 
-def _get_portfolio_movers(snapshot: Dict[str, Any], max_items: int = 3) -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _get_portfolio_movers(
+    snapshot: Dict[str, Any],
+    max_items: int = 3,
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
 
     value_by_symbol: Dict[str, float] = {}
     for holding in holdings:
@@ -777,10 +673,13 @@ def _format_mover_list(movers: List[Dict[str, Any]]) -> str:
     )
 
 
-def _build_portfolio_driver_sentence(snapshot: Dict[str, Any]) -> str:
+def _build_portfolio_driver_sentence(
+    snapshot: Dict[str, Any],
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> str:
     portfolio_daily = _to_float(snapshot.get("portfolioDailyPercent"))
     market_daily = _to_float(snapshot.get("marketDailyPercent"))
-    movers = _get_portfolio_movers(snapshot)
+    movers = _get_portfolio_movers(snapshot, holdings_override=holdings_override)
     leaders = movers["leaders"]
     laggards = movers["laggards"]
 
@@ -850,10 +749,13 @@ def _format_directional_percent(value: Optional[float]) -> str:
     return "flat at 0.00%"
 
 
-def _build_fallback_ai_summary(snapshot: Dict[str, Any]) -> Optional[str]:
+def _build_fallback_ai_summary(
+    snapshot: Dict[str, Any],
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
     portfolio_daily = _to_float(snapshot.get("portfolioDailyPercent"))
     market_daily = _to_float(snapshot.get("marketDailyPercent"))
-    movers = _get_portfolio_movers(snapshot)
+    movers = _get_portfolio_movers(snapshot, holdings_override=holdings_override)
     driver_symbols = [
         item["symbol"]
         for item in sorted(
@@ -903,11 +805,13 @@ def _build_fallback_ai_summary(snapshot: Dict[str, Any]) -> Optional[str]:
     )
 
 
-@app.get("/market/ai-summary")
-def get_ai_summary(force: bool = False):
+def _get_ai_summary_response(
+    force: bool = False,
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+):
     today = datetime.now(timezone.utc).date().isoformat()
 
-    portfolio_snapshot = _compute_portfolio_vs_market()
+    portfolio_snapshot = _compute_portfolio_vs_market(holdings_override)
     benchmarks = portfolio_snapshot.get("benchmarks", [])
     benchmark_lines = []
     for b in benchmarks:
@@ -925,6 +829,15 @@ def get_ai_summary(force: bool = False):
             }
             for item in portfolio_snapshot.get("perTicker", [])
         ],
+        "holdingsSource": "request" if holdings_override is not None else "store",
+        "holdings": [
+            {
+                "symbol": item.get("symbol"),
+                "marketValue": item.get("market_value"),
+                "quantity": item.get("quantity"),
+            }
+            for item in (holdings_override or [])
+        ],
     }
     cache_key = f"{today}:{AI_SUMMARY_PROMPT_VERSION}:{json.dumps(cache_payload, sort_keys=True)}"
 
@@ -933,63 +846,62 @@ def get_ai_summary(force: bool = False):
         return {
             "summary": cached.get("summary"),
             "cached": True,
-            "source": cached.get("source", "llm"),
+            "source": cached.get("source", "fallback"),
             "date": today,
             "portfolioDrivers": cached.get("portfolioDrivers", {"leaders": [], "laggards": []}),
         }
 
-    prompt = (
-        f"Today's benchmark moves ({today}):\n"
-        + "\n".join(benchmark_lines)
-        + "\n\nWrite exactly 1 sentence of market commentary for a portfolio dashboard. "
-        "Summarize the benchmark moves only. Do not mention headlines, news, or causes. "
-        "Be factual, neutral, and concise."
+    fallback_summary = _build_fallback_ai_summary(
+        portfolio_snapshot,
+        holdings_override=holdings_override,
+    ) or (
+        "No portfolio or benchmark quote data is available yet, so a market summary "
+        "cannot be calculated from current holdings."
+    )
+    portfolio_drivers = _get_portfolio_movers(
+        portfolio_snapshot,
+        holdings_override=holdings_override,
     )
 
-    try:
-        resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        commentary = resp.json().get("response", "").strip()
-        if not commentary:
-            raise ValueError("LLM returned an empty summary")
-        summary = _build_ai_summary(
-            commentary,
-            _build_portfolio_driver_sentence(portfolio_snapshot),
-        )
-        _ai_summary_cache[cache_key] = {
-            "summary": summary,
-            "source": "llm",
-            "portfolioDrivers": _get_portfolio_movers(portfolio_snapshot),
-        }
-        return {
-            "summary": summary,
-            "cached": False,
-            "source": "llm",
-            "date": today,
-            "portfolioDrivers": _get_portfolio_movers(portfolio_snapshot),
-        }
-    except Exception as err:
-        logger.warning("AI summary unavailable; using fallback: %s", err)
-        summary = _build_fallback_ai_summary(portfolio_snapshot)
-        portfolio_drivers = _get_portfolio_movers(portfolio_snapshot)
-        if summary:
-            _ai_summary_cache[cache_key] = {
-                "summary": summary,
-                "source": "fallback",
-                "portfolioDrivers": portfolio_drivers,
-            }
-        return {
-            "summary": summary,
-            "cached": False,
-            "source": "fallback",
-            "error": str(err),
-            "date": today,
-            "portfolioDrivers": portfolio_drivers,
-        }
+    prompt = (
+        "Polish this portfolio dashboard market summary without changing any facts, "
+        "numbers, or ticker symbols. Return one or two concise professional sentences. "
+        "Do not add news, causes, recommendations, or extra context.\n\n"
+        f"Benchmark context for verification:\n{chr(10).join(benchmark_lines)}\n\n"
+        f"Summary to polish:\n{fallback_summary}"
+    )
+    polished = _try_ollama_polish(prompt, timeout=12)
+    summary = polished or fallback_summary
+    source = "ollama" if polished else "fallback"
+
+    _ai_summary_cache[cache_key] = {
+        "summary": summary,
+        "source": source,
+        "portfolioDrivers": portfolio_drivers,
+    }
+    return {
+        "summary": summary,
+        "cached": False,
+        "source": source,
+        "date": today,
+        "portfolioDrivers": portfolio_drivers,
+    }
+
+
+@app.get("/market/ai-summary")
+def get_ai_summary(force: bool = False):
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /market/ai-summary with holdings in the request body.",
+    )
+
+
+@app.post("/market/ai-summary")
+def create_ai_summary(payload: HoldingsSummaryRequest, force: bool = False):
+    return _get_ai_summary_response(
+        force=force,
+        holdings_override=_serialize_holdings(payload.holdings),
+    )
 
 
 def _fetch_market_cap_single(symbol: str) -> Optional[float]:
@@ -1269,9 +1181,10 @@ def _sector_for_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_sector_breakdown() -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _build_sector_breakdown(
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
     by_sector: Dict[str, float] = {}
     per_ticker: List[Dict[str, Any]] = []
     total_value_cad = 0.0
@@ -1425,10 +1338,13 @@ def _fallback_risk_summary(concerns: List[Dict[str, Any]]) -> str:
     return f"The main risks to review are {readable}. Check whether these positions are intentional, especially if they combine high weight, small market cap, volatility, or near-term catalysts."
 
 
-def _ai_risk_summary(concerns: List[Dict[str, Any]], holdings_count: int) -> str:
+def _ai_risk_summary(
+    concerns: List[Dict[str, Any]],
+    holdings_count: int,
+) -> Tuple[str, str]:
     fallback = _fallback_risk_summary(concerns)
     if not concerns:
-        return fallback
+        return fallback, "fallback"
 
     concern_lines = [
         f"- {item['symbol']}: {item['title']} | {item['detail']} | severity={item['severity']}"
@@ -1441,28 +1357,19 @@ def _ai_risk_summary(concerns: List[Dict[str, Any]], holdings_count: int) -> str
         + "\n".join(concern_lines)
     )
 
-    try:
-        resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=12,
-        )
-        resp.raise_for_status()
-        text = _strip_llm_preamble(_repair_text_encoding(resp.json().get("response", "").strip()))
-        return text or fallback
-    except Exception as err:
-        logger.debug("AI risk summary fallback used: %s", err)
-        return fallback
+    polished = _try_ollama_polish(prompt, timeout=12)
+    return (polished, "ollama") if polished else (fallback, "fallback")
 
 
-def _build_risk_analysis() -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _build_risk_analysis(
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
     positions = _prepare_rebalance_positions(holdings)
     total_value = sum(item["currentValueCad"] for item in positions)
     concerns: List[Dict[str, Any]] = []
 
-    sector_data = _build_sector_breakdown()
+    sector_data = _build_sector_breakdown(holdings)
     for sector in sector_data.get("sectors", []):
         weight = _to_float(sector.get("weight")) or 0.0
         if weight >= 45:
@@ -1629,12 +1536,13 @@ def _build_risk_analysis() -> Dict[str, Any]:
         )
     )
     concerns = concerns[:12]
-    summary = _ai_risk_summary(concerns, len(positions))
+    summary, summary_source = _ai_risk_summary(concerns, len(positions))
     dashboard_summary = _first_sentence(summary) or _fallback_risk_summary(concerns)
 
     return {
         "summary": summary,
         "dashboardSummary": dashboard_summary,
+        "source": summary_source,
         "concerns": concerns,
         "holdingsAnalyzed": len(positions),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -1703,10 +1611,10 @@ def _fallback_key_insights_summary(insights: List[Dict[str, Any]]) -> str:
     return f"Key patterns to review include {highlights}. Use these as prompts for research rather than automatic trade instructions."
 
 
-def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> str:
+def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> Tuple[str, str]:
     fallback = _fallback_key_insights_summary(insights)
     if not insights:
-        return fallback
+        return fallback, "fallback"
 
     insight_lines = [
         f"- {item['title']}: {item['detail']} | category={item['category']}"
@@ -1719,31 +1627,23 @@ def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> str:
         + "\n".join(insight_lines)
     )
 
-    try:
-        resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=12,
-        )
-        resp.raise_for_status()
-        text = _strip_llm_preamble(_repair_text_encoding(resp.json().get("response", "").strip()))
-        return text or fallback
-    except Exception as err:
-        logger.debug("AI key insights fallback used: %s", err)
-        return fallback
+    polished = _try_ollama_polish(prompt, timeout=12)
+    return (polished, "ollama") if polished else (fallback, "fallback")
 
 
-def _build_key_insights() -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _build_key_insights(
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
     positions = _prepare_rebalance_positions(holdings)
     total_value = sum(item["currentValueCad"] for item in positions)
-    sector_data = _build_sector_breakdown()
+    sector_data = _build_sector_breakdown(holdings)
     insights: List[Dict[str, Any]] = []
 
     if not holdings or total_value <= 0:
         return {
             "summary": _fallback_key_insights_summary([]),
+            "source": "fallback",
             "insights": [],
             "topPerformers": [],
             "laggards": [],
@@ -1897,10 +1797,11 @@ def _build_key_insights() -> Dict[str, Any]:
             "neutral",
         )
 
-    summary = _ai_key_insights_summary(insights)
+    summary, summary_source = _ai_key_insights_summary(insights)
 
     return {
         "summary": summary,
+        "source": summary_source,
         "insights": insights[:10],
         "topPerformers": top_performers,
         "laggards": laggards,
@@ -2218,9 +2119,11 @@ def _generate_rebalance_trades(
     return sorted(items, key=lambda row: abs(row.get("tradeCad") or 0), reverse=True)
 
 
-def _build_rebalance_plan(request: RebalancePlanRequest) -> Dict[str, Any]:
-    store = _load_store()
-    holdings = store.get("holdings", [])
+def _build_rebalance_plan(
+    request: RebalancePlanRequest,
+    holdings_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    holdings = holdings_override or []
 
     if not holdings:
         return {
@@ -2228,7 +2131,7 @@ def _build_rebalance_plan(request: RebalancePlanRequest) -> Dict[str, Any]:
             "totalValueCad": 0.0,
             "cashCad": request.cashCad,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "settings": request.model_dump(),
+            "settings": request.model_dump(exclude={"holdings"}),
             "notes": [],
         }
 
@@ -2260,7 +2163,7 @@ def _build_rebalance_plan(request: RebalancePlanRequest) -> Dict[str, Any]:
         "totalBuyCad": round(total_buy, 2),
         "totalSellCad": round(total_sell, 2),
         "excludedCount": excluded_count,
-        "settings": request.model_dump(),
+        "settings": request.model_dump(exclude={"holdings"}),
         "notes": target_plan["notes"],
         "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
@@ -2288,6 +2191,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     if not items:
         return {
             "summary": "Import your holdings first, then the dashboard can suggest a rebalance plan based on your actual portfolio weights.",
+            "source": "fallback",
             "mode": "capped_market_cap",
             "overweights": [],
             "underweights": [],
@@ -2299,6 +2203,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     if any("could not fetch usable market caps" in note for note in notes):
         return {
             "summary": "Market-cap data is not available right now, so the app is preserving current weights instead of suggesting trades. Try generating the plan again later, or use Equal Weight or Custom Targets on the Reweight page.",
+            "source": "fallback",
             "mode": plan.get("targetMode", "capped_market_cap"),
             "overweights": [],
             "underweights": [],
@@ -2376,6 +2281,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "summary": summary,
+        "source": "fallback",
         "mode": plan.get("targetMode", "capped_market_cap"),
         "trimSymbols": [item.get("symbol", "") for item in sells[:max_top_actions]],
         "addSymbols": [item.get("symbol", "") for item in buys[:max_top_actions]],
@@ -2397,12 +2303,23 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.post("/reweight/plan")
-def create_rebalance_plan(payload: RebalancePlanRequest):
-    return _build_rebalance_plan(payload)
+def create_rebalance_plan(payload: RebalancePlanWithHoldingsRequest):
+    return _build_rebalance_plan(
+        payload,
+        holdings_override=_serialize_holdings(payload.holdings),
+    )
 
 
 @app.get("/reweight/ai-summary")
 def get_rebalance_ai_summary():
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /reweight/ai-summary with holdings in the request body.",
+    )
+
+
+@app.post("/reweight/ai-summary")
+def create_rebalance_ai_summary(payload: HoldingsSummaryRequest):
     plan = _build_rebalance_plan(
         RebalancePlanRequest(
             targetMode="capped_market_cap",
@@ -2413,19 +2330,36 @@ def get_rebalance_ai_summary():
             fractionalShares=True,
             cashFirst=True,
             noSell=False,
-        )
+        ),
+        holdings_override=_serialize_holdings(payload.holdings),
     )
     return _build_rebalance_summary(plan)
 
 
 @app.get("/portfolio/sector-breakdown")
 def get_sector_breakdown():
-    return _build_sector_breakdown()
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /portfolio/sector-breakdown with holdings in the request body.",
+    )
+
+
+@app.post("/portfolio/sector-breakdown")
+def create_sector_breakdown(payload: HoldingsSummaryRequest):
+    return _build_sector_breakdown(_serialize_holdings(payload.holdings))
 
 
 @app.get("/risk/analysis")
 def get_risk_analysis():
-    return _build_risk_analysis()
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /risk/analysis with holdings in the request body.",
+    )
+
+
+@app.post("/risk/analysis")
+def create_risk_analysis(payload: HoldingsSummaryRequest):
+    return _build_risk_analysis(_serialize_holdings(payload.holdings))
 
 
 @app.post("/tickers/enrich")
@@ -2436,37 +2370,17 @@ def enrich_tickers_endpoint(request: EnrichRequest):
     return _enrich_tickers_batch(symbols)
 
 
-@app.post("/demo/enable")
-def enable_demo_mode():
-    global _demo_mode_active
-    _demo_mode_active = True
-    _risk_profile_cache.clear()
-    return {"demo": True}
-
-
-@app.post("/demo/disable")
-def disable_demo_mode():
-    global _demo_mode_active
-    _demo_mode_active = False
-    _risk_profile_cache.clear()
-    return {"demo": False}
-
-
-@app.get("/demo/status")
-def get_demo_status():
-    return {"demo": _demo_mode_active}
-
-
-@app.get("/demo/holdings")
-def get_demo_holdings():
-    """Always returns demo holdings regardless of demo mode flag."""
-    return _DEMO_STORE
-
-
 @app.get("/portfolio/earnings-calendar")
 def get_earnings_calendar():
-    store = _load_store()
-    holdings = store.get("holdings", [])
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /portfolio/earnings-calendar with holdings in the request body.",
+    )
+
+
+@app.post("/portfolio/earnings-calendar")
+def create_earnings_calendar(payload: HoldingsSummaryRequest):
+    holdings = _serialize_holdings(payload.holdings)
     positions = _prepare_rebalance_positions(holdings)
 
     today = datetime.now(timezone.utc).date()
@@ -2499,7 +2413,15 @@ def get_earnings_calendar():
 
 @app.get("/portfolio/key-insights")
 def get_key_insights():
-    return _build_key_insights()
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /portfolio/key-insights with holdings in the request body.",
+    )
+
+
+@app.post("/portfolio/key-insights")
+def create_key_insights(payload: HoldingsSummaryRequest):
+    return _build_key_insights(_serialize_holdings(payload.holdings))
 
 
 @app.get("/reweight/market-cap")
@@ -2512,17 +2434,9 @@ def get_market_cap_reweight(
     cashFirst: bool = True,
     noSell: bool = False,
 ):
-    return _build_rebalance_plan(
-        RebalancePlanRequest(
-            targetMode="capped_market_cap",
-            cashCad=cashCad,
-            driftThresholdPct=driftThresholdPct,
-            minTradeCad=minTradeCad,
-            maxSingleStockPct=maxSingleStockPct,
-            fractionalShares=fractionalShares,
-            cashFirst=cashFirst,
-            noSell=noSell,
-        )
+    raise HTTPException(
+        status_code=410,
+        detail="Use POST /reweight/plan with holdings in the request body.",
     )
 
 

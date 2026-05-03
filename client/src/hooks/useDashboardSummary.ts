@@ -27,9 +27,15 @@ const stripPreamble = (text: string) =>
     .replace(/^sure[,!]?\s+here (?:are|is)[^:]*:\s*/i, "")
     .trim();
 
-async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
+async function fetchRebalanceSummary(
+  holdings: ImportedHolding[],
+): Promise<RebalanceSummaryData> {
   if (import.meta.env.DEV) console.time("computeRebalance");
-  const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`);
+  const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ holdings }),
+  });
   if (!res.ok) throw new Error("rebalance summary fetch failed");
   const data = await (res.json() as Promise<{
     summary?: string | null;
@@ -54,9 +60,13 @@ async function fetchRebalanceSummary(): Promise<RebalanceSummaryData> {
   };
 }
 
-async function fetchRiskAlert(): Promise<RiskAlertData> {
+async function fetchRiskAlert(holdings: ImportedHolding[]): Promise<RiskAlertData> {
   if (import.meta.env.DEV) console.time("computeRiskScan");
-  const res = await fetch(`${API_BASE_URL}/risk/analysis`);
+  const res = await fetch(`${API_BASE_URL}/risk/analysis`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ holdings }),
+  });
   if (!res.ok) throw new Error("risk analysis fetch failed");
   const data = await (res.json() as Promise<{
     dashboardSummary?: string | null;
@@ -116,7 +126,7 @@ export function useDashboardSummary(
       setIsLoadingRebalance(true);
       setIsLoadingRisk(true);
 
-      fetchRebalanceSummary()
+      fetchRebalanceSummary(holdings)
         .then((data) => {
           setRebalance(data);
           saveDashboardCache(uid, hash, { rebalance: data });
@@ -128,7 +138,7 @@ export function useDashboardSummary(
           setIsLoadingRebalance(false);
         });
 
-      fetchRiskAlert()
+      fetchRiskAlert(holdings)
         .then((data) => {
           setRisk(data);
           saveDashboardCache(uid, hash, { risk: data });
@@ -140,19 +150,19 @@ export function useDashboardSummary(
           setIsLoadingRisk(false);
         });
     },
-    [uid],
+    [holdings, uid],
   );
 
-  // Load from cache immediately on mount (before hash is even stable)
+  // Load from cache only once holdings are known, so stale empty-backend summaries
+  // do not mask the live portfolio on hosted deployments.
   useEffect(() => {
     const cached = loadDashboardCache(uid);
-    if (cached) {
-      if (cached.rebalance) setRebalance(cached.rebalance);
-      if (cached.risk) setRisk(cached.risk);
-      setIsLoadingRebalance(false);
-      setIsLoadingRisk(false);
-    }
-  }, [uid]);
+    if (!cached || cached.holdingsHash !== holdingsHash) return;
+    if (cached.rebalance) setRebalance(cached.rebalance);
+    if (cached.risk) setRisk(cached.risk);
+    setIsLoadingRebalance(false);
+    setIsLoadingRisk(false);
+  }, [holdingsHash, uid]);
 
   // Debounced recompute when holdings/hash changes
   useEffect(() => {

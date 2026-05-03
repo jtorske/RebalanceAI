@@ -52,7 +52,7 @@ export function computeHoldingsHash(holdings: ImportedHolding[]): string {
 }
 
 function cacheKey(userId: string | null): string {
-  return `rebalancex:dashboard-cache:${userId ?? "demo"}`;
+  return `rebalancex:dashboard-cache-v2:${userId ?? "demo"}`;
 }
 
 export function loadDashboardCache(userId: string | null): DashboardSummaryCache | null {
@@ -118,11 +118,12 @@ export interface MarketComparisonCache {
 
 export interface MarketSummaryCache {
   date: string; // ISO date "YYYY-MM-DD"
+  holdingsHash?: string;
   aiSummary: string | null;
   marketComparison: MarketComparisonCache | null;
 }
 
-const MARKET_SUMMARY_KEY = "rebalancex:market-summary";
+const MARKET_SUMMARY_KEY = "rebalancex:market-summary-v2";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -145,10 +146,16 @@ export function saveMarketSummaryCache(patch: Partial<MarketSummaryCache>): void
   if (typeof window === "undefined") return;
   try {
     const existing = loadMarketSummaryCache();
+    const sameHoldings =
+      !patch.holdingsHash ||
+      !existing?.holdingsHash ||
+      patch.holdingsHash === existing.holdingsHash;
     const next: MarketSummaryCache = {
       date: todayIso(),
-      aiSummary: patch.aiSummary ?? existing?.aiSummary ?? null,
-      marketComparison: patch.marketComparison ?? existing?.marketComparison ?? null,
+      holdingsHash: patch.holdingsHash ?? existing?.holdingsHash,
+      aiSummary: patch.aiSummary ?? (sameHoldings ? existing?.aiSummary : null) ?? null,
+      marketComparison:
+        patch.marketComparison ?? (sameHoldings ? existing?.marketComparison : null) ?? null,
     };
     window.localStorage.setItem(MARKET_SUMMARY_KEY, JSON.stringify(next));
   } catch {

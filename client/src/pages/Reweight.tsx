@@ -9,6 +9,10 @@ import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings } from "../lib/userSettings";
 import { buildTradeExplanation } from "../lib/rebalanceExplanations";
 import { useRequireAuth } from "../lib/useRequireAuth";
+import { useAuth } from "../context/AuthContext";
+import { useDemoMode } from "../lib/demoMode";
+import { computeHoldingsHash } from "../lib/dashboardCache";
+import { loadActiveHoldings } from "../services/activeHoldings";
 
 type TargetMode =
   | "capped_market_cap"
@@ -113,6 +117,8 @@ const MODE_LABELS: Record<TargetMode, string> = {
 function Reweight() {
   const { settings } = useUserSettings();
   const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
+  const { portfolio } = useAuth();
+  const { isDemoMode } = useDemoMode();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
 
@@ -150,8 +156,9 @@ function Reweight() {
         .filter(([, v]) => v !== null),
     );
 
-  const buildReweightCacheKey = (caps: Record<string, string> = {}) => {
+  const buildReweightCacheKey = (caps: Record<string, string> = {}, holdingsHash = "") => {
     const payload = {
+      holdingsHash,
       targetMode,
       cashCad,
       driftThresholdPct,
@@ -168,7 +175,11 @@ function Reweight() {
 
   const fetchReweight = async (marketCapOverrides: Record<string, string> = {}, useCache = true) => {
     const marketCapsToSend = { ...manualMarketCaps, ...marketCapOverrides };
-    const cacheKey = buildReweightCacheKey(marketCapOverrides);
+    const holdings = await loadActiveHoldings({
+      portfolioId: portfolio?.id,
+      isDemoMode,
+    });
+    const cacheKey = buildReweightCacheKey(marketCapOverrides, computeHoldingsHash(holdings));
 
     if (useCache) {
       const cached = sessionCacheGet<ReweightResponse>(cacheKey);
@@ -196,6 +207,7 @@ function Reweight() {
           noSell,
           manualTargets: targetMode === "manual" ? manualTargetList : [],
           manualMarketCaps: buildManualMarketCapPayload(marketCapsToSend),
+          holdings,
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -211,8 +223,7 @@ function Reweight() {
 
   useEffect(() => {
     void fetchReweight({}, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isDemoMode, portfolio]);
 
   const hasNoHoldings = data && data.items.length === 0;
   const missingCapItems = data?.items.filter((i) => i.reason === "Missing market cap") ?? [];

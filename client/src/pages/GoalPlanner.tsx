@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiTarget } from "react-icons/fi";
 import DashboardNavbar from "../components/DashboardNavbar";
-import { API_BASE_URL } from "../lib/constants";
 import { useUserSettings } from "../lib/userSettings";
+import { useAuth } from "../context/AuthContext";
+import { useDemoMode } from "../lib/demoMode";
+import { loadActiveHoldings } from "../services/activeHoldings";
 import "./GoalPlanner.css";
 
 type RiskProfile = "conservative" | "moderate" | "aggressive";
@@ -19,8 +21,6 @@ const CONF_PCT: Record<string, number> = {
   Low: 35,
   Below: 12,
 };
-type HoldingsResponse = { holdings?: Array<{ market_value?: number; market_value_currency?: string }> };
-
 const RISK_SPREAD: Record<RiskProfile, number> = { conservative: 1.5, moderate: 3, aggressive: 5 };
 const RISK_RETURN_DEFAULT: Record<RiskProfile, number> = { conservative: 5, moderate: 7, aggressive: 10 };
 const USD_TO_CAD = 1.37;
@@ -62,6 +62,8 @@ const PH = SVG_H - MT - MB;
 
 export default function GoalPlanner() {
   const { settings } = useUserSettings();
+  const { portfolio } = useAuth();
+  const { isDemoMode } = useDemoMode();
 
   const [currentPortfolio, setCurrentPortfolio] = useState(0);
   const [goalAmount, setGoalAmount] = useState(500_000);
@@ -75,10 +77,11 @@ export default function GoalPlanner() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/holdings`);
-        if (!res.ok) return;
-        const data = (await res.json()) as HoldingsResponse;
-        const total = (data.holdings ?? []).reduce((sum, h) => {
+        const holdings = await loadActiveHoldings({
+          portfolioId: portfolio?.id,
+          isDemoMode,
+        });
+        const total = holdings.reduce((sum, h) => {
           const val = h.market_value ?? 0;
           const cur = (h.market_value_currency ?? "CAD").toUpperCase();
           return sum + (cur === "CAD" ? val : val * USD_TO_CAD);
@@ -89,7 +92,7 @@ export default function GoalPlanner() {
       }
     };
     void load();
-  }, []);
+  }, [isDemoMode, portfolio]);
 
   const handleRiskChange = (p: RiskProfile) => {
     setRiskProfile(p);

@@ -21,11 +21,11 @@ import { useDemoMode } from "../lib/demoMode";
 import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
 import { useRequireAuth } from "../lib/useRequireAuth";
 import { useAuth } from "../context/AuthContext";
+import { DEMO_HOLDINGS_RESPONSE } from "../lib/demoHoldings";
 import {
   buildHoldingsResponse,
   getHoldings,
   replaceHoldings,
-  syncBackendHoldings,
 } from "../services/holdingsService";
 import { getOrCreateMainPortfolio } from "../services/portfolioService";
 import { getSupabaseErrorMessage } from "../services/supabaseError";
@@ -84,19 +84,12 @@ function HoldingsPage() {
           const holdings = await getHoldings(portfolio.id);
           if (holdingsLoadRequestId.current === requestId) {
             setPersisted(buildHoldingsResponse(holdings));
-            await syncBackendHoldings(holdings);
           }
           return;
         }
 
-        const url = isDemoMode
-          ? `${API_BASE_URL}/demo/holdings`
-          : `${API_BASE_URL}/holdings`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Unable to read holdings.");
-        const data = (await response.json()) as HoldingsResponse;
         if (holdingsLoadRequestId.current === requestId) {
-          setPersisted(data);
+          setPersisted(isDemoMode ? DEMO_HOLDINGS_RESPONSE : buildHoldingsResponse([], null));
         }
       } catch (loadError) {
         const details =
@@ -130,6 +123,11 @@ function HoldingsPage() {
       try {
         const response = await fetch(
           `${API_BASE_URL}/market/portfolio-vs-market`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ holdings: persisted?.holdings ?? [] }),
+          },
         );
         if (!response.ok) {
           throw new Error("Unable to load per-ticker daily changes.");
@@ -195,7 +193,7 @@ function HoldingsPage() {
     return () => {
       window.removeEventListener("holdings-changed", refreshTickerDailyChanges);
     };
-  }, []);
+  }, [persisted?.holdings]);
 
 
   const parsedMarketValue = useMemo(
@@ -410,7 +408,6 @@ function HoldingsPage() {
         (await getOrCreateMainPortfolio(user.id, settings.defaultCurrency));
 
       await replaceHoldings(user.id, activePortfolio.id, parsedHoldings);
-      await syncBackendHoldings(parsedHoldings, fileName);
       await refreshPortfolio();
       setPersisted(buildHoldingsResponse(parsedHoldings, fileName));
       window.dispatchEvent(new Event("holdings-changed"));
@@ -444,9 +441,6 @@ function HoldingsPage() {
       if (user && portfolio) {
         await replaceHoldings(user.id, portfolio.id, []);
       }
-
-      await syncBackendHoldings([]);
-
       setPersisted({
         source_file_name: null,
         as_of: null,

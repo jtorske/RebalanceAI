@@ -14,10 +14,14 @@ import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
-import { loadMarketSummaryCache, saveMarketSummaryCache } from "../lib/dashboardCache";
+import { loadActiveHoldings } from "../services/activeHoldings";
+import {
+  computeHoldingsHash,
+  loadMarketSummaryCache,
+  saveMarketSummaryCache,
+} from "../lib/dashboardCache";
 import type {
   ImportedHolding,
-  HoldingsResponse,
   BenchmarkQuote,
   MarketComparisonResponse,
   WeightedHolding,
@@ -25,7 +29,7 @@ import type {
 
 type AiSummaryResponse = {
   summary: string | null;
-  source?: "llm" | "fallback";
+  source?: "ollama" | "fallback";
   cached?: boolean;
 };
 
@@ -42,8 +46,40 @@ type SectorBreakdownResponse = {
 };
 
 const MAX_CARD_ACTION_ROWS = 5;
-const MARKET_SUMMARY_FALLBACK =
-  "Market summary data is temporarily unavailable. Portfolio and benchmark cards will continue updating from the latest available dashboard data.";
+
+const formatSummaryDirection = (value: number | null | undefined) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "unavailable";
+  }
+  if (value > 0) return `up ${Math.abs(value).toFixed(2)}%`;
+  if (value < 0) return `down ${Math.abs(value).toFixed(2)}%`;
+  return "flat at 0.00%";
+};
+
+const buildMarketSummaryFallback = (
+  comparison: MarketComparisonResponse | null,
+) => {
+  if (!comparison) {
+    return "Market summary cannot be calculated because current portfolio and benchmark quote data are unavailable.";
+  }
+
+  const portfolio = comparison.portfolioDailyPercent;
+  const market = comparison.marketDailyPercent;
+  if (portfolio !== null && portfolio !== undefined) {
+    return `The portfolio is ${formatSummaryDirection(portfolio)} today, compared with a benchmark average that is ${formatSummaryDirection(market)}.`;
+  }
+
+  const benchmarkParts = (comparison.benchmarks ?? [])
+    .filter((item) => typeof item.changePercent === "number")
+    .slice(0, 3)
+    .map((item) => `${item.symbol} ${formatSummaryDirection(item.changePercent)}`);
+
+  if (benchmarkParts.length > 0) {
+    return `Portfolio daily data is not available yet. Current benchmark moves include ${benchmarkParts.join(", ")}.`;
+  }
+
+  return "Market summary cannot be calculated because current portfolio and benchmark quote data are unavailable.";
+};
 
 const repairTextEncoding = (value: string) =>
   value
@@ -400,7 +436,7 @@ const buildSectorBreakdownFromHoldings = (
 
 function Dashboard() {
   const { settings } = useUserSettings();
-  const { user, profile, hasHoldings, portfolioLoading } = useAuth();
+  const { user, profile, portfolio, hasHoldings, portfolioLoading } = useAuth();
   const { isDemoMode, enableDemoMode } = useDemoMode();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
@@ -417,17 +453,20 @@ function Dashboard() {
   const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(
     null,
   );
+  const holdingsHash = useMemo(() => computeHoldingsHash(holdings), [holdings]);
+  const shouldWaitForSyncedHoldings =
+    !!user && (portfolioLoading || (hasHoldings && holdings.length === 0));
 
   useEffect(() => {
     const loadHoldings = async () => {
+      if (user && !portfolio && portfolioLoading) return;
       try {
-        const response = await fetch(`${API_BASE_URL}/holdings`);
-        if (!response.ok) {
-          throw new Error("Failed to load holdings from backend.");
-        }
-
-        const data = (await response.json()) as HoldingsResponse;
-        setHoldings(data.holdings ?? []);
+        setHoldings(
+          await loadActiveHoldings({
+            portfolioId: portfolio?.id,
+            isDemoMode,
+          }),
+        );
       } catch {
         setHoldings([]);
       }
@@ -443,12 +482,14 @@ function Dashboard() {
     return () => {
       window.removeEventListener("holdings-changed", refreshHoldings);
     };
-  }, []);
+  }, [isDemoMode, portfolio, portfolioLoading, user]);
 
   useEffect(() => {
     // Restore from cache instantly — market data only changes per trading day
     const cached = loadMarketSummaryCache();
-    if (cached?.marketComparison) {
+    if (shouldWaitForSyncedHoldings) return;
+
+    if (cached?.marketComparison && cached.holdingsHash === holdingsHash) {
       setBenchmarks((cached.marketComparison.benchmarks as BenchmarkQuote[]) ?? []);
       setMarketComparison(cached.marketComparison as MarketComparisonResponse);
       setIsLoadingBenchmarks(false);
@@ -463,7 +504,12 @@ function Dashboard() {
 
       try {
         const response = (await Promise.race([
-          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, { signal: controller.signal }),
+          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, {
+            signal: controller.signal,
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ holdings }),
+          }),
           new Promise<Response>((_, reject) => {
             window.setTimeout(() => reject(new Error("Benchmark request timed out.")), 8500);
           }),
@@ -474,7 +520,7 @@ function Dashboard() {
         const data = (await response.json()) as MarketComparisonResponse;
         setBenchmarks(data.benchmarks ?? []);
         setMarketComparison(data);
-        saveMarketSummaryCache({ marketComparison: data });
+        saveMarketSummaryCache({ holdingsHash, marketComparison: data });
       } catch {
         setBenchmarks([]);
         setMarketComparison(null);
@@ -486,12 +532,13 @@ function Dashboard() {
     };
 
     void loadBenchmarks();
-    // Note: market data is date-scoped — no need to re-fetch on holdings-changed
-  }, []);
+  }, [holdings, holdingsHash, shouldWaitForSyncedHoldings]);
 
   useEffect(() => {
     const cached = loadMarketSummaryCache();
-    if (cached?.aiSummary) {
+    if (shouldWaitForSyncedHoldings) return;
+
+    if (cached?.aiSummary && cached.holdingsHash === holdingsHash) {
       setAiSummary(cached.aiSummary);
       setIsLoadingAiSummary(false);
       return;
@@ -500,22 +547,26 @@ function Dashboard() {
     const loadAiSummary = async () => {
       setIsLoadingAiSummary(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/market/ai-summary`);
+        const res = await fetch(`${API_BASE_URL}/market/ai-summary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holdings }),
+        });
         if (!res.ok) throw new Error("ai-summary fetch failed");
         const data = (await res.json()) as AiSummaryResponse;
         const summary = data.summary
           ? repairTextEncoding(data.summary)
-          : MARKET_SUMMARY_FALLBACK;
+          : buildMarketSummaryFallback(marketComparison);
         setAiSummary(summary);
-        saveMarketSummaryCache({ aiSummary: summary });
+        saveMarketSummaryCache({ holdingsHash, aiSummary: summary });
       } catch {
-        setAiSummary(MARKET_SUMMARY_FALLBACK);
+        setAiSummary(buildMarketSummaryFallback(marketComparison));
       } finally {
         setIsLoadingAiSummary(false);
       }
     };
     void loadAiSummary();
-  }, []);
+  }, [holdings, holdingsHash, marketComparison, shouldWaitForSyncedHoldings]);
 
   const {
     rebalance: rebalanceData,
@@ -528,7 +579,11 @@ function Dashboard() {
     const loadSectorBreakdown = async () => {
       setIsLoadingSectorBreakdown(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`);
+        const res = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holdings }),
+        });
         if (!res.ok) throw new Error("sector-breakdown fetch failed");
         const data = (await res.json()) as SectorBreakdownResponse;
         if ((data.sectors ?? []).length > 0) {
@@ -538,20 +593,7 @@ function Dashboard() {
 
         throw new Error("sector-breakdown returned empty sectors");
       } catch {
-        try {
-          const holdingsRes = await fetch(`${API_BASE_URL}/holdings`);
-          if (!holdingsRes.ok) {
-            throw new Error("holdings fetch failed");
-          }
-
-          const holdingsData = (await holdingsRes.json()) as HoldingsResponse;
-          const holdingsList = holdingsData.holdings ?? [];
-          const fallbackBreakdown =
-            buildSectorBreakdownFromHoldings(holdingsList);
-          setSectorBreakdown(fallbackBreakdown);
-        } catch {
-          setSectorBreakdown([]);
-        }
+        setSectorBreakdown(buildSectorBreakdownFromHoldings(holdings));
       } finally {
         setIsLoadingSectorBreakdown(false);
       }
@@ -567,7 +609,7 @@ function Dashboard() {
     return () => {
       window.removeEventListener("holdings-changed", refreshSectorBreakdown);
     };
-  }, []);
+  }, [holdings]);
 
 
   const totalMarketValueCad = useMemo(
