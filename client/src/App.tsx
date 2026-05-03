@@ -30,9 +30,7 @@ function AppRoutes() {
     !loading &&
     !!user &&
     !isDemoMode &&
-    (apiHealth.status === "checking" ||
-      apiHealth.status === "warming" ||
-      apiHealth.status === "error");
+    apiHealth.status === "error";
 
   if (shouldBlockForApi) {
     return (

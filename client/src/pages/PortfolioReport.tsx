@@ -139,6 +139,101 @@ export default function PortfolioReport() {
     isLoadingRisk,
   } = useDashboardSummary(holdings, user?.id);
 
+  const executiveSummary = useMemo(() => {
+    if (!topHoldings.length) return null;
+
+    const topHolding = topHoldings[0];
+    const concentration = topHolding.weight;
+
+    let concentrationLevel: string;
+    if (concentration >= 30) concentrationLevel = "highly concentrated";
+    else if (concentration >= 20) concentrationLevel = "moderately concentrated";
+    else concentrationLevel = "well-diversified";
+
+    const equityPct = allocationRows.find(
+      (r) => r.label.toUpperCase().includes("EQUITY"),
+    )?.weight ?? 0;
+
+    const observations: string[] = [];
+    if (concentration >= 20) {
+      observations.push(
+        `High concentration in top holding (${topHolding.symbol} at ${formatPercent(concentration)})`,
+      );
+    }
+    if (equityPct >= 60) {
+      observations.push(`Equity-heavy allocation (${formatPercent(equityPct)})`);
+    }
+    const riskCount = risk?.concernTotal ?? 0;
+    if (riskCount > 0) {
+      observations.push(`${riskCount} active risk signal${riskCount !== 1 ? "s" : ""}`);
+    }
+    if (observations.length === 0) {
+      observations.push("Portfolio is broadly balanced across asset types");
+      observations.push("No major concentration risk detected");
+    }
+
+    let suggestedAction: string;
+    if (concentration >= 20 && rebalance?.trimSymbols?.length) {
+      const toTrim = rebalance.trimSymbols.slice(0, 2).join(" and ");
+      suggestedAction = `Reduce concentration in ${toTrim} and rebalance into underweighted assets.`;
+    } else if (riskCount > 0) {
+      suggestedAction = "Review high-volatility and high-risk positions before next rebalance.";
+    } else {
+      suggestedAction = "Portfolio is close to target allocation. Monitor for drift.";
+    }
+
+    return {
+      summary: `Your portfolio is ${concentrationLevel}, with ${topHolding.symbol} representing ${formatPercent(topHolding.weight)} of holdings.`,
+      observations,
+      suggestedAction,
+    };
+  }, [topHoldings, allocationRows, risk, rebalance]);
+
+  const riskSuggestedAction = useMemo(() => {
+    if (!risk?.concerns?.length) return null;
+    const hasEarnings = risk.concerns.some(
+      (c) =>
+        c.category?.toLowerCase().includes("earnings") ||
+        c.title?.toLowerCase().includes("earnings"),
+    );
+    const hasVolatility = risk.concerns.some(
+      (c) =>
+        c.category?.toLowerCase().includes("volatil") ||
+        c.title?.toLowerCase().includes("volatil"),
+    );
+    if (hasEarnings && hasVolatility) {
+      return "Review high-volatility and catalyst-driven positions.";
+    }
+    if (hasEarnings) return "Monitor upcoming earnings catalysts closely.";
+    if (hasVolatility) return "Consider reducing exposure to high-volatility positions.";
+    return "Review and monitor flagged positions.";
+  }, [risk]);
+
+  const rebalanceOutcome = useMemo(() => {
+    if (!rebalance) return [];
+    const outcomes: string[] = [];
+    if (rebalance.trimSymbols?.length) {
+      outcomes.push(`Reduced concentration in ${rebalance.trimSymbols.slice(0, 2).join(" and ")}`);
+    }
+    if (rebalance.addSymbols?.length) {
+      outcomes.push(`Increased exposure to ${rebalance.addSymbols.slice(0, 2).join(" and ")}`);
+    }
+    if (rebalance.tradeCount > 0) {
+      outcomes.push("Improved diversification across holdings");
+    }
+    return outcomes;
+  }, [rebalance]);
+
+  const riskBySymbol = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const concern of risk?.concerns ?? []) {
+      if (concern.symbol && !map.has(concern.symbol)) {
+        map.set(concern.symbol, concern.severity);
+      }
+    }
+    return map;
+  }, [risk]);
+
   const years = DEFAULT_TARGET_AGE - DEFAULT_CURRENT_AGE;
   const months = years * 12;
   const projectedGoalValue = fv(
@@ -193,6 +288,27 @@ export default function PortfolioReport() {
           </section>
         ) : (
           <>
+            {executiveSummary && (
+              <section className="report-card report-exec-summary">
+                <span className="report-label">Portfolio Summary</span>
+                <p className="report-exec-lead">{executiveSummary.summary}</p>
+                <div className="report-exec-body">
+                  <div className="report-exec-col">
+                    <p className="report-exec-section-label">Key observations</p>
+                    <ul className="report-exec-list">
+                      {executiveSummary.observations.map((obs) => (
+                        <li key={obs}>{obs}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="report-exec-col report-exec-action-col">
+                    <p className="report-exec-section-label">Suggested action</p>
+                    <p className="report-exec-action">{executiveSummary.suggestedAction}</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section className="report-grid report-grid-four">
               <article className="report-card">
                 <span className="report-label">Portfolio value</span>
@@ -223,11 +339,17 @@ export default function PortfolioReport() {
             <section className="report-grid report-grid-two">
               <article className="report-card">
                 <h2>Allocation Breakdown</h2>
-                <div className="report-table">
+                <div className="report-table report-alloc-table">
                   {allocationRows.map((row) => (
-                    <div className="report-row" key={row.label}>
-                      <span>{row.label}</span>
-                      <strong>{formatPercent(row.weight)}</strong>
+                    <div className="report-row report-alloc-row" key={row.label}>
+                      <span className="report-alloc-label">{row.label}</span>
+                      <div className="report-alloc-bar-wrap">
+                        <div
+                          className="report-alloc-bar"
+                          style={{ width: `${Math.min(row.weight, 100)}%` }}
+                        />
+                      </div>
+                      <strong className="report-alloc-pct">{formatPercent(row.weight)}</strong>
                     </div>
                   ))}
                 </div>
@@ -236,52 +358,102 @@ export default function PortfolioReport() {
               <article className="report-card">
                 <h2>Top Holdings</h2>
                 <div className="report-table">
-                  {topHoldings.map((holding) => (
-                    <div className="report-row" key={holding.symbol}>
-                      <span>
-                        {holding.symbol}
-                        <small>{holding.name}</small>
-                      </span>
-                      <strong>{formatPercent(holding.weight)}</strong>
-                    </div>
-                  ))}
+                  {topHoldings.map((holding) => {
+                    const riskLevel = riskBySymbol.get(holding.symbol);
+                    return (
+                      <div className="report-row" key={holding.symbol}>
+                        <span>
+                          {holding.symbol}
+                          <small>{holding.name}</small>
+                        </span>
+                        <div className="report-holding-right">
+                          <strong>{formatPercent(holding.weight)}</strong>
+                          <span className={`report-risk-badge report-risk-badge-${riskLevel ?? "none"}`}>
+                            {riskLevel ?? "—"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </article>
             </section>
 
             <section className="report-grid report-grid-two">
               <article className="report-card">
-                <h2>Rebalance Recommendations</h2>
-                <p>{rebalance?.summary ?? "No rebalance summary available yet."}</p>
-                {(rebalance?.topTrades ?? []).length > 0 && (
-                  <div className="report-table">
-                    {(rebalance?.topTrades ?? []).slice(0, 6).map((trade) => (
-                      <div className="report-row" key={`${trade.action}-${trade.symbol}`}>
-                        <span>{trade.symbol}</span>
-                        <strong>
-                          {trade.action.toUpperCase()} {maskMoney(trade.tradeCad)}
-                        </strong>
+                <h2>Rebalance Summary</h2>
+                {isLoadingRebalance ? (
+                  <p>Calculating rebalance plan...</p>
+                ) : (
+                  <>
+                    <p>{rebalance?.summary ?? "No rebalance summary available yet."}</p>
+                    {(rebalance?.totalBuyCad ?? 0) > 0 && (
+                      <div className="report-rebalance-totals">
+                        <div className="report-rebalance-total-row">
+                          <span>Total buys</span>
+                          <strong className="report-positive">{maskMoney(rebalance?.totalBuyCad ?? 0)}</strong>
+                        </div>
+                        <div className="report-rebalance-total-row">
+                          <span>Total sells</span>
+                          <strong className="report-negative">{maskMoney(rebalance?.totalSellCad ?? 0)}</strong>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                    {(rebalance?.topTrades ?? []).length > 0 && (
+                      <div className="report-table">
+                        {(rebalance?.topTrades ?? []).slice(0, 6).map((trade) => (
+                          <div className="report-row" key={`${trade.action}-${trade.symbol}`}>
+                            <span>{trade.symbol}</span>
+                            <strong>
+                              {trade.action.toUpperCase()} {maskMoney(trade.tradeCad)}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {rebalanceOutcome.length > 0 && (
+                      <div className="report-outcome">
+                        <p className="report-exec-section-label">Expected outcome</p>
+                        <ul className="report-exec-list">
+                          {rebalanceOutcome.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
                 )}
               </article>
 
               <article className="report-card">
                 <h2>Risk Findings</h2>
-                <p>{risk?.summary ?? "No risk summary available yet."}</p>
-                {(risk?.concerns ?? []).length > 0 && (
-                  <div className="report-table">
-                    {(risk?.concerns ?? []).slice(0, 6).map((concern, index) => (
-                      <div
-                        className="report-row"
-                        key={`${concern.symbol ?? "risk"}-${index}`}
-                      >
-                        <span>{concern.symbol ?? concern.category ?? "Risk"}</span>
-                        <strong>{concern.severity}</strong>
+                {isLoadingRisk ? (
+                  <p>Scanning for risks...</p>
+                ) : (
+                  <>
+                    <p>{risk?.summary ?? "No risk summary available yet."}</p>
+                    {(risk?.concerns ?? []).length > 0 && (
+                      <div className="report-table">
+                        {(risk?.concerns ?? []).slice(0, 6).map((concern, index) => (
+                          <div
+                            className="report-row"
+                            key={`${concern.symbol ?? "risk"}-${index}`}
+                          >
+                            <span>{concern.symbol ?? concern.category ?? "Risk"}</span>
+                            <strong className={`report-risk-text-${concern.severity}`}>
+                              {concern.title ?? concern.severity}
+                            </strong>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                    {riskSuggestedAction && (
+                      <div className="report-outcome">
+                        <p className="report-exec-section-label">Suggested action</p>
+                        <p className="report-exec-action">{riskSuggestedAction}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </article>
             </section>

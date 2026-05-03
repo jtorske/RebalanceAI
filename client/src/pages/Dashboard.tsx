@@ -1,7 +1,7 @@
-import { FiAlertCircle, FiBarChart2, FiLock } from "react-icons/fi";
+import { FiAlertCircle, FiBarChart2, FiLock, FiMoreHorizontal } from "react-icons/fi";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
 import { TickerLogoBadge } from "../components/TickerLogoBadge";
 import DashboardOnboardingBanner from "../components/DashboardOnboardingBanner";
@@ -723,6 +723,19 @@ function Dashboard() {
   const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(
     null,
   );
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [actionsMenuOpen]);
   // One-shot flag: removed after the enter animation completes so tab-switch
   // visibility events can never restart the donut-appear animation.
   const [donutAppeared, setDonutAppeared] = useState(false);
@@ -1287,6 +1300,32 @@ function Dashboard() {
         <DashboardNavbar />
 
         <main className="dashboard-main">
+          <div className="dashboard-page-toolbar">
+            <div className="dashboard-actions-menu" ref={actionsMenuRef}>
+              <button
+                className="dashboard-actions-trigger"
+                type="button"
+                aria-label="More actions"
+                aria-expanded={actionsMenuOpen}
+                onClick={() => setActionsMenuOpen((prev) => !prev)}
+              >
+                <FiMoreHorizontal size={15} />
+                <span>More</span>
+              </button>
+              {actionsMenuOpen && (
+                <div className="dashboard-actions-dropdown" role="menu">
+                  <Link
+                    className="dashboard-actions-item"
+                    to="/portfolio-report"
+                    role="menuitem"
+                    onClick={() => setActionsMenuOpen(false)}
+                  >
+                    Generate Portfolio Report
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
           <section className="dashboard-top-section">
             <div className="dashboard-left-column">
               <div className="dashboard-stats-grid">
@@ -1920,11 +1959,6 @@ function Dashboard() {
               </div>
             </div>
           </section>
-          <div className="dashboard-report-actions">
-            <Link className="dashboard-report-link" to="/portfolio-report">
-              Generate Portfolio Report
-            </Link>
-          </div>
           <DataStatusPanel />
         </main>
       </div>
