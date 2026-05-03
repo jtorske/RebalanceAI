@@ -594,6 +594,45 @@ const getFallbackRiskAnalysis = (
   };
 };
 
+type RiskSummaryInput = {
+  dashboardSummary?: string | null;
+  summary?: string | null;
+  concerns?: Array<{ symbol?: string | null }>;
+} | null;
+
+function isBadSummary(value?: string | null) {
+  const text = value?.trim();
+  if (!text) return true;
+  if (text === "1." || text === "1") return true;
+  if (/^\d+\.?$/.test(text)) return true;
+  if (text.length < 12) return true;
+  return false;
+}
+
+function getRiskSummary(risk: RiskSummaryInput) {
+  const raw = risk?.dashboardSummary || risk?.summary;
+
+  if (!isBadSummary(raw)) {
+    return raw;
+  }
+
+  const concerns = risk?.concerns || [];
+  const symbols = [
+    ...new Set(
+      concerns
+        .slice(0, 4)
+        .map((c) => c.symbol)
+        .filter(Boolean),
+    ),
+  ];
+
+  if (symbols.length > 0) {
+    return `Key risks to review include ${symbols.join(", ")}, driven by concentration, volatility, headline, or catalyst signals.`;
+  }
+
+  return "No major portfolio risks stand out from current holdings.";
+}
+
 const normalizeTickerForSector = (symbol: string) =>
   symbol.trim().toUpperCase().replace(/\s+/g, "");
 
@@ -1200,14 +1239,6 @@ function Dashboard() {
     return { high: 0, medium: 0, low: 0 };
   }, [riskData, holdings]);
 
-  const riskSummaryText = useMemo(() => {
-    if (riskData?.summary) return riskData.summary;
-    if (!isLoadingRiskSummary && holdings.length > 0) {
-      return "Risk analysis is temporarily unavailable.";
-    }
-    return "Import holdings to scan for concentration, volatility, market-cap, and catalyst risks.";
-  }, [riskData, isLoadingRiskSummary, holdings.length]);
-
   const riskScore = useMemo(
     () =>
       Math.min(
@@ -1710,7 +1741,7 @@ function Dashboard() {
                       <>
                         <div className="dashboard-card-summary-block">
                           <p className="dashboard-risk-summary">
-                            {riskSummaryText}
+                            {getRiskSummary(riskData)}
                           </p>
                         </div>
 

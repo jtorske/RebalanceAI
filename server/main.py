@@ -1426,6 +1426,10 @@ def _is_risk_summary_usable(text: Optional[str]) -> bool:
     if not text:
         return False
     stripped = text.strip()
+    if stripped in {"1", "1."}:
+        return False
+    if re.match(r"^\d+\.?$", stripped):
+        return False
     if len(stripped) < 20:
         return False
     # Reject if the text opens with a numbered or bulleted list marker
@@ -1641,6 +1645,8 @@ def _build_risk_analysis(
     concerns = concerns[:12]
     summary, summary_source = _ai_risk_summary(concerns, len(positions))
     dashboard_summary = _first_sentence(summary) or _fallback_risk_summary(concerns)
+    if not _is_risk_summary_usable(dashboard_summary):
+        dashboard_summary = _fallback_risk_summary(concerns)
 
     return {
         "summary": summary,
