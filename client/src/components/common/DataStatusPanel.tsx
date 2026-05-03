@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { readDataStatus, type DataStatus } from "../../lib/dataStatus";
+import {
+  calculateDataQualityStatus,
+  readDataStatus,
+  type DataStatus,
+} from "../../lib/dataStatus";
 import "./DataStatusPanel.css";
 
 type Props = {
@@ -40,10 +44,25 @@ export function DataStatusPanel({ override }: Props) {
     return null;
   }
 
+  const quality = calculateDataQualityStatus({
+    holdingsCount: merged.holdingsCount,
+    importedAt: merged.importedAt,
+    fxRate: merged.fxRate,
+    missingDataCount: merged.missingDataCount,
+    warningCount: merged.warningCount,
+  });
+
   return (
-    <div className="dsp-row" aria-label="Data status">
+    <div className="dsp-row" aria-label="Data quality and status">
       <span className="dsp-label">Data status</span>
       <div className="dsp-items">
+        <span
+          className={`dsp-quality dsp-quality-${quality.label.toLowerCase()}`}
+          title={quality.reason}
+        >
+          <span className="dsp-item-label">Data quality</span>
+          {quality.label}
+        </span>
         {merged.sourceFileName && (
           <span className="dsp-item">
             <span className="dsp-item-label">Source</span>
@@ -51,7 +70,7 @@ export function DataStatusPanel({ override }: Props) {
           </span>
         )}
         <span className="dsp-item">
-          <span className="dsp-item-label">Imported</span>
+          <span className="dsp-item-label">Last imported</span>
           {formatImportedAt(merged.importedAt)}
         </span>
         <span className="dsp-item">

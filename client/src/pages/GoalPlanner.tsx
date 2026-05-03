@@ -39,6 +39,57 @@ function requiredPmt(goal: number, pv: number, r: number, n: number): number {
   return ((goal - pv * g) * r) / (g - 1);
 }
 
+function buildGoalPlanSummary({
+  baseEnd,
+  goalAmount,
+  currentAge,
+  targetAge,
+  monthlyContrib,
+  annualReturn,
+  reqMonthly,
+  inflationAdjGoal,
+  inflation,
+}: {
+  baseEnd: number;
+  goalAmount: number;
+  currentAge: number;
+  targetAge: number;
+  monthlyContrib: number;
+  annualReturn: number;
+  reqMonthly: number;
+  inflationAdjGoal: number;
+  inflation: number;
+}) {
+  const years = Math.max(1, targetAge - currentAge);
+  const shortfall = Math.max(0, goalAmount - baseEnd);
+  const requiredMonthly = Math.max(0, reqMonthly);
+  const requiredIncrease = Math.max(0, requiredMonthly - monthlyContrib);
+  const isOnTrack = shortfall === 0;
+
+  const alternatives = [
+    `Extend the target age beyond ${targetAge} to give compounding more time.`,
+    `Lower the target amount or phase the goal toward ${fmtCad(inflationAdjGoal)} in today's purchasing power.`,
+    `Increase monthly contributions by ${fmtCad(Math.ceil(requiredIncrease))}/mo if that fits your cash flow.`,
+    `Review a higher-return assumption only if you accept the added volatility risk.`,
+  ];
+
+  return {
+    shortfall,
+    requiredMonthly,
+    requiredIncrease,
+    isOnTrack,
+    summary:
+      `At your current ${fmtCad(monthlyContrib)}/month contribution and ${annualReturn}% expected annual return, ` +
+      `your projected portfolio at age ${targetAge} is about ${fmtCad(baseEnd)}. ` +
+      (isOnTrack
+        ? `That is about ${fmtCad(baseEnd - goalAmount)} above your ${fmtCad(goalAmount)} target.`
+        : `To reach ${fmtCad(goalAmount)} in ${years} years, you would need about ${fmtCad(requiredMonthly)}/month total contributions.`),
+    inflationNote:
+      `${fmtCad(goalAmount)} in ${years} years is roughly ${fmtCad(inflationAdjGoal)} in today's purchasing power at ${inflation}% inflation.`,
+    alternatives,
+  };
+}
+
 function fmtCad(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `CA$${(v / 1_000_000).toFixed(2)}M`;
   if (Math.abs(v) >= 1_000) return `CA$${Math.round(v / 1_000)}k`;
@@ -126,6 +177,17 @@ export default function GoalPlanner() {
   const isOnTrack = baseEnd >= goalAmount;
   const reqMonthly = requiredPmt(goalAmount, currentPortfolio, r, months);
   const extraNeeded = Math.max(0, reqMonthly - monthlyContrib);
+  const planSummary = buildGoalPlanSummary({
+    baseEnd,
+    goalAmount,
+    currentAge,
+    targetAge,
+    monthlyContrib,
+    annualReturn,
+    reqMonthly,
+    inflationAdjGoal,
+    inflation,
+  });
 
   const confidence =
     pessEnd >= goalAmount ? "High" :
@@ -380,6 +442,30 @@ export default function GoalPlanner() {
               </svg>
               </div>
             </div>
+
+            <section className="goal-card goal-guidance-card">
+              <div className="goal-guidance-main">
+                <span className="goal-section-title">Planning Summary</span>
+                <p>{mask(planSummary.summary)}</p>
+                <p className="goal-guidance-note">
+                  {mask(planSummary.inflationNote)}
+                </p>
+                <div className="goal-assumption-row">
+                  <span>Bear {Math.max(0, annualReturn - RISK_SPREAD[riskProfile]).toFixed(1)}%</span>
+                  <span>Base {annualReturn.toFixed(1)}%</span>
+                  <span>Bull {(annualReturn + RISK_SPREAD[riskProfile]).toFixed(1)}%</span>
+                </div>
+              </div>
+
+              <div className="goal-guidance-side">
+                <span className="goal-section-title">What would make this realistic?</span>
+                <ul>
+                  {planSummary.alternatives.map((item) => (
+                    <li key={item}>{mask(item)}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
 
             {/* Outcome cards */}
             <div className="goal-outcomes">

@@ -704,9 +704,11 @@ const buildSectorBreakdownFromHoldings = (
 
 function Dashboard() {
   const { settings } = useUserSettings();
-  const { user, portfolio, hasHoldings, portfolioLoading } = useAuth();
+  const { user, portfolio, hasHoldings, portfolioLoading, savedHoldingsCount } =
+    useAuth();
   const { isDemoMode, enableDemoMode } = useDemoMode();
   const [holdings, setHoldings] = useState<ImportedHolding[]>([]);
+  const [activeHoldingsLoaded, setActiveHoldingsLoaded] = useState(false);
   const [benchmarks, setBenchmarks] = useState<BenchmarkQuote[]>([]);
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(true);
   const [marketComparison, setMarketComparison] =
@@ -729,20 +731,29 @@ function Dashboard() {
   }, []);
   const holdingsHash = useMemo(() => computeHoldingsHash(holdings), [holdings]);
   const shouldWaitForSyncedHoldings =
-    !!user && (portfolioLoading || (hasHoldings && holdings.length === 0));
+    !!user &&
+    (portfolioLoading ||
+      !activeHoldingsLoaded ||
+      (hasHoldings && holdings.length === 0));
 
   useEffect(() => {
     const loadHoldings = async () => {
-      if (user && !portfolio && portfolioLoading) return;
+      if (user && !portfolio) {
+        setActiveHoldingsLoaded(false);
+        return;
+      }
+
+      setActiveHoldingsLoaded(false);
       try {
-        setHoldings(
-          await loadActiveHoldings({
-            portfolioId: portfolio?.id,
-            isDemoMode,
-          }),
-        );
+        const loadedHoldings = await loadActiveHoldings({
+          portfolioId: portfolio?.id,
+          isDemoMode,
+        });
+        setHoldings(loadedHoldings);
       } catch {
         setHoldings([]);
+      } finally {
+        setActiveHoldingsLoaded(true);
       }
     };
 
@@ -1198,7 +1209,13 @@ function Dashboard() {
           : "Low";
 
   const showEmptyOnboarding =
-    !!user && !isDemoMode && !portfolioLoading && !hasHoldings;
+    !!user &&
+    !isDemoMode &&
+    !portfolioLoading &&
+    !!portfolio &&
+    activeHoldingsLoaded &&
+    savedHoldingsCount === 0 &&
+    holdings.length === 0;
 
   if (showEmptyOnboarding) {
     const previewCards = [
