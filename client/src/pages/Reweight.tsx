@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { computeHoldingsHash } from "../lib/dashboardCache";
 import { loadActiveHoldings } from "../services/activeHoldings";
+import { maskSensitiveAmount } from "../lib/privacyFormat";
 import { AllocationComparison, type AllocationRow } from "../components/rebalance/AllocationComparison";
 
 type TargetMode =
@@ -306,7 +307,8 @@ function Reweight() {
     setManualTargets((cur) => ({ ...cur, [symbol]: Number.isFinite(parsed) ? parsed : 0 }));
   };
 
-  const maskDollar = (v: string) => (settings.hideDollarAmounts ? "..." : v);
+  const maskDollar = (v: string) =>
+    maskSensitiveAmount(v, settings.hideDollarAmounts);
 
   return (
     <div className="route-page">
@@ -506,7 +508,6 @@ function Reweight() {
           {data && !hasNoHoldings && allocationRows.length > 0 && (
             <AllocationComparison
               rows={allocationRows}
-              maskPercent={settings.hideDollarAmounts}
             />
           )}
 
@@ -742,6 +743,7 @@ function Reweight() {
                 totalValueCad: data.totalValueCad,
                 settings: data.settings,
                 targetMode: data.targetMode,
+                hideDollarAmounts: settings.hideDollarAmounts,
               }).map((line, i) => (
                 <li key={i}>{line}</li>
               ))}

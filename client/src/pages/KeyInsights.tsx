@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { computeHoldingsHash } from "../lib/dashboardCache";
 import { loadActiveHoldings } from "../services/activeHoldings";
+import { maskSensitiveAmount } from "../lib/privacyFormat";
 
 type Insight = {
   title: string;
@@ -84,7 +85,7 @@ function KeyInsights() {
   });
 
   const maskDollar = (displayValue: string) =>
-    settings.hideDollarAmounts ? "..." : displayValue;
+    maskSensitiveAmount(displayValue, settings.hideDollarAmounts);
 
   const loadInsights = useCallback(async (force = false) => {
     setIsLoading(true);

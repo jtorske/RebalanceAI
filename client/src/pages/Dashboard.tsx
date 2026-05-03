@@ -16,6 +16,7 @@ import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import { useTickerEnrichment } from "../hooks/useTickerEnrichment";
 import { loadActiveHoldings } from "../services/activeHoldings";
 import { DataStatusPanel } from "../components/common/DataStatusPanel";
+import { maskSensitiveAmount } from "../lib/privacyFormat";
 import {
   computeHoldingsHash,
   loadMarketSummaryCache,
@@ -1095,7 +1096,7 @@ function Dashboard() {
   };
 
   const maskDollar = (displayValue: string) =>
-    settings.hideDollarAmounts ? "..." : displayValue;
+    maskSensitiveAmount(displayValue, settings.hideDollarAmounts);
 
   const formatSpread = (value: number | null) => {
     if (value === null || portfolioDailyPercent === null) {

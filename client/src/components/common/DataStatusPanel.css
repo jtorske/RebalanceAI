@@ -38,7 +38,7 @@
 .dsp-quality {
   color: var(--app-text-soft, #303039);
   font-weight: 800;
-  gap: 5px;
+  gap: 6px;
   margin-right: 4px;
 }
 
@@ -47,6 +47,7 @@
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
+  margin-right: 3px;
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 14%, transparent);

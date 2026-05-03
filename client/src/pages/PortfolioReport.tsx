@@ -8,6 +8,7 @@ import { useUserSettings } from "../lib/userSettings";
 import { convertToCad } from "../lib/holdingsUtils";
 import { readDataStatus } from "../lib/dataStatus";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
+import { formatMoney } from "../lib/privacyFormat";
 import type { ImportedHolding } from "../lib/types";
 import "./PortfolioReport.css";
 
@@ -150,13 +151,7 @@ export default function PortfolioReport() {
     DEFAULT_GOAL_AMOUNT / Math.pow(1 + DEFAULT_INFLATION, years);
 
   const maskMoney = (value: number) =>
-    settings.hideDollarAmounts
-      ? "..."
-      : new Intl.NumberFormat("en-CA", {
-          style: "currency",
-          currency: "CAD",
-          maximumFractionDigits: 0,
-        }).format(value);
+    formatMoney(value, { hideDollarAmounts: settings.hideDollarAmounts });
 
   const generatedAt = new Date().toLocaleString(undefined, {
     month: "short",

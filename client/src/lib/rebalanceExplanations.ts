@@ -17,6 +17,7 @@ type ExplainableContext = {
   totalValueCad: number;
   settings: { maxSingleStockPct: number };
   targetMode: string;
+  hideDollarAmounts?: boolean;
 };
 
 function fmtPct(v: number | null): string {
@@ -24,8 +25,9 @@ function fmtPct(v: number | null): string {
   return `${v.toFixed(1)}%`;
 }
 
-function fmtCad(v: number | null): string {
+function fmtCad(v: number | null, hideDollarAmounts = false): string {
   if (v === null) return "—";
+  if (hideDollarAmounts) return "••••";
   const abs = Math.abs(v);
   if (abs >= 1_000_000) return `$${(abs / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `$${(abs / 1_000).toFixed(1)}K`;
@@ -48,7 +50,7 @@ export function buildTradeExplanation(
   ctx: ExplainableContext,
 ): string[] {
   const lines: string[] = [];
-  const { targetMode, settings } = ctx;
+  const { targetMode, settings, hideDollarAmounts = false } = ctx;
 
   if (!item.includedInRebalance) {
     lines.push(`${item.symbol} is excluded from the rebalance plan.`);
@@ -81,7 +83,7 @@ export function buildTradeExplanation(
     );
     if (item.tradeCad !== null) {
       lines.push(
-        `Buying ${fmtCad(item.tradeCad)}` +
+        `Buying ${fmtCad(item.tradeCad, hideDollarAmounts)}` +
           (item.tradeShares !== null ? ` (~${item.tradeShares.toFixed(2)} shares)` : "") +
           " would bring it in line with the target.",
       );
@@ -101,7 +103,7 @@ export function buildTradeExplanation(
     );
     if (item.tradeCad !== null) {
       lines.push(
-        `Selling ${fmtCad(Math.abs(item.tradeCad))}` +
+        `Selling ${fmtCad(Math.abs(item.tradeCad), hideDollarAmounts)}` +
           (item.tradeShares !== null
             ? ` (~${Math.abs(item.tradeShares).toFixed(2)} shares)`
             : "") +

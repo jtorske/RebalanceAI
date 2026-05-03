@@ -5,6 +5,7 @@ import { useUserSettings } from "../lib/userSettings";
 import { useAuth } from "../context/AuthContext";
 import { useDemoMode } from "../lib/demoMode";
 import { loadActiveHoldings } from "../services/activeHoldings";
+import { maskSensitiveAmount, maskSensitiveText } from "../lib/privacyFormat";
 import "./GoalPlanner.css";
 
 type RiskProfile = "conservative" | "moderate" | "aggressive";
@@ -224,9 +225,10 @@ export default function GoalPlanner() {
   if (!xLabels.includes(years)) xLabels.push(years);
   const yLabels = [0, 0.25, 0.5, 0.75, 1].map((f) => f * yMax);
 
-  const mask = (s: string) => (settings.hideDollarAmounts ? "···" : s);
+  const mask = (s: string) =>
+    maskSensitiveAmount(s, settings.hideDollarAmounts);
   const maskGoalText = (s: string) =>
-    settings.hideDollarAmounts ? s.replace(/CA\$[\d.,]+[Mk]?/g, "···") : s;
+    maskSensitiveText(s, settings.hideDollarAmounts);
 
   return (
     <div className="goal-shell">
@@ -381,7 +383,7 @@ export default function GoalPlanner() {
                       stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
                     <text x={ML - 6} y={sy(v)} textAnchor="end" dominantBaseline="middle"
                       fontSize="10" fill="var(--app-muted, #888)">
-                      {fmtAxis(v)}
+                      {mask(fmtAxis(v))}
                     </text>
                   </g>
                 ))}
@@ -407,7 +409,7 @@ export default function GoalPlanner() {
                       rx={4} fill="rgba(252,200,96,0.15)" />
                     <text x={ML + PW - 4} y={goalY - 4} textAnchor="end"
                       fontSize="10" fontWeight="600" fill="#FCC860">
-                      Goal {fmtAxis(goalAmount)}
+                      Goal {mask(fmtAxis(goalAmount))}
                     </text>
                   </g>
                 )}
@@ -506,8 +508,12 @@ export default function GoalPlanner() {
                 </div>
                 <div className="goal-outcome-sub">
                   {extraNeeded > 0
-                    ? `Total needed: CA$${Math.ceil(reqMonthly).toLocaleString()}/mo`
-                    : `CA$${monthlyContrib.toLocaleString()}/mo is sufficient`}
+                    ? maskGoalText(
+                        `Total needed: CA$${Math.ceil(reqMonthly).toLocaleString()}/mo`,
+                      )
+                    : maskGoalText(
+                        `CA$${monthlyContrib.toLocaleString()}/mo is sufficient`,
+                      )}
                 </div>
               </div>
 
@@ -525,3 +531,4 @@ export default function GoalPlanner() {
     </div>
   );
 }
+

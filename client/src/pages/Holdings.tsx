@@ -38,6 +38,7 @@ import type {
 } from "../lib/types";
 import { saveDataStatus } from "../lib/dataStatus";
 import { DataStatusPanel } from "../components/common/DataStatusPanel";
+import { maskSensitiveAmount } from "../lib/privacyFormat";
 
 function HoldingsPage() {
   const { settings } = useUserSettings();
@@ -328,7 +329,7 @@ function HoldingsPage() {
   const tickerMeta = useTickerEnrichment(allSymbols);
 
   const maskDollar = (displayValue: string) =>
-    settings.hideDollarAmounts ? "..." : displayValue;
+    maskSensitiveAmount(displayValue, settings.hideDollarAmounts);
 
   const handleSort = (key: SortKey) => {
     if (sortKey !== key) {

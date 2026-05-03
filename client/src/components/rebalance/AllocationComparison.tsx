@@ -13,7 +13,6 @@ export type AllocationRow = {
 
 type Props = {
   rows: AllocationRow[];
-  maskPercent?: boolean;
 };
 
 const DEFAULT_VISIBLE = 8;
@@ -28,7 +27,7 @@ function fmtDrift(v: number | null): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-export function AllocationComparison({ rows, maskPercent = false }: Props) {
+export function AllocationComparison({ rows }: Props) {
   const [showAll, setShowAll] = useState(false);
 
   const sorted = [...rows].sort((a, b) => b.currentPct - a.currentPct);
@@ -88,7 +87,7 @@ export function AllocationComparison({ rows, maskPercent = false }: Props) {
 
                   <td className="ac-cell-pct">
                     <span className="ac-pct-value">
-                      {maskPercent ? "·····" : fmt(row.currentPct)}
+                      {fmt(row.currentPct)}
                     </span>
                     <div className="ac-bar-track">
                       <div
@@ -100,7 +99,7 @@ export function AllocationComparison({ rows, maskPercent = false }: Props) {
 
                   <td className="ac-cell-pct">
                     <span className="ac-pct-value">
-                      {maskPercent ? "·····" : fmt(row.targetPct)}
+                      {fmt(row.targetPct)}
                     </span>
                     <div className="ac-bar-track">
                       <div
@@ -112,7 +111,7 @@ export function AllocationComparison({ rows, maskPercent = false }: Props) {
 
                   <td className="ac-cell-pct">
                     <span className="ac-pct-value">
-                      {maskPercent ? "·····" : fmt(row.afterPct)}
+                      {fmt(row.afterPct)}
                     </span>
                     <div className="ac-bar-track">
                       <div
@@ -129,7 +128,7 @@ export function AllocationComparison({ rows, maskPercent = false }: Props) {
                   </td>
 
                   <td className={`ac-cell-drift ${driftClass}`}>
-                    {maskPercent ? "·····" : fmtDrift(row.driftAfter)}
+                    {fmtDrift(row.driftAfter)}
                   </td>
                 </tr>
               );
