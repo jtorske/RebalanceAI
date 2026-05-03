@@ -1,6 +1,5 @@
 .dashboard-shell {
   height: 100vh;
-  height: 100dvh;
   overflow: hidden;
 }
 
@@ -347,7 +346,7 @@
 
 .dashboard-donut-stage {
   position: relative;
-  max-width: min(100%, clamp(340px, calc(100dvh - 260px), 620px));
+  max-width: min(100%, clamp(340px, calc(100vh - 260px), 620px));
   width: 100%;
   display: flex;
   align-items: center;
@@ -433,6 +432,9 @@
   max-width: min(100%, 520px);
   min-width: 0;
   isolation: isolate;
+}
+
+.dashboard-donut-chart--appearing {
   animation: donut-appear 0.5s ease forwards;
 }
 
@@ -605,13 +607,12 @@
   background: linear-gradient(135deg, #f3f0ff 0%, #eef0ff 100%);
   border: 1px solid #ddd9f7;
   border-radius: 10px;
-  padding: 10px 12px;
-  flex: 1;
+  padding: 8px 12px;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
+  gap: 6px;
+  align-items: flex-start;
 }
 
 .dashboard-ai-summary-text {
@@ -720,7 +721,7 @@
 }
 
 .dashboard-comparison-row {
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 10px;
   border-radius: 8px;
   background: #f7f7f9;
@@ -730,6 +731,7 @@
 
 .dashboard-comparison-row-portfolio {
   background: #eef0ff;
+  font-weight: 600;
 }
 
 .dashboard-comparison-row-loading {

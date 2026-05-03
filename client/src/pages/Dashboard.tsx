@@ -48,6 +48,10 @@ type SectorBreakdownResponse = {
 
 const MAX_CARD_ACTION_ROWS = 5;
 
+// Session-scoped cache — keyed by holdingsHash so tab-focus re-renders that
+// produce a new `holdings` array reference (same data) skip the network call.
+const sectorBreakdownCache = new Map<string, SectorBreakdownEntry[]>();
+
 const formatSummaryDirection = (value: number | null | undefined) => {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return "unavailable";
@@ -90,6 +94,15 @@ const repairTextEncoding = (value: string) =>
     .replaceAll("\u00e2\u0080\u009d", '"')
     .replaceAll("\u00e2\u0080\u0093", "-")
     .replaceAll("\u00e2\u0080\u0094", "-");
+
+const sanitizeAiSummary = (text: string): string =>
+  repairTextEncoding(text)
+    .replace(
+      /^(Sure[,!]?\s+|Certainly[,!]?\s+|Here is\s+.*?:\s*|Here's\s+.*?:\s*|Of course[,!]?\s+|Absolutely[,!]?\s+)/i,
+      "",
+    )
+    .replace(/\*\*/g, "")
+    .trim();
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
   if (holdings.length === 0) {
@@ -454,6 +467,13 @@ function Dashboard() {
   const [hoveredChipSymbol, setHoveredChipSymbol] = useState<string | null>(
     null,
   );
+  // One-shot flag: removed after the enter animation completes so tab-switch
+  // visibility events can never restart the donut-appear animation.
+  const [donutAppeared, setDonutAppeared] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDonutAppeared(true), 550);
+    return () => clearTimeout(t);
+  }, []);
   const holdingsHash = useMemo(() => computeHoldingsHash(holdings), [holdings]);
   const shouldWaitForSyncedHoldings =
     !!user && (portfolioLoading || (hasHoldings && holdings.length === 0));
@@ -577,6 +597,16 @@ function Dashboard() {
   } = useDashboardSummary(holdings, user?.id);
 
   useEffect(() => {
+    // Return cached result immediately if holdings content hasn't changed.
+    // This prevents re-fetching when a Supabase auth refresh on tab focus
+    // produces a new `holdings` array reference with identical data.
+    const cached = sectorBreakdownCache.get(holdingsHash);
+    if (cached) {
+      setSectorBreakdown(cached);
+      setIsLoadingSectorBreakdown(false);
+      return;
+    }
+
     const loadSectorBreakdown = async () => {
       setIsLoadingSectorBreakdown(true);
       try {
@@ -588,21 +618,21 @@ function Dashboard() {
         if (!res.ok) throw new Error("sector-breakdown fetch failed");
         const data = (await res.json()) as SectorBreakdownResponse;
         if ((data.sectors ?? []).length > 0) {
+          sectorBreakdownCache.set(holdingsHash, data.sectors ?? []);
           setSectorBreakdown(data.sectors ?? []);
           return;
         }
-
         throw new Error("sector-breakdown returned empty sectors");
       } catch {
-        setSectorBreakdown(buildSectorBreakdownFromHoldings(holdings));
+        const fallback = buildSectorBreakdownFromHoldings(holdings);
+        sectorBreakdownCache.set(holdingsHash, fallback);
+        setSectorBreakdown(fallback);
       } finally {
         setIsLoadingSectorBreakdown(false);
       }
     };
 
-    const refreshSectorBreakdown = () => {
-      void loadSectorBreakdown();
-    };
+    const refreshSectorBreakdown = () => { void loadSectorBreakdown(); };
 
     void loadSectorBreakdown();
     window.addEventListener("holdings-changed", refreshSectorBreakdown);
@@ -610,7 +640,7 @@ function Dashboard() {
     return () => {
       window.removeEventListener("holdings-changed", refreshSectorBreakdown);
     };
-  }, [holdings]);
+  }, [holdings, holdingsHash]);
 
 
   const totalMarketValueCad = useMemo(
@@ -790,8 +820,7 @@ function Dashboard() {
       return "--";
     }
     const spread = value - portfolioDailyPercent;
-    const arrow = spread >= 0 ? "▲" : "▼";
-    return `${arrow} ${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`;
+    return `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`;
   };
 
   const getVsPortfolioClass = (spread: number | null) => {
@@ -807,14 +836,15 @@ function Dashboard() {
       ? null
       : marketDailyPercent - portfolioDailyPercent;
 
-  const welcomeName = user
-    ? (
-        profile?.display_name?.split(" ")[0] ||
-        profile?.full_name?.split(" ")[0] ||
-        settings.displayName.trim() ||
-        "there"
-      )
-    : "there";
+  const performanceHeadline: string = (() => {
+    if (portfolioDailyPercent === null) return "Today's market update";
+    const sign = portfolioDailyPercent >= 0 ? "+" : "";
+    if (portfolioDailyPercent >= 0.5)
+      return `Portfolio up ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
+    if (portfolioDailyPercent <= -0.5)
+      return `Portfolio down ${portfolioDailyPercent.toFixed(2)}% today`;
+    return `Portfolio roughly flat at ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
+  })();
 
   const suggestionCards = useMemo(() => {
     const text = (
@@ -1024,7 +1054,7 @@ function Dashboard() {
                         ) : (
                           <div>
                             <p className="dashboard-ai-summary-title">
-                              Welcome back {welcomeName}
+                              {performanceHeadline}
                             </p>
                             <p className="dashboard-market-date">
                               {new Date().toLocaleDateString("en-CA", {
@@ -1033,32 +1063,9 @@ function Dashboard() {
                                 year: "numeric",
                               })}
                             </p>
-                            {(() => {
-                              const parts = (aiSummary ?? "").split(
-                                "Portfolio drivers:",
-                              );
-                              const market = parts[0].trim();
-                              const drivers = parts[1]?.trim() ?? null;
-                              return (
-                                <>
-                                  {market && (
-                                    <p className="dashboard-ai-summary-text">
-                                      {market}
-                                    </p>
-                                  )}
-                                  {drivers && (
-                                    <div className="dashboard-ai-drivers">
-                                      <span className="dashboard-ai-drivers-label">
-                                        Portfolio drivers
-                                      </span>
-                                      <p className="dashboard-ai-summary-text">
-                                        {drivers}
-                                      </p>
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
+                            <p className="dashboard-ai-summary-text">
+                              {sanitizeAiSummary(aiSummary ?? "")}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1068,7 +1075,7 @@ function Dashboard() {
                       <div className="dashboard-comparison-head">
                         <span>Asset</span>
                         <span>Daily</span>
-                        <span>Vs portfolio</span>
+                        <span>vs You</span>
                       </div>
 
                       <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
@@ -1143,7 +1150,7 @@ function Dashboard() {
                               <span className={getVsPortfolioClass(spread)}>
                                 {spread === null
                                   ? "--"
-                                  : `${spread >= 0 ? "▲" : "▼"} ${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
+                                  : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}%`}
                               </span>
                             </div>
                           );
@@ -1411,7 +1418,7 @@ function Dashboard() {
               <div className="dashboard-donut-wrap">
                 <div className="dashboard-donut-stage">
                   <div className="dashboard-donut-panel">
-                    <div className="dashboard-donut-chart">
+                    <div className={`dashboard-donut-chart${donutAppeared ? "" : " dashboard-donut-chart--appearing"}`}>
                       <svg
                         className="dashboard-donut-svg"
                         viewBox="0 0 100 100"
@@ -1430,7 +1437,7 @@ function Dashboard() {
                             cx="50"
                             cy="50"
                             r="35"
-                            key={`${segment.symbol}-${segment.weight.toString()}`}
+                            key={segment.symbol}
                             stroke={segment.color}
                             strokeDasharray={segment.dasharray}
                             strokeDashoffset={segment.dashoffset}
@@ -1509,7 +1516,7 @@ function Dashboard() {
                         return (
                           <button
                             className={`dashboard-donut-chip dashboard-donut-chip-${segment.labelSide}`}
-                            key={`${segment.symbol}-${segment.weight.toString()}-chip`}
+                            key={`${segment.symbol}-chip`}
                             style={segment.labelStyle}
                             type="button"
                             title={tooltip}
