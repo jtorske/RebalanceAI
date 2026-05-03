@@ -1,5 +1,6 @@
-fastapi
-uvicorn[standard]
-pydantic
-yfinance
-requests
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+starlette>=0.27.0
+pydantic>=2.0.0
+yfinance>=0.2.0
+requests>=2.28.0

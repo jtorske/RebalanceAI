@@ -24,17 +24,23 @@ OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 
 app = FastAPI()
 
-_CORS_ORIGINS_ENV = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:5174",
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+_CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
+_cors_origins: List[str] = (
+    ["*"]
+    if _CORS_ORIGINS_RAW.strip() == "*"
+    else [o.strip() for o in _CORS_ORIGINS_RAW.split(",") if o.strip()]
 )
-_cors_origins = [o.strip() for o in _CORS_ORIGINS_ENV.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_credentials=True,
+    allow_credentials=_CORS_ORIGINS_RAW.strip() != "*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -443,14 +449,6 @@ async def log_routes():
 def root():
     return {"message": "Portfolio API running"}
 
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "ok",
-        "service": "rebalancex-analytics",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
 
 
 @app.get("/debug/quote-test")
