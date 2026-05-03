@@ -1,0 +1,11 @@
+from app.routes._legacy import router_from_legacy
+
+
+router = router_from_legacy(
+    [
+        "/portfolio/sector-breakdown",
+        "/portfolio/earnings-calendar",
+        "/portfolio/key-insights",
+        "/analyze",
+    ]
+)
