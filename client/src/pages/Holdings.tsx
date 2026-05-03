@@ -422,7 +422,7 @@ function HoldingsPage() {
   const handleDeleteHoldings = async () => {
     const hasAnyHoldings = (persisted?.holdings.length ?? 0) > 0;
     if (!hasAnyHoldings) {
-      setError("No persisted holdings available to delete.");
+      setError("No saved holdings available to delete.");
       return;
     }
 
@@ -450,7 +450,7 @@ function HoldingsPage() {
       setParsedHoldings([]);
       setFileName(null);
       setAsOf(null);
-      setMessage("Deleted all persisted holdings.");
+      setMessage("Deleted all saved holdings.");
       window.dispatchEvent(new Event("holdings-changed"));
     } catch (deleteError) {
       const details =

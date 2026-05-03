@@ -1156,7 +1156,7 @@ function Dashboard() {
                   <div className="dashboard-card-header-row dashboard-structured-card-header">
                     <div className="dashboard-card-title-row">
                       <HiOutlineLightBulb size={31} />
-                      <span>Suggested Rebalance</span>
+                      <span>AI Rebalance Assistant</span>
                     </div>
                   </div>
 
@@ -1369,7 +1369,7 @@ function Dashboard() {
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  View all {riskData?.concernTotal ?? 0} items →
+                                  Review all {riskData?.concernTotal ?? 0} risks →
                                 </Link>
                               )}
                             </>
