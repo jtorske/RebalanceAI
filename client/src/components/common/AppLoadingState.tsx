@@ -7,10 +7,10 @@ type AppLoadingStateProps = {
   onRetry?: () => void;
 };
 
-const steps = [
-  "Connecting to analytics API",
-  "Loading portfolio data",
-  "Preparing dashboard insights",
+const steps: { label: string; tag: string; activeOn: ApiHealthStatus }[] = [
+  { label: "Reaching analytics API", tag: "Connecting", activeOn: "checking" },
+  { label: "Waking up backend services", tag: "Warming up", activeOn: "warming" },
+  { label: "Preparing portfolio data", tag: "Loading", activeOn: "ready" },
 ];
 
 export function AppLoadingState({ status, onRetry }: AppLoadingStateProps) {
@@ -44,11 +44,11 @@ export function AppLoadingState({ status, onRetry }: AppLoadingStateProps) {
 
         {!isError && (
           <div className="app-loading-steps">
-            {steps.map((step, index) => (
-              <div className="app-loading-step" key={step}>
+            {steps.map((step) => (
+              <div className="app-loading-step" key={step.label}>
                 <span className="app-loading-step-dot" />
-                <span>{step}</span>
-                {index === 0 && <strong>Connecting</strong>}
+                <span>{step.label}</span>
+                {step.activeOn === status && <strong>{step.tag}</strong>}
               </div>
             ))}
           </div>

@@ -30,6 +30,11 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/ready")
+def ready():
+    return {"status": "ready", "api": "ok"}
+
+
 _CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
 _cors_origins: List[str] = (
     ["*"]

@@ -17,7 +17,7 @@ export function ApiStatusBanner({ status, onRetry }: ApiStatusBannerProps) {
       <span>
         {isError
           ? "We couldn't connect to the analytics API. Please refresh or try again shortly."
-          : "Hosted demo is waking up. Preparing your portfolio dashboard."}
+          : "Analytics engine is still warming up — some features may load slowly."}
       </span>
       {isError && (
         <button type="button" onClick={onRetry}>

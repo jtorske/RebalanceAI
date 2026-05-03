@@ -8,6 +8,7 @@ type HealthResult = {
   elapsedMs: number;
   retryNow: () => void;
   isHostedApi: boolean;
+  attempt: number;
 };
 
 const HEALTH_TIMEOUT_MS = 3500;
@@ -23,25 +24,19 @@ const isHostedApiUrl = (url: string) => {
   }
 };
 
-async function checkHealth(signal: AbortSignal): Promise<boolean> {
-  const timeoutController = new AbortController();
-  const timeoutId = window.setTimeout(
-    () => timeoutController.abort(),
-    HEALTH_TIMEOUT_MS,
-  );
-
-  const abortOnParent = () => timeoutController.abort();
-  signal.addEventListener("abort", abortOnParent, { once: true });
-
+async function fetchOk(url: string, parentSignal: AbortSignal): Promise<boolean> {
+  const ctl = new AbortController();
+  const tid = window.setTimeout(() => ctl.abort(), HEALTH_TIMEOUT_MS);
+  const abortOnParent = () => ctl.abort();
+  parentSignal.addEventListener("abort", abortOnParent, { once: true });
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
-      cache: "no-store",
-      signal: timeoutController.signal,
-    });
-    return response.ok;
+    const res = await fetch(url, { cache: "no-store", signal: ctl.signal });
+    return res.ok;
+  } catch {
+    return false;
   } finally {
-    window.clearTimeout(timeoutId);
-    signal.removeEventListener("abort", abortOnParent);
+    window.clearTimeout(tid);
+    parentSignal.removeEventListener("abort", abortOnParent);
   }
 }
 
@@ -56,39 +51,45 @@ export function useApiHealth(): HealthResult {
     startedAtRef.current = Date.now();
     setElapsedMs(0);
     setStatus("checking");
-    setAttempt((value) => value + 1);
+    setAttempt((v) => v + 1);
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     let retryId: number | undefined;
-    if (startedAtRef.current === 0) {
-      startedAtRef.current = Date.now();
-    }
+    if (startedAtRef.current === 0) startedAtRef.current = Date.now();
+
+    const scheduleRetry = (elapsed: number) => {
+      if (elapsed < ERROR_AFTER_MS) {
+        retryId = window.setTimeout(() => setAttempt((v) => v + 1), RETRY_INTERVAL_MS);
+      }
+    };
 
     const run = async () => {
-      const ok = await checkHealth(controller.signal).catch(() => false);
+      // Phase 1: liveness — server must respond at all
+      const alive = await fetchOk(`${API_BASE_URL}/health`, controller.signal);
       if (controller.signal.aborted) return;
 
-      if (ok) {
-        setStatus("ready");
+      if (!alive) {
+        if (!isHostedApi) { setStatus("ready"); return; }
+        const elapsed = Date.now() - startedAtRef.current;
+        setElapsedMs(elapsed);
+        setStatus(elapsed >= ERROR_AFTER_MS ? "error" : "checking");
+        scheduleRetry(elapsed);
         return;
       }
 
-      if (!isHostedApi) {
-        setStatus("ready");
-        return;
-      }
+      // Phase 2: readiness — server is up and accepting work
+      setStatus("warming");
+      const ready = await fetchOk(`${API_BASE_URL}/ready`, controller.signal);
+      if (controller.signal.aborted) return;
+
+      if (ready || !isHostedApi) { setStatus("ready"); return; }
 
       const elapsed = Date.now() - startedAtRef.current;
       setElapsedMs(elapsed);
       setStatus(elapsed >= ERROR_AFTER_MS ? "error" : "warming");
-
-      if (elapsed < ERROR_AFTER_MS) {
-        retryId = window.setTimeout(() => {
-          setAttempt((value) => value + 1);
-        }, RETRY_INTERVAL_MS);
-      }
+      scheduleRetry(elapsed);
     };
 
     const elapsedId = window.setInterval(() => {
@@ -100,9 +101,9 @@ export function useApiHealth(): HealthResult {
     return () => {
       controller.abort();
       if (retryId) window.clearTimeout(retryId);
-      if (elapsedId) window.clearInterval(elapsedId);
+      window.clearInterval(elapsedId);
     };
   }, [attempt, isHostedApi]);
 
-  return { status, elapsedMs, retryNow, isHostedApi };
+  return { status, elapsedMs, retryNow, isHostedApi, attempt };
 }

@@ -37,6 +37,7 @@ function AppRoutes() {
   if (shouldBlockForApi) {
     return (
       <AppLoadingState
+        key={apiHealth.attempt}
         status={apiHealth.status}
         onRetry={apiHealth.retryNow}
       />
