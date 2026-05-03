@@ -7,6 +7,7 @@ import HoldingsPage from "./pages/Holdings";
 import KeyInsights from "./pages/KeyInsights";
 import RiskManager from "./pages/RiskManager";
 import GoalPlanner from "./pages/GoalPlanner";
+import PortfolioReport from "./pages/PortfolioReport";
 import { UserSettingsProvider } from "./lib/userSettings";
 import { DemoModeProvider, useDemoMode } from "./lib/demoMode";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="/key-insights" element={<KeyInsights />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/goal-planner" element={<GoalPlanner />} />
+        <Route path="/portfolio-report" element={<PortfolioReport />} />
       </Routes>
     </>
   );

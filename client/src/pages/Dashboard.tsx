@@ -1919,6 +1919,11 @@ function Dashboard() {
               </div>
             </div>
           </section>
+          <div className="dashboard-report-actions">
+            <Link className="dashboard-report-link" to="/portfolio-report">
+              Generate Portfolio Report
+            </Link>
+          </div>
           <DataStatusPanel />
         </main>
       </div>
