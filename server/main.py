@@ -10,18 +10,23 @@ import re
 import time
 import requests
 import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 
 logger = logging.getLogger("rebalanceai")
 
 _ai_summary_cache: Dict[str, Dict[str, Any]] = {}
+_quote_cache: Dict[str, Dict[str, Any]] = {}
 _market_cap_cache: Dict[str, Any] = {}  # keyed by date → {symbol: market_cap}
 _sector_cache: Dict[str, Dict[str, Any]] = {}
 _risk_profile_cache: Dict[str, Dict[str, Any]] = {}
 _ticker_metadata_cache: Dict[str, Dict[str, Any]] = {}  # symbol → {data, fetched_at}
 TICKER_METADATA_TTL = 7 * 24 * 3600  # 7 days
+QUOTE_CACHE_TTL = 15 * 60
+YFINANCE_TIMEOUT_SECONDS = 5
+YFINANCE_BATCH_TIMEOUT_SECONDS = 8
 AI_SUMMARY_PROMPT_VERSION = "summary-v6"
 OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
+_yfinance_executor = ThreadPoolExecutor(max_workers=8)
 
 app = FastAPI()
 
@@ -144,6 +149,35 @@ ETF_SYMBOLS = {
     "XIU",
     "ZAG",
 }
+KNOWN_SECTOR_BY_SYMBOL = {
+    "AMD": "Technology",
+    "ANET": "Technology",
+    "AAPL": "Technology",
+    "AMZN": "Consumer Discretionary",
+    "CEG": "Utilities",
+    "CNR": "Industrials",
+    "CN": "Industrials",
+    "ENB": "Energy",
+    "ETN": "Industrials",
+    "GDX": "Materials",
+    "GEV": "Industrials",
+    "GOOG": "Communication Services",
+    "HG": "Materials",
+    "INTC": "Technology",
+    "META": "Communication Services",
+    "MSFT": "Technology",
+    "MU": "Technology",
+    "NVDA": "Technology",
+    "ONDS": "Technology",
+    "SLS": "Healthcare",
+    "SNDK": "Technology",
+    "SU": "Energy",
+    "TSM": "Technology",
+    "VFV": "ETF / Diversified",
+    "VST": "Utilities",
+    "WDC": "Technology",
+    "XEQT": "ETF / Diversified",
+}
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -152,6 +186,23 @@ def _to_float(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return parsed
+
+
+def _run_yfinance_with_timeout(
+    fn: Any,
+    timeout: int = YFINANCE_TIMEOUT_SECONDS,
+    fallback: Any = None,
+) -> Any:
+    future = _yfinance_executor.submit(fn)
+    try:
+        return future.result(timeout=timeout)
+    except TimeoutError:
+        logger.warning("yfinance call timed out after %ss", timeout)
+        future.cancel()
+        return fallback
+    except Exception as err:
+        logger.debug("yfinance call failed: %s", err)
+        return fallback
 
 
 def _convert_to_cad(amount: float, currency: str) -> float:
@@ -234,24 +285,42 @@ def _fetch_quotes_for_symbols(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     if not deduped:
         return {}
 
-    # OCC option symbols contain digits; regular equity/ETF symbols do not
-    stock_syms = [s for s in deduped if not any(c.isdigit() for c in s)]
-    option_syms = [s for s in deduped if any(c.isdigit() for c in s)]
-
+    now_ts = time.time()
     result: Dict[str, Dict[str, Any]] = {}
+    to_fetch: List[str] = []
+    for symbol in deduped:
+        cached = _quote_cache.get(symbol)
+        if cached and now_ts - cached.get("fetched_at", 0) < QUOTE_CACHE_TTL:
+            result[symbol] = cached["data"]
+        else:
+            to_fetch.append(symbol)
+
+    if not to_fetch:
+        return result
+
+    # OCC option symbols contain digits; regular equity/ETF symbols do not
+    stock_syms = [s for s in to_fetch if not any(c.isdigit() for c in s)]
+    option_syms = [s for s in to_fetch if any(c.isdigit() for c in s)]
 
     # ── Batch download for stocks/ETFs ──────────────────────────────────────
     if stock_syms:
-        try:
+        def download_stock_quotes():
             ticker_arg = stock_syms[0] if len(stock_syms) == 1 else stock_syms
-            raw = yf.download(
+            return yf.download(
                 ticker_arg,
                 period="5d",
                 interval="1d",
                 auto_adjust=True,
                 progress=False,
+                timeout=YFINANCE_TIMEOUT_SECONDS,
             )
-            if not raw.empty:
+
+        raw = _run_yfinance_with_timeout(
+            download_stock_quotes,
+            timeout=YFINANCE_BATCH_TIMEOUT_SECONDS,
+        )
+        try:
+            if raw is not None and not raw.empty:
                 close_col = raw["Close"]
                 is_multi = hasattr(close_col, "columns")
                 for sym in stock_syms:
@@ -260,24 +329,51 @@ def _fetch_quotes_for_symbols(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
                         q = _quote_from_series(sym, series)
                         if q:
                             result[sym] = q
-                    except Exception as e:
-                        logger.debug("Stock quote skipped for %s: %s", sym, e)
-            else:
+                            _quote_cache[sym] = {"data": q, "fetched_at": now_ts}
+                    except Exception as err:
+                        logger.debug("Stock quote skipped for %s: %s", sym, err)
+            elif raw is not None:
                 logger.warning("yfinance returned empty data for stocks: %s", stock_syms)
-        except Exception as e:
-            logger.error("Stock batch download failed: %s", e, exc_info=True)
+        except Exception as err:
+            logger.error("Stock batch parse failed: %s", err, exc_info=True)
 
     # ── Individual history fetch for option contracts ────────────────────────
-    for sym in option_syms:
+    def fetch_option_quote(sym: str) -> Optional[Dict[str, Any]]:
         try:
-            hist = yf.Ticker(sym).history(period="5d", interval="1d")
-            if hist.empty or "Close" not in hist.columns:
-                continue
-            q = _quote_from_series(sym, hist["Close"])
-            if q:
-                result[sym] = q
-        except Exception as e:
-            logger.debug("Option quote skipped for %s: %s", sym, e)
+            hist = yf.Ticker(sym).history(
+                period="5d",
+                interval="1d",
+                timeout=YFINANCE_TIMEOUT_SECONDS,
+            )
+            if hist is None or hist.empty or "Close" not in hist.columns:
+                return None
+            return _quote_from_series(sym, hist["Close"])
+        except Exception as err:
+            logger.debug("Option quote skipped for %s: %s", sym, err)
+            return None
+
+    if option_syms:
+        max_workers = min(4, len(option_syms))
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            futures = {
+                pool.submit(fetch_option_quote, sym): sym
+                for sym in option_syms
+            }
+            try:
+                for future in as_completed(futures, timeout=YFINANCE_BATCH_TIMEOUT_SECONDS):
+                    sym = futures[future]
+                    try:
+                        q = future.result(timeout=1)
+                    except Exception:
+                        q = None
+                    if q:
+                        result[sym] = q
+                        _quote_cache[sym] = {"data": q, "fetched_at": now_ts}
+            except TimeoutError:
+                logger.warning("Option quote batch timed out for %s", option_syms)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     return result
 
@@ -990,7 +1086,13 @@ def create_ai_summary(payload: HoldingsSummaryRequest, force: bool = False):
 def _fetch_market_cap_single(symbol: str) -> Optional[float]:
     """Try fast_info then full .info to get market cap. Returns None only if both fail."""
     try:
-        fast = yf.Ticker(symbol).fast_info
+        fast = _run_yfinance_with_timeout(
+            lambda: yf.Ticker(symbol).fast_info,
+            timeout=YFINANCE_TIMEOUT_SECONDS,
+            fallback=None,
+        )
+        if fast is None:
+            raise ValueError("fast_info unavailable")
         mc = getattr(fast, "market_cap", None)
         if mc and float(mc) > 0:
             return float(mc)
@@ -1002,7 +1104,11 @@ def _fetch_market_cap_single(symbol: str) -> Optional[float]:
         pass
 
     try:
-        info = yf.Ticker(symbol).info
+        info = _run_yfinance_with_timeout(
+            lambda: yf.Ticker(symbol).info,
+            timeout=YFINANCE_TIMEOUT_SECONDS,
+            fallback={},
+        )
         mc = info.get("marketCap") or info.get("totalAssets")
         if mc and float(mc) > 0:
             return float(mc)
@@ -1025,17 +1131,28 @@ def _fetch_market_caps(symbols: List[str]) -> Dict[str, Optional[float]]:
 
     # Only fetch symbols not yet successfully resolved; failed symbols (absent from cache)
     # are retried on every request so transient yfinance errors self-heal.
-    to_fetch = [s for s in symbols if s not in cached]
-    for symbol in to_fetch:
-        mc = None
-        for attempt in range(3):
-            mc = _fetch_market_cap_single(symbol)
-            if mc is not None:
-                break
-            if attempt < 2:
-                time.sleep(0.4 * (attempt + 1))
-        if mc is not None:
-            cached[symbol] = mc
+    to_fetch = sorted({s for s in symbols if s not in cached})
+    if to_fetch:
+        max_workers = min(6, len(to_fetch))
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            futures = {
+                pool.submit(_fetch_market_cap_single, symbol): symbol
+                for symbol in to_fetch
+            }
+            try:
+                for future in as_completed(futures, timeout=12):
+                    symbol = futures[future]
+                    try:
+                        mc = future.result(timeout=1)
+                    except Exception:
+                        mc = None
+                    if mc is not None:
+                        cached[symbol] = mc
+            except TimeoutError:
+                logger.warning("Market cap batch timed out for %s", to_fetch)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
         # Do NOT cache None — absent entry means "retry next call"
 
     return {symbol: cached.get(symbol) for symbol in symbols}
@@ -1210,12 +1327,22 @@ def _fetch_stock_sector(symbol: str) -> Optional[str]:
     if not normalized:
         return None
 
+    base_symbol = normalized.split(".", 1)[0]
+    if base_symbol in KNOWN_SECTOR_BY_SYMBOL:
+        sector = KNOWN_SECTOR_BY_SYMBOL[base_symbol]
+        _sector_cache[normalized] = {"sector": sector}
+        return sector
+
     cached = _sector_cache.get(normalized)
     if cached is not None:
         return cached.get("sector")
 
+    info = _run_yfinance_with_timeout(
+        lambda: yf.Ticker(normalized).info,
+        timeout=YFINANCE_TIMEOUT_SECONDS,
+        fallback={},
+    )
     try:
-        info = yf.Ticker(normalized).info
         sector = str(info.get("sector") or "").strip()
         _sector_cache[normalized] = {"sector": sector or None}
         return sector or None
@@ -1225,14 +1352,42 @@ def _fetch_stock_sector(symbol: str) -> Optional[str]:
         return None
 
 
+def _infer_sector_from_name(name: str) -> Optional[str]:
+    normalized = name.strip().upper()
+    if not normalized:
+        return None
+    if "TECH" in normalized or "SEMICONDUCTOR" in normalized:
+        return "Technology"
+    if "HEALTH" in normalized or "PHARMA" in normalized or "BIO" in normalized:
+        return "Healthcare"
+    if "ENERGY" in normalized or "POWER" in normalized or "OIL" in normalized:
+        return "Energy"
+    if "BANK" in normalized or "FINANC" in normalized or "INSURANCE" in normalized:
+        return "Financials"
+    if "MINING" in normalized or "GOLD" in normalized or "METAL" in normalized:
+        return "Materials"
+    if "REIT" in normalized or "REAL ESTATE" in normalized:
+        return "Real Estate"
+    if "COMM" in normalized or "MEDIA" in normalized:
+        return "Communication Services"
+    return None
+
+
 def _sector_for_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
     normalized_symbol = _normalize_symbol_for_quote(holding)
     raw_symbol = str(holding.get("symbol", "")).strip().upper()
+    name = str(holding.get("name", "")).strip()
     asset_class = _classify_asset(holding, normalized_symbol or raw_symbol)
 
     if asset_class == "stock" and normalized_symbol:
-        sector = _fetch_stock_sector(normalized_symbol) or "Other"
-        source = "yfinance"
+        base_symbol = normalized_symbol.split(".", 1)[0]
+        sector = (
+            KNOWN_SECTOR_BY_SYMBOL.get(base_symbol)
+            or _infer_sector_from_name(name)
+            or "Other"
+        )
+        _sector_cache.setdefault(normalized_symbol, {"sector": sector})
+        source = "known" if sector != "Other" else "fallback"
     elif asset_class == "etf":
         sector = "ETF / Diversified"
         source = "asset_class"
@@ -1351,20 +1506,30 @@ def _fetch_risk_profile(symbol: str) -> Dict[str, Any]:
     profile: Dict[str, Any] = {
         "marketCap": None,
         "beta": None,
-        "sector": None,
+        "sector": KNOWN_SECTOR_BY_SYMBOL.get(normalized.split(".", 1)[0]),
         "earningsDate": None,
         "newsTitles": [],
     }
 
     try:
         ticker = yf.Ticker(normalized)
-        info = ticker.info or {}
+        info = _run_yfinance_with_timeout(
+            lambda: ticker.info or {},
+            timeout=YFINANCE_TIMEOUT_SECONDS,
+            fallback={},
+        )
+        news_titles = _run_yfinance_with_timeout(
+            lambda: _extract_news_titles(ticker),
+            timeout=YFINANCE_TIMEOUT_SECONDS,
+            fallback=[],
+        )
         profile = {
             "marketCap": _to_float(info.get("marketCap") or info.get("totalAssets")),
             "beta": _to_float(info.get("beta")),
-            "sector": str(info.get("sector") or "").strip() or None,
+            "sector": str(info.get("sector") or "").strip()
+            or profile.get("sector"),
             "earningsDate": _extract_earnings_date(info),
-            "newsTitles": _extract_news_titles(ticker),
+            "newsTitles": news_titles,
         }
     except Exception as err:
         logger.debug("Risk profile lookup skipped for %s: %s", normalized, err)
@@ -1500,6 +1665,34 @@ def _build_risk_analysis(
                 weight,
             )
 
+    risk_symbols = sorted(
+        {
+            str(item.get("quoteSymbol") or item.get("symbol") or "").strip().upper()
+            for item in positions
+            if item.get("assetClass") == "stock"
+        }
+    )
+    risk_profiles: Dict[str, Dict[str, Any]] = {}
+    if risk_symbols:
+        max_workers = min(6, len(risk_symbols))
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            futures = {
+                pool.submit(_fetch_risk_profile, symbol): symbol
+                for symbol in risk_symbols
+            }
+            try:
+                for future in as_completed(futures, timeout=18):
+                    symbol = futures[future]
+                    try:
+                        risk_profiles[symbol] = future.result(timeout=1)
+                    except Exception:
+                        risk_profiles[symbol] = {}
+            except TimeoutError:
+                logger.warning("Risk profile batch timed out for %s", risk_symbols)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
     for item in positions:
         if total_value <= 0 or item["currentValueCad"] <= 0:
             continue
@@ -1535,7 +1728,7 @@ def _build_risk_analysis(
         if asset_class != "stock":
             continue
 
-        profile = _fetch_risk_profile(quote_symbol)
+        profile = risk_profiles.get(str(quote_symbol).strip().upper(), {})
         market_cap = _to_float(profile.get("marketCap"))
         beta = _to_float(profile.get("beta"))
         earnings_date = profile.get("earningsDate")
@@ -2467,7 +2660,18 @@ def get_sector_breakdown():
 
 @app.post("/portfolio/sector-breakdown")
 def create_sector_breakdown(payload: HoldingsSummaryRequest):
-    return _build_sector_breakdown(_serialize_holdings(payload.holdings))
+    try:
+        return _build_sector_breakdown(_serialize_holdings(payload.holdings))
+    except Exception as exc:
+        logger.error("Error in POST /portfolio/sector-breakdown: %s", exc, exc_info=True)
+        now = datetime.now(timezone.utc)
+        return {
+            "sectors": [],
+            "perTicker": [],
+            "totalValueCad": 0,
+            "generatedAt": now.isoformat(),
+            "source": "fallback",
+        }
 
 
 @app.get("/risk/analysis")

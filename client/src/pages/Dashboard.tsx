@@ -61,10 +61,28 @@ type SectorBreakdownResponse = {
 };
 
 const MAX_CARD_ACTION_ROWS = 5;
+const ANALYTICS_TIMEOUT_MS = 30000;
+const ANALYTICS_LOADING_WATCHDOG_MS = 32000;
 
 // Session-scoped cache — keyed by holdingsHash so tab-focus re-renders that
 // produce a new `holdings` array reference (same data) skip the network call.
 const sectorBreakdownCache = new Map<string, SectorBreakdownEntry[]>();
+
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = ANALYTICS_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, {
+    ...options,
+    signal: controller.signal,
+  }).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
+}
 
 const formatSummaryDirection = (value: number | null | undefined) => {
   if (value === null || value === undefined || !Number.isFinite(value)) {
@@ -840,22 +858,20 @@ function Dashboard() {
 
     const loadBenchmarks = async () => {
       setIsLoadingBenchmarks(true);
-      const controller = new AbortController();
-      const abortTimeoutId = window.setTimeout(() => controller.abort(), 8000);
-      const loadingWatchdogId = window.setTimeout(() => setIsLoadingBenchmarks(false), 10000);
+      const loadingWatchdogId = window.setTimeout(
+        () => setIsLoadingBenchmarks(false),
+        ANALYTICS_LOADING_WATCHDOG_MS,
+      );
 
       try {
-        const response = (await Promise.race([
-          fetch(`${API_BASE_URL}/market/portfolio-vs-market`, {
-            signal: controller.signal,
+        const response = await fetchWithTimeout(
+          `${API_BASE_URL}/market/portfolio-vs-market`,
+          {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ holdings }),
-          }),
-          new Promise<Response>((_, reject) => {
-            window.setTimeout(() => reject(new Error("Benchmark request timed out.")), 8500);
-          }),
-        ])) as Response;
+          },
+        );
 
         if (!response.ok) throw new Error("Failed to load market comparison.");
 
@@ -870,7 +886,6 @@ function Dashboard() {
         setBenchmarks((currentBenchmarks) => currentBenchmarks);
         setMarketComparison((currentComparison) => currentComparison);
       } finally {
-        window.clearTimeout(abortTimeoutId);
         window.clearTimeout(loadingWatchdogId);
         setIsLoadingBenchmarks(false);
       }
@@ -938,12 +953,22 @@ function Dashboard() {
 
     const loadSectorBreakdown = async () => {
       setIsLoadingSectorBreakdown(true);
+      const loadingWatchdogId = window.setTimeout(() => {
+        const fallback = buildSectorBreakdownFromHoldings(holdings);
+        sectorBreakdownCache.set(holdingsHash, fallback);
+        setSectorBreakdown(fallback);
+        setIsLoadingSectorBreakdown(false);
+      }, ANALYTICS_LOADING_WATCHDOG_MS);
+
       try {
-        const res = await fetch(`${API_BASE_URL}/portfolio/sector-breakdown`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ holdings }),
-        });
+        const res = await fetchWithTimeout(
+          `${API_BASE_URL}/portfolio/sector-breakdown`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ holdings }),
+          },
+        );
         if (!res.ok) throw new Error("sector-breakdown fetch failed");
         const data = (await res.json()) as SectorBreakdownResponse;
         if ((data.sectors ?? []).length > 0) {
@@ -957,6 +982,7 @@ function Dashboard() {
         sectorBreakdownCache.set(holdingsHash, fallback);
         setSectorBreakdown(fallback);
       } finally {
+        window.clearTimeout(loadingWatchdogId);
         setIsLoadingSectorBreakdown(false);
       }
     };
@@ -1184,7 +1210,7 @@ function Dashboard() {
 
   const isMarketSummaryLoading =
     !marketComparison
-      ? isLoadingBenchmarks || !marketComparison
+      ? isLoadingBenchmarks
       : portfolioDailyPercent === null || marketDailyPercent === null;
 
   const suggestionCards = useMemo(() => {

@@ -12,6 +12,23 @@ import type {
 } from "../lib/dashboardCache";
 import type { ImportedHolding } from "../lib/types";
 
+const ANALYTICS_TIMEOUT_MS = 30000;
+
+function fetchWithTimeout(url: string, options: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    ANALYTICS_TIMEOUT_MS,
+  );
+
+  return fetch(url, {
+    ...options,
+    signal: controller.signal,
+  }).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
+}
+
 const repairText = (v: string) =>
   v
     .replaceAll("â", "'")
@@ -50,7 +67,7 @@ async function fetchRebalanceSummary(
   holdings: ImportedHolding[],
 ): Promise<RebalanceSummaryData> {
   if (import.meta.env.DEV) console.time("computeRebalance");
-  const res = await fetch(`${API_BASE_URL}/reweight/ai-summary`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reweight/ai-summary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ holdings }),
@@ -81,7 +98,7 @@ async function fetchRebalanceSummary(
 
 async function fetchRiskAlert(holdings: ImportedHolding[]): Promise<RiskAlertData> {
   if (import.meta.env.DEV) console.time("computeRiskScan");
-  const res = await fetch(`${API_BASE_URL}/risk/analysis`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/risk/analysis`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ holdings }),
