@@ -338,3 +338,10 @@ body {
   border-color: var(--app-accent) !important;
   color: #fff !important;
 }
+
+/* ── Auth loading placeholder (ProtectedRoute during session check) ── */
+.app-auth-loading {
+  position: fixed;
+  inset: 0;
+  background: var(--app-bg, #151516);
+}

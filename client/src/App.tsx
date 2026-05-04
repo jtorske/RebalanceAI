@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
@@ -21,12 +21,18 @@ function HomeRoute() {
   return user ? <Dashboard /> : <LandingPage />;
 }
 
+// Redirects unauthenticated users to "/" (landing page with auth modal).
+// Shows a blank screen during the initial session check to prevent flash.
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="app-auth-loading" />;
+  if (!user) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   const apiHealth = useApiHealth();
 
-  // Block the entire app shell until the hosted API is confirmed ready.
-  // No exceptions for demo mode, unauthenticated users, or any other state —
-  // all routes depend on the backend, so nothing mounts until /health + /ready pass.
   if (
     apiHealth.isHostedApi &&
     (apiHealth.status === "checking" ||
@@ -51,12 +57,12 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<HomeRoute />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/re-weight" element={<Reweight />} />
-        <Route path="/risk-manager" element={<RiskManager />} />
-        <Route path="/key-insights" element={<KeyInsights />} />
-        <Route path="/holdings" element={<HoldingsPage />} />
-        <Route path="/goal-planner" element={<GoalPlanner />} />
-        <Route path="/portfolio-report" element={<PortfolioReport />} />
+        <Route path="/re-weight" element={<ProtectedRoute><Reweight /></ProtectedRoute>} />
+        <Route path="/risk-manager" element={<ProtectedRoute><RiskManager /></ProtectedRoute>} />
+        <Route path="/key-insights" element={<ProtectedRoute><KeyInsights /></ProtectedRoute>} />
+        <Route path="/holdings" element={<ProtectedRoute><HoldingsPage /></ProtectedRoute>} />
+        <Route path="/goal-planner" element={<ProtectedRoute><GoalPlanner /></ProtectedRoute>} />
+        <Route path="/portfolio-report" element={<ProtectedRoute><PortfolioReport /></ProtectedRoute>} />
       </Routes>
     </>
   );

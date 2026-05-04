@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { FiArrowLeft, FiCheckCircle } from "react-icons/fi";
+import { FaGoogle } from "react-icons/fa";
 import { supabase } from "../lib/supabase";
+import { getAuthErrorMessage, isEmailExistsError } from "../lib/authErrors";
 
 interface Props {
   onBack: () => void;
   onSuccess: () => void;
-  onSwitchToLogin: () => void;
+  onSwitchToLogin: (prefillEmail?: string) => void;
 }
 
 export default function SignupFlow({
@@ -18,11 +20,27 @@ export default function SignupFlow({
   const [fullName, setFullName] = useState("");
   const [confirmedEmail, setConfirmedEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emailExists, setEmailExists] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleBusy(true);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (oauthError) {
+      setError(getAuthErrorMessage(oauthError));
+      setGoogleBusy(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setEmailExists(false);
 
     const trimmedEmail = email.trim();
     const trimmedName = fullName.trim();
@@ -44,26 +62,63 @@ export default function SignupFlow({
 
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            full_name: trimmedName,
-          },
+          data: { full_name: trimmedName },
         },
       });
 
-      if (error) throw error;
+      if (signUpError) {
+        if (isEmailExistsError(signUpError)) {
+          setEmailExists(true);
+        } else {
+          setError(getAuthErrorMessage(signUpError));
+        }
+        return;
+      }
+
+      // Supabase signals "email already exists" with empty identities when
+      // email confirmation is enabled — no error is returned.
+      if (data.user && (data.user.identities ?? []).length === 0) {
+        setEmailExists(true);
+        return;
+      }
+
       setConfirmedEmail(trimmedEmail);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account.");
     } finally {
       setBusy(false);
     }
   };
 
+  // ── Email already exists ──────────────────────────────────────
+  if (emailExists) {
+    return (
+      <div className="auth-view">
+        <h2 className="auth-title">Account already exists</h2>
+        <p className="auth-subtitle">
+          An account with <strong>{email.trim()}</strong> already exists.
+          Log in to access your account.
+        </p>
+        <button
+          className="auth-primary-btn"
+          type="button"
+          onClick={() => onSwitchToLogin(email.trim())}
+        >
+          Log in
+        </button>
+        <p className="auth-switch">
+          <button type="button" onClick={() => setEmailExists(false)}>
+            Use a different email
+          </button>
+        </p>
+      </div>
+    );
+  }
+
+  // ── Confirmation sent ─────────────────────────────────────────
   if (confirmedEmail) {
     return (
       <div className="auth-view">
@@ -75,13 +130,14 @@ export default function SignupFlow({
           We sent a confirmation link to <strong>{confirmedEmail}</strong>.
           Click the link to verify your account, then return to sign in.
         </p>
-        <button className="auth-primary-btn" type="button" onClick={onSwitchToLogin}>
+        <button className="auth-primary-btn" type="button" onClick={() => onSwitchToLogin()}>
           Sign in
         </button>
       </div>
     );
   }
 
+  // ── Signup form ───────────────────────────────────────────────
   return (
     <div className="auth-view">
       <button className="auth-back" type="button" onClick={onBack}>
@@ -90,9 +146,18 @@ export default function SignupFlow({
       </button>
 
       <h2 className="auth-title">Create account</h2>
-      <p className="auth-subtitle">
-        Start with an email confirmation link to secure your account.
-      </p>
+
+      <button
+        className="auth-google-btn"
+        type="button"
+        disabled={googleBusy}
+        onClick={() => void handleGoogle()}
+      >
+        <FaGoogle size={14} />
+        {googleBusy ? "Redirecting…" : "Sign up with Google"}
+      </button>
+
+      <div className="auth-or"><span>or</span></div>
 
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
         <label className="auth-label">
@@ -157,13 +222,13 @@ export default function SignupFlow({
           type="submit"
           disabled={busy || !email.trim() || !password || !confirmPassword || !fullName.trim()}
         >
-          {busy ? "Creating account..." : "Create account"}
+          {busy ? "Creating account…" : "Create account"}
         </button>
       </form>
 
       <p className="auth-switch">
         Already have an account?{" "}
-        <button type="button" onClick={onSwitchToLogin}>
+        <button type="button" onClick={() => onSwitchToLogin()}>
           Log in
         </button>
       </p>

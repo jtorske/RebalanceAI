@@ -7,6 +7,8 @@ import {
   type Portfolio,
 } from "../services/portfolioService";
 import { getHoldings } from "../services/holdingsService";
+import { clearDashboardCache } from "../lib/dashboardCache";
+import { DAILY_CHANGE_CACHE_KEY } from "../lib/constants";
 
 type AuthContextType = {
   user: User | null;
@@ -111,6 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
+    const userId = user?.id ?? null;
+    clearDashboardCache(userId);
+    try { localStorage.removeItem(DAILY_CHANGE_CACHE_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem("rebalancex:market-summary-v2"); } catch { /* ignore */ }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }

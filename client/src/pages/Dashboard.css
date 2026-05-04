@@ -20,6 +20,7 @@
 .dashboard-main {
   flex: 1;
   min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: clamp(10px, 1.4vw, 24px) clamp(14px, 2.5vw, 48px)
@@ -1299,10 +1300,10 @@
 /* ── Responsive ───────────────────────────────────── */
 
 .dashboard-page-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  margin-bottom: clamp(4px, 0.6vw, 8px);
+  position: absolute;
+  top: clamp(10px, 1.4vw, 24px);
+  right: clamp(14px, 2.5vw, 48px);
+  z-index: 10;
 }
 
 .dashboard-actions-menu {

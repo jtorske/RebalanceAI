@@ -3,19 +3,23 @@ import { FiArrowLeft } from "react-icons/fi";
 import { FaGoogle } from "react-icons/fa";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { getAuthErrorMessage } from "../lib/authErrors";
 
 interface Props {
   onBack: () => void;
   onSuccess: () => void;
   onSwitchToSignup: () => void;
+  prefillEmail?: string;
 }
 
-export default function LoginForm({ onBack, onSuccess, onSwitchToSignup }: Props) {
-  const [email, setEmail] = useState("");
+export default function LoginForm({ onBack, onSuccess, onSwitchToSignup, prefillEmail = "" }: Props) {
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotBusy, setForgotBusy] = useState(false);
   const { signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,23 +30,42 @@ export default function LoginForm({ onBack, onSuccess, onSwitchToSignup }: Props
       await signIn(email, password);
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid email or password.");
+      setError(getAuthErrorMessage(err));
     } finally {
       setBusy(false);
     }
   };
 
   const handleGoogle = async () => {
+    setError(null);
     setGoogleBusy(true);
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) {
-      setError(error.message);
+    if (oauthError) {
+      setError(getAuthErrorMessage(oauthError));
       setGoogleBusy(false);
     }
-    // success → browser redirects, nothing more to do here
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError("Enter your email above, then click Forgot password.");
+      return;
+    }
+    setForgotBusy(true);
+    setError(null);
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      });
+      setForgotSent(true);
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setForgotBusy(false);
+    }
   };
 
   return (
@@ -76,7 +99,7 @@ export default function LoginForm({ onBack, onSuccess, onSwitchToSignup }: Props
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             required
-            autoFocus
+            autoFocus={!prefillEmail}
             autoComplete="email"
           />
         </label>
@@ -90,16 +113,33 @@ export default function LoginForm({ onBack, onSuccess, onSwitchToSignup }: Props
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
+            autoFocus={!!prefillEmail}
             autoComplete="current-password"
           />
         </label>
 
         {error && <p className="auth-error">{error}</p>}
+        {forgotSent && (
+          <p className="auth-info">
+            Password reset link sent — check your email.
+          </p>
+        )}
 
         <button className="auth-primary-btn" type="submit" disabled={busy}>
           {busy ? "Logging in…" : "Log in"}
         </button>
       </form>
+
+      <p className="auth-switch">
+        <button
+          type="button"
+          className="auth-link-btn"
+          disabled={forgotBusy}
+          onClick={() => void handleForgotPassword()}
+        >
+          {forgotBusy ? "Sending…" : "Forgot password?"}
+        </button>
+      </p>
 
       <p className="auth-switch">
         Don&apos;t have an account?{" "}

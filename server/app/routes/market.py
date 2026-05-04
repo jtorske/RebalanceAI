@@ -10,3 +10,4 @@ router = router_from_legacy(
         "/tickers/enrich",
     ]
 )
+

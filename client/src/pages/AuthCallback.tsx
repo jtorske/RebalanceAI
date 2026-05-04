@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { getAuthErrorMessage } from "../lib/authErrors";
 import "../components/AuthModal.css";
 
 export default function AuthCallback() {
@@ -33,11 +34,7 @@ export default function AuthCallback() {
         }
       } catch (err) {
         if (active) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "We could not verify your account. Please try signing in.",
-          );
+          setError(getAuthErrorMessage(err));
         }
       }
     };
@@ -57,12 +54,12 @@ export default function AuthCallback() {
             Rebalance<span>X</span>
           </span>
           <h1 className="auth-title">
-            {error ? "Confirmation failed" : "Confirming your account"}
+            {error ? "Sign-in failed" : "Signing you in…"}
           </h1>
           <p className="auth-subtitle">
             {error
               ? error
-              : "Just a moment while we finish your sign-in and take you back to the dashboard."}
+              : "Just a moment while we finish signing you in and take you to your dashboard."}
           </p>
           {error && (
             <button

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { FiX } from "react-icons/fi";
 import { FaGoogle } from "react-icons/fa";
 import { supabase } from "../lib/supabase";
+import { getAuthErrorMessage } from "../lib/authErrors";
 import SignupFlow from "./SignupFlow";
 import LoginForm from "./LoginForm";
 import "./AuthModal.css";
@@ -21,6 +22,7 @@ export default function AuthModal({ mode: initialMode, onClose }: Props) {
   const [tab, setTab] = useState<AuthModalMode>(initialMode);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [loginPrefillEmail, setLoginPrefillEmail] = useState("");
 
   const handleGoogle = async () => {
     setGoogleError(null);
@@ -30,16 +32,20 @@ export default function AuthModal({ mode: initialMode, onClose }: Props) {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) {
-      setGoogleError(error.message);
+      setGoogleError(getAuthErrorMessage(error));
       setGoogleBusy(false);
     }
-    // success → browser redirects to Google; no further handling needed here
   };
 
   const goToView = (v: TopView, t?: AuthModalMode) => {
     setView(v);
     if (t) setTab(t);
     setGoogleError(null);
+  };
+
+  const goToLogin = (prefillEmail?: string) => {
+    setLoginPrefillEmail(prefillEmail ?? "");
+    goToView("login", "login");
   };
 
   return createPortal(
@@ -140,6 +146,7 @@ export default function AuthModal({ mode: initialMode, onClose }: Props) {
               onBack={() => goToView("landing", "login")}
               onSuccess={onClose}
               onSwitchToSignup={() => goToView("signup", "signup")}
+              prefillEmail={loginPrefillEmail}
             />
           )}
 
@@ -148,7 +155,7 @@ export default function AuthModal({ mode: initialMode, onClose }: Props) {
             <SignupFlow
               onBack={() => goToView("landing", "signup")}
               onSuccess={onClose}
-              onSwitchToLogin={() => goToView("login", "login")}
+              onSwitchToLogin={goToLogin}
             />
           )}
         </div>
