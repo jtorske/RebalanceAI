@@ -30,6 +30,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Requires auth AND at least one saved holding.
+// Users with no holdings are sent to "/" where the empty-onboarding dashboard shows.
+function HoldingsRequiredRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, portfolioLoading, portfolio, savedHoldingsCount } = useAuth();
+  if (loading || (!!user && portfolioLoading)) return <div className="app-auth-loading" />;
+  if (!user) return <Navigate to="/" replace />;
+  if (portfolio && savedHoldingsCount === 0) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   const apiHealth = useApiHealth();
 
@@ -57,12 +67,12 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<HomeRoute />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/re-weight" element={<ProtectedRoute><Reweight /></ProtectedRoute>} />
-        <Route path="/risk-manager" element={<ProtectedRoute><RiskManager /></ProtectedRoute>} />
-        <Route path="/key-insights" element={<ProtectedRoute><KeyInsights /></ProtectedRoute>} />
+        <Route path="/re-weight" element={<HoldingsRequiredRoute><Reweight /></HoldingsRequiredRoute>} />
+        <Route path="/risk-manager" element={<HoldingsRequiredRoute><RiskManager /></HoldingsRequiredRoute>} />
+        <Route path="/key-insights" element={<HoldingsRequiredRoute><KeyInsights /></HoldingsRequiredRoute>} />
         <Route path="/holdings" element={<ProtectedRoute><HoldingsPage /></ProtectedRoute>} />
-        <Route path="/goal-planner" element={<ProtectedRoute><GoalPlanner /></ProtectedRoute>} />
-        <Route path="/portfolio-report" element={<ProtectedRoute><PortfolioReport /></ProtectedRoute>} />
+        <Route path="/goal-planner" element={<HoldingsRequiredRoute><GoalPlanner /></HoldingsRequiredRoute>} />
+        <Route path="/portfolio-report" element={<HoldingsRequiredRoute><PortfolioReport /></HoldingsRequiredRoute>} />
       </Routes>
     </>
   );

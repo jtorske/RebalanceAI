@@ -424,6 +424,9 @@ function HoldingsPage() {
       await replaceHoldings(user.id, activePortfolio.id, parsedHoldings);
       await refreshPortfolio();
       setPersisted(buildHoldingsResponse(parsedHoldings, fileName));
+      setParsedHoldings([]);
+      setFileName(null);
+      setAsOf(null);
       window.dispatchEvent(new Event("holdings-changed"));
       setMessage(`Saved ${parsedHoldings.length} holdings.`);
     } catch (saveError) {
@@ -466,6 +469,7 @@ function HoldingsPage() {
       setAsOf(null);
       setMessage("Deleted all saved holdings.");
       window.dispatchEvent(new Event("holdings-changed"));
+      await refreshPortfolio();
     } catch (deleteError) {
       const details =
         deleteError instanceof Error
