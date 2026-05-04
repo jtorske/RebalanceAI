@@ -1296,12 +1296,24 @@ function Dashboard() {
           ? "Moderate"
           : "Low";
 
+  // While the portfolio/holdings count is still resolving for a logged-in non-demo user,
+  // render only the navbar shell to prevent the main dashboard from flashing before the
+  // empty-onboarding screen appears.
+  if (!!user && !isDemoMode && (portfolioLoading || !portfolio)) {
+    return (
+      <div className="dashboard-shell">
+        <div className="dashboard-page">
+          <DashboardNavbar />
+        </div>
+      </div>
+    );
+  }
+
+  // savedHoldingsCount comes from AuthContext and is authoritative once portfolioLoading
+  // is false — no need to wait for the local activeHoldingsLoaded flag.
   const showEmptyOnboarding =
     !!user &&
     !isDemoMode &&
-    !portfolioLoading &&
-    !!portfolio &&
-    activeHoldingsLoaded &&
     savedHoldingsCount === 0 &&
     holdings.length === 0;
 

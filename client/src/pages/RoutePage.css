@@ -42,7 +42,7 @@
 .import-upload-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 }
 
@@ -135,6 +135,18 @@
 
 .import-file-input {
   display: none;
+}
+
+/* ── Guided step pulse ──────────────────────────────────── */
+
+@keyframes guide-pulse {
+  0%, 100% { border-color: #8a6ef0; box-shadow: 0 0 0 0 rgba(138, 110, 240, 0.35); }
+  50%       { border-color: #7358d8; box-shadow: 0 0 0 4px rgba(138, 110, 240, 0); }
+}
+
+.import-guide-pulse {
+  border-color: #8a6ef0 !important;
+  animation: guide-pulse 2s ease-in-out infinite;
 }
 
 .import-save-button {

@@ -522,7 +522,7 @@ function HoldingsPage() {
           <div className="import-upload-row">
             <div className="import-upload-control">
               <label
-                className="import-file-input-wrap"
+                className={`import-file-input-wrap${parsedHoldings.length === 0 && (persisted?.holdings.length ?? 0) === 0 ? " import-guide-pulse" : ""}`}
                 htmlFor="holdings-csv-upload"
               >
                 Select CSV File
@@ -540,7 +540,7 @@ function HoldingsPage() {
             />
 
             <button
-              className="import-save-button"
+              className={`import-save-button${parsedHoldings.length > 0 ? " import-guide-pulse" : ""}`}
               type="button"
               onClick={() => requireAuth(handleSaveToBackend)}
               disabled={isUploading || parsedHoldings.length === 0}
