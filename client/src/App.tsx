@@ -9,7 +9,7 @@ import RiskManager from "./pages/RiskManager";
 import GoalPlanner from "./pages/GoalPlanner";
 import PortfolioReport from "./pages/PortfolioReport";
 import { UserSettingsProvider } from "./lib/userSettings";
-import { DemoModeProvider } from "./lib/demoMode";
+import { DemoModeProvider, useDemoMode } from "./lib/demoMode";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppLoadingState } from "./components/common/AppLoadingState";
 import { ApiStatusBanner } from "./components/common/ApiStatusBanner";
@@ -21,21 +21,23 @@ function HomeRoute() {
   return user ? <Dashboard /> : <LandingPage />;
 }
 
-// Redirects unauthenticated users to "/" (landing page with auth modal).
+// Redirects unauthenticated, non-demo users to "/" (landing page with auth modal).
 // Shows a blank screen during the initial session check to prevent flash.
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { isDemoMode } = useDemoMode();
   if (loading) return <div className="app-auth-loading" />;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user && !isDemoMode) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
-// Requires auth AND at least one saved holding.
+// Requires auth AND at least one saved holding, or demo mode.
 // Users with no holdings are sent to "/" where the empty-onboarding dashboard shows.
 function HoldingsRequiredRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, portfolioLoading, portfolio, savedHoldingsCount } = useAuth();
+  const { isDemoMode } = useDemoMode();
   if (loading || (!!user && portfolioLoading)) return <div className="app-auth-loading" />;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user && !isDemoMode) return <Navigate to="/" replace />;
   if (portfolio && savedHoldingsCount === 0) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
