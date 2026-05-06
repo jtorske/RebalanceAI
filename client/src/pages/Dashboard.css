@@ -335,12 +335,19 @@
 
 /* Donut fills remaining right-column space */
 .dashboard-donut-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
+}
+
+.dashboard-actions-donut-corner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
 }
 
 .dashboard-donut-stage {

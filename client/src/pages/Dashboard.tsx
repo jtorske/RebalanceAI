@@ -1,4 +1,9 @@
-import { FiAlertCircle, FiBarChart2, FiLock, FiMoreHorizontal } from "react-icons/fi";
+import {
+  FiAlertCircle,
+  FiBarChart2,
+  FiLock,
+  FiMoreHorizontal,
+} from "react-icons/fi";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -109,7 +114,9 @@ const buildMarketSummaryFallback = (
   const benchmarkParts = (comparison.benchmarks ?? [])
     .filter((item) => typeof item.changePercent === "number")
     .slice(0, 3)
-    .map((item) => `${item.symbol} ${formatSummaryDirection(item.changePercent)}`);
+    .map(
+      (item) => `${item.symbol} ${formatSummaryDirection(item.changePercent)}`,
+    );
 
   if (benchmarkParts.length > 0) {
     return `Portfolio daily data is not available yet. Current benchmark moves include ${benchmarkParts.join(", ")}.`;
@@ -222,8 +229,7 @@ const getTopMarketContributors = (
     .map(([symbol, dailyValues]) => {
       const marketValueCad = valueBySymbol.get(symbol) ?? 0;
       const dailyPercent =
-        dailyValues.reduce((sum, value) => sum + value, 0) /
-        dailyValues.length;
+        dailyValues.reduce((sum, value) => sum + value, 0) / dailyValues.length;
       return {
         symbol,
         dailyPercent,
@@ -786,7 +792,10 @@ function Dashboard() {
   useEffect(() => {
     if (!actionsMenuOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+      if (
+        actionsMenuRef.current &&
+        !actionsMenuRef.current.contains(e.target as Node)
+      ) {
         setActionsMenuOpen(false);
       }
     };
@@ -848,9 +857,13 @@ function Dashboard() {
     if (
       cached?.marketComparison &&
       cached.holdingsHash === holdingsHash &&
-      hasUsableMarketComparison(cached.marketComparison as MarketComparisonResponse)
+      hasUsableMarketComparison(
+        cached.marketComparison as MarketComparisonResponse,
+      )
     ) {
-      setBenchmarks((cached.marketComparison.benchmarks as BenchmarkQuote[]) ?? []);
+      setBenchmarks(
+        (cached.marketComparison.benchmarks as BenchmarkQuote[]) ?? [],
+      );
       setMarketComparison(cached.marketComparison as MarketComparisonResponse);
       setIsLoadingBenchmarks(false);
       return; // skip network fetch for today
@@ -996,7 +1009,9 @@ function Dashboard() {
       }
     };
 
-    const refreshSectorBreakdown = () => { void loadSectorBreakdown(); };
+    const refreshSectorBreakdown = () => {
+      void loadSectorBreakdown();
+    };
 
     void loadSectorBreakdown();
     window.addEventListener("holdings-changed", refreshSectorBreakdown);
@@ -1005,7 +1020,6 @@ function Dashboard() {
       window.removeEventListener("holdings-changed", refreshSectorBreakdown);
     };
   }, [holdings, holdingsHash]);
-
 
   const totalMarketValueCad = useMemo(
     () =>
@@ -1217,10 +1231,9 @@ function Dashboard() {
     [aiSummary, marketComparison, totalMarketValueCad, weightedHoldings],
   );
 
-  const isMarketSummaryLoading =
-    !marketComparison
-      ? isLoadingBenchmarks
-      : portfolioDailyPercent === null || marketDailyPercent === null;
+  const isMarketSummaryLoading = !marketComparison
+    ? isLoadingBenchmarks
+    : portfolioDailyPercent === null || marketDailyPercent === null;
 
   const suggestionCards = useMemo(() => {
     const text = (
@@ -1270,7 +1283,8 @@ function Dashboard() {
 
   const riskSeverityCounts = useMemo(() => {
     if (riskData?.severityCounts) return riskData.severityCounts;
-    if (holdings.length > 0) return getFallbackRiskAnalysis(holdings).severityCounts;
+    if (holdings.length > 0)
+      return getFallbackRiskAnalysis(holdings).severityCounts;
     return { high: 0, medium: 0, low: 0 };
   }, [riskData, holdings]);
 
@@ -1312,10 +1326,7 @@ function Dashboard() {
   // savedHoldingsCount comes from AuthContext and is authoritative once portfolioLoading
   // is false — no need to wait for the local activeHoldingsLoaded flag.
   const showEmptyOnboarding =
-    !!user &&
-    !isDemoMode &&
-    savedHoldingsCount === 0 &&
-    holdings.length === 0;
+    !!user && !isDemoMode && savedHoldingsCount === 0 && holdings.length === 0;
 
   if (showEmptyOnboarding) {
     const previewCards = [
@@ -1366,7 +1377,10 @@ function Dashboard() {
 
               <div className="dashboard-empty-preview-grid">
                 {previewCards.map((card) => (
-                  <article className="dashboard-empty-preview-card" key={card.title}>
+                  <article
+                    className="dashboard-empty-preview-card"
+                    key={card.title}
+                  >
                     <FiLock size={15} />
                     <h2>{card.title}</h2>
                     <p>{card.copy}</p>
@@ -1386,32 +1400,6 @@ function Dashboard() {
         <DashboardNavbar />
 
         <main className="dashboard-main">
-          <div className="dashboard-page-toolbar">
-            <div className="dashboard-actions-menu" ref={actionsMenuRef}>
-              <button
-                className="dashboard-actions-trigger"
-                type="button"
-                aria-label="More actions"
-                aria-expanded={actionsMenuOpen}
-                onClick={() => setActionsMenuOpen((prev) => !prev)}
-              >
-                <FiMoreHorizontal size={15} />
-                <span>More</span>
-              </button>
-              {actionsMenuOpen && (
-                <div className="dashboard-actions-dropdown" role="menu">
-                  <Link
-                    className="dashboard-actions-item"
-                    to="/portfolio-report"
-                    role="menuitem"
-                    onClick={() => setActionsMenuOpen(false)}
-                  >
-                    Generate Portfolio Report
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
           <section className="dashboard-top-section">
             <div className="dashboard-left-column">
               <div className="dashboard-stats-grid">
@@ -1522,13 +1510,13 @@ function Dashboard() {
                                         ? "dashboard-market-driver-chip-negative"
                                         : "dashboard-market-driver-chip-positive";
                                     return (
-                                    <span
-                                      className={`dashboard-market-driver-chip ${chipTone}`}
-                                      key={driver.symbol}
-                                    >
-                                      <span>{driver.symbol}</span>
-                                      {impact && <strong>{impact}</strong>}
-                                    </span>
+                                      <span
+                                        className={`dashboard-market-driver-chip ${chipTone}`}
+                                        key={driver.symbol}
+                                      >
+                                        <span>{driver.symbol}</span>
+                                        {impact && <strong>{impact}</strong>}
+                                      </span>
                                     );
                                   },
                                 )}
@@ -1548,7 +1536,9 @@ function Dashboard() {
 
                       {isMarketSummaryLoading ? (
                         <div className="dashboard-comparison-row dashboard-comparison-row-loading">
-                          <span>Loading portfolio and benchmark comparison...</span>
+                          <span>
+                            Loading portfolio and benchmark comparison...
+                          </span>
                         </div>
                       ) : benchmarks.length === 0 ? (
                         <div className="dashboard-comparison-row dashboard-comparison-row-loading">
@@ -1561,7 +1551,9 @@ function Dashboard() {
                             <span className="dashboard-positive">
                               {formatPercent(portfolioDailyPercent)}
                             </span>
-                            <span className="dashboard-comparison-muted">Base</span>
+                            <span className="dashboard-comparison-muted">
+                              Base
+                            </span>
                           </div>
 
                           <div className="dashboard-comparison-row">
@@ -1690,7 +1682,8 @@ function Dashboard() {
                                 className="dashboard-inline-link"
                                 to="/re-weight"
                               >
-                                View all {rebalanceData?.tradeCount ?? 0} suggested trades →
+                                View all {rebalanceData?.tradeCount ?? 0}{" "}
+                                suggested trades →
                               </Link>
                             </>
                           ) : fallbackActionRows.length > 0 ? (
@@ -1732,7 +1725,11 @@ function Dashboard() {
                           <div className="dashboard-plan-snapshot-grid">
                             <div className="dashboard-plan-snapshot-item">
                               <span className="dashboard-plan-snapshot-value dashboard-positive">
-                                {maskDollar(formatCompactCad(rebalanceData?.totalBuyCad ?? 0))}
+                                {maskDollar(
+                                  formatCompactCad(
+                                    rebalanceData?.totalBuyCad ?? 0,
+                                  ),
+                                )}
                               </span>
                               <span className="dashboard-plan-snapshot-key">
                                 Buys
@@ -1741,7 +1738,9 @@ function Dashboard() {
                             <div className="dashboard-plan-snapshot-item">
                               <span className="dashboard-plan-snapshot-value dashboard-negative">
                                 {maskDollar(
-                                  formatCompactCad(rebalanceData?.totalSellCad ?? 0),
+                                  formatCompactCad(
+                                    rebalanceData?.totalSellCad ?? 0,
+                                  ),
                                 )}
                               </span>
                               <span className="dashboard-plan-snapshot-key">
@@ -1753,7 +1752,8 @@ function Dashboard() {
                                 {maskDollar(
                                   formatCompactCad(
                                     Math.abs(
-                                      (rebalanceData?.totalBuyCad ?? 0) - (rebalanceData?.totalSellCad ?? 0),
+                                      (rebalanceData?.totalBuyCad ?? 0) -
+                                        (rebalanceData?.totalSellCad ?? 0),
                                     ),
                                   ),
                                 )}
@@ -1839,12 +1839,14 @@ function Dashboard() {
                                   </span>
                                 </div>
                               ))}
-                              {(riskData?.concernTotal ?? 0) > (riskData?.concerns ?? []).length && (
+                              {(riskData?.concernTotal ?? 0) >
+                                (riskData?.concerns ?? []).length && (
                                 <Link
                                   className="dashboard-inline-link"
                                   to="/risk-manager"
                                 >
-                                  Review all {riskData?.concernTotal ?? 0} risks →
+                                  Review all {riskData?.concernTotal ?? 0} risks
+                                  →
                                 </Link>
                               )}
                             </>
@@ -1883,9 +1885,37 @@ function Dashboard() {
               <DashboardOnboardingBanner />
 
               <div className="dashboard-donut-wrap">
+                <div className="dashboard-actions-donut-corner">
+                  <div className="dashboard-actions-menu" ref={actionsMenuRef}>
+                    <button
+                      className="dashboard-actions-trigger"
+                      type="button"
+                      aria-label="More actions"
+                      aria-expanded={actionsMenuOpen}
+                      onClick={() => setActionsMenuOpen((prev) => !prev)}
+                    >
+                      <FiMoreHorizontal size={15} />
+                      <span>More</span>
+                    </button>
+                    {actionsMenuOpen && (
+                      <div className="dashboard-actions-dropdown" role="menu">
+                        <Link
+                          className="dashboard-actions-item"
+                          to="/portfolio-report"
+                          role="menuitem"
+                          onClick={() => setActionsMenuOpen(false)}
+                        >
+                          Generate Portfolio Report
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="dashboard-donut-stage">
                   <div className="dashboard-donut-panel">
-                    <div className={`dashboard-donut-chart${donutAppeared ? "" : " dashboard-donut-chart--appearing"}`}>
+                    <div
+                      className={`dashboard-donut-chart${donutAppeared ? "" : " dashboard-donut-chart--appearing"}`}
+                    >
                       <svg
                         className="dashboard-donut-svg"
                         viewBox="0 0 100 100"
