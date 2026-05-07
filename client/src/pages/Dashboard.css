@@ -638,6 +638,20 @@
   margin: 0;
 }
 
+.dashboard-ai-source-badge {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 10px;
+  font-family: monospace;
+  color: #7b7b9d;
+  background: rgba(92, 77, 219, 0.06);
+  border: 1px solid rgba(92, 77, 219, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
 .dashboard-ai-summary-title {
   margin: 0 0 1px;
   font-size: clamp(12px, 1vw, 14px);
@@ -950,6 +964,7 @@
 .dashboard-risk-flag:hover {
   box-shadow: inset 0 0 0 1px rgba(92, 77, 219, 0.14);
   transform: translateY(-1px);
+  cursor: pointer;
 }
 
 .dashboard-action-sell {

@@ -6,10 +6,17 @@ Thumbs.db
 *.swp
 *.swo
 
-# Environment files
-.env
-.env.*
-!.env.example
+# Environment files — never commit real secrets
+client/.env
+client/.env.local
+client/.env.production
+client/.env.development
+server/.env
+
+# Allow committed example/template files
+!client/.env.example
+!client/.env.production.example
+!server/.env.example
 
 # Python / FastAPI
 __pycache__/
@@ -49,9 +56,6 @@ pnpm-debug.log*
 lerna-debug.log*
 logs/
 client/logs/
-
-# Local Ollama installation
-ollama/
 
 # Claude Code local session data
 .claude/

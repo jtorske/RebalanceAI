@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
 import DashboardNavbar from "../components/DashboardNavbar";
 import AuthGateModal from "../components/AuthGateModal";
@@ -117,10 +118,15 @@ const MODE_LABELS: Record<TargetMode, string> = {
 };
 
 function Reweight() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { settings } = useUserSettings();
   const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
   const { portfolio } = useAuth();
   const { isDemoMode } = useDemoMode();
+  const pendingTradeSymbol = useRef<string | null>(
+    (location.state as { openTradeSymbol?: string } | null)?.openTradeSymbol ?? null,
+  );
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
 
@@ -226,6 +232,17 @@ function Reweight() {
   useEffect(() => {
     void fetchReweight({}, true);
   }, [isDemoMode, portfolio]);
+
+  useEffect(() => {
+    if (!pendingTradeSymbol.current || !data || isLoading) return;
+    const symbol = pendingTradeSymbol.current;
+    const match = data.items.find((i) => i.symbol === symbol);
+    if (match) {
+      setExplainItem(match);
+      pendingTradeSymbol.current = null;
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [data, isLoading, navigate, location.pathname]);
 
   const hasNoHoldings = data && data.items.length === 0;
   const missingCapItems = data?.items.filter((i) => i.reason === "Missing market cap") ?? [];

@@ -151,7 +151,7 @@ Built-in sample portfolio for instant product exploration.
 | Market Data   | yfinance                   |
 | Charts        | Recharts                   |
 | Styling       | Custom CSS                 |
-| AI (optional) | Ollama (llama3.x)          |
+| AI            | Groq (llama-3.1-8b-instant) |
 
 ---
 

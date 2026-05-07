@@ -60,6 +60,8 @@ async function fetchRebalanceSummary(
   if (!res.ok) throw new Error("rebalance summary fetch failed");
   const data = await (res.json() as Promise<{
     summary?: string | null;
+    source?: "groq" | "fallback";
+    model?: string | null;
     trimSymbols?: string[];
     addSymbols?: string[];
     overweights?: Array<{ symbol: string }>;
@@ -69,9 +71,14 @@ async function fetchRebalanceSummary(
     topTrades?: Array<{ symbol: string; action: "buy" | "sell" | "hold"; tradeCad: number }>;
     tradeCount?: number;
   }>);
-  if (import.meta.env.DEV) console.timeEnd("computeRebalance");
+  if (import.meta.env.DEV) {
+    console.timeEnd("computeRebalance");
+    console.log("[AI] rebalance summary source=%s model=%s", data.source ?? "unknown", data.model ?? "n/a");
+  }
   return {
     summary: data.summary ? repairText(data.summary) : null,
+    source: data.source,
+    model: data.model,
     trimSymbols: data.trimSymbols ?? (data.overweights ?? []).map((o) => o.symbol).slice(0, 3),
     addSymbols: data.addSymbols ?? (data.underweights ?? []).map((u) => u.symbol).slice(0, 3),
     totalBuyCad: data.totalBuyCad ?? null,
@@ -89,9 +96,13 @@ async function fetchRiskAlert(holdings: ImportedHolding[]): Promise<RiskAlertDat
     body: JSON.stringify({ holdings }),
   });
   if (!res.ok) throw new Error("risk analysis fetch failed");
-  const data = await (res.json() as Promise<RiskAnalysisApiResponse>);
-  if (import.meta.env.DEV) console.timeEnd("computeRiskScan");
-  return toRiskAlertData(normalizeRiskAnalysis(data, holdings));
+  const raw = await (res.json() as Promise<RiskAnalysisApiResponse>);
+  if (import.meta.env.DEV) {
+    console.timeEnd("computeRiskScan");
+    console.log("[AI] risk analysis source=%s model=%s", raw.source ?? "unknown", raw.model ?? "n/a");
+  }
+  const normalized = toRiskAlertData(normalizeRiskAnalysis(raw, holdings));
+  return { ...normalized, source: raw.source, model: raw.model };
 }
 
 export interface DashboardSummaryState {
@@ -158,15 +169,15 @@ export function useDashboardSummary(
     [holdings, uid],
   );
 
-  // Load from cache only once holdings are known, so stale empty-backend summaries
-  // do not mask the live portfolio on hosted deployments.
+  // Pre-populate UI from cache (Groq-sourced entries only) before network fetch arrives.
   useEffect(() => {
     const cached = loadDashboardCache(uid);
     if (!cached || cached.holdingsHash !== holdingsHash) return;
-    if (cached.rebalance) setRebalance(cached.rebalance);
-    if (cached.risk) setRisk(cached.risk);
-    setIsLoadingRebalance(false);
-    setIsLoadingRisk(false);
+    if (cached.rebalance?.source === "groq") setRebalance(cached.rebalance);
+    if (cached.risk?.source === "groq") setRisk(cached.risk);
+    // Only suppress loading indicators when both are Groq-sourced
+    if (cached.rebalance?.source === "groq") setIsLoadingRebalance(false);
+    if (cached.risk?.source === "groq") setIsLoadingRisk(false);
   }, [holdingsHash, uid]);
 
   // Debounced recompute when holdings/hash changes
@@ -180,6 +191,19 @@ export function useDashboardSummary(
     debounceRef.current = setTimeout(() => {
       if (activeHashRef.current === holdingsHash) return;
       activeHashRef.current = holdingsHash;
+
+      // Skip network fetch only when both summaries are Groq-sourced (not fallback)
+      const cached = loadDashboardCache(uid);
+      const rebalanceReady = cached?.holdingsHash === holdingsHash && cached.rebalance?.source === "groq";
+      const riskReady = cached?.holdingsHash === holdingsHash && cached.risk?.source === "groq";
+      if (rebalanceReady && riskReady) {
+        setRebalance(cached!.rebalance);
+        setRisk(cached!.risk);
+        setIsLoadingRebalance(false);
+        setIsLoadingRisk(false);
+        return;
+      }
+
       loadSummaries(holdingsHash);
     }, 350);
     return () => {

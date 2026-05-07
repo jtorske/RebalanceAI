@@ -23,6 +23,8 @@ export type RiskConcern = {
 export type RiskAnalysisApiResponse = {
   summary?: string | null;
   dashboardSummary?: string | null;
+  source?: "groq" | "fallback";
+  model?: string | null;
   concerns?: RiskConcern[];
   dataQuality?: {
     metadataIncomplete?: boolean;

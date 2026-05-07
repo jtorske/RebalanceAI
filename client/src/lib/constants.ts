@@ -1,7 +1,16 @@
-const rawApiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8002";
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-export const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, "");
+if (!rawApiBaseUrl) {
+  if (import.meta.env.DEV) {
+    console.warn("[RebalanceX] VITE_API_BASE_URL not set, falling back to http://localhost:8002");
+  } else {
+    console.error("[RebalanceX] VITE_API_BASE_URL is not configured. Set it in Vercel environment variables.");
+  }
+}
+
+export const API_BASE_URL = (
+  rawApiBaseUrl || (import.meta.env.DEV ? "http://localhost:8002" : "")
+).replace(/\/+$/, "");
 
 export const USD_TO_CAD_RATE = Number.parseFloat(
   import.meta.env.VITE_USD_TO_CAD_RATE ?? "1.37",

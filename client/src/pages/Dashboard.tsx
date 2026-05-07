@@ -5,7 +5,7 @@ import {
   FiMoreHorizontal,
 } from "react-icons/fi";
 import { HiOutlineLightBulb } from "react-icons/hi";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardNavbar from "../components/DashboardNavbar";
 import { TickerLogoBadge } from "../components/TickerLogoBadge";
@@ -36,7 +36,9 @@ import type {
 
 type AiSummaryResponse = {
   summary: string | null;
-  source?: "ollama" | "fallback";
+  source?: "groq" | "fallback";
+  model?: string | null;
+  generatedAt?: string | null;
   cached?: boolean;
 };
 
@@ -767,6 +769,7 @@ const buildSectorBreakdownFromHoldings = (
 };
 
 function Dashboard() {
+  const navigate = useNavigate();
   const { settings } = useUserSettings();
   const { user, portfolio, hasHoldings, portfolioLoading, savedHoldingsCount } =
     useAuth();
@@ -778,6 +781,8 @@ function Dashboard() {
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummarySource, setAiSummarySource] = useState<"groq" | "fallback" | null>(null);
+  const [aiSummaryModel, setAiSummaryModel] = useState<string | null>(null);
   const [sectorBreakdown, setSectorBreakdown] = useState<
     SectorBreakdownEntry[]
   >([]);
@@ -945,6 +950,11 @@ function Dashboard() {
         const data = (await res.json()) as AiSummaryResponse;
         const summary = data.summary ? sanitizeAiSummary(data.summary) : null;
         setAiSummary((currentSummary) => summary ?? currentSummary);
+        setAiSummarySource(data.source ?? null);
+        setAiSummaryModel(data.model ?? null);
+        if (import.meta.env.DEV) {
+          console.log("[AI] market summary source=%s model=%s cached=%s", data.source ?? "unknown", data.model ?? "n/a", data.cached);
+        }
         if (summary) {
           saveMarketSummaryCache({ holdingsHash, aiSummary: summary });
         }
@@ -1231,9 +1241,9 @@ function Dashboard() {
     [aiSummary, marketComparison, totalMarketValueCad, weightedHoldings],
   );
 
-  const isMarketSummaryLoading = !marketComparison
-    ? isLoadingBenchmarks
-    : portfolioDailyPercent === null || marketDailyPercent === null;
+  // Once marketComparison is set (even with null daily %), stop showing loading.
+  // Null fields mean data is genuinely unavailable — not that a fetch is in progress.
+  const isMarketSummaryLoading = !marketComparison && isLoadingBenchmarks;
 
   const suggestionCards = useMemo(() => {
     const text = (
@@ -1310,10 +1320,10 @@ function Dashboard() {
           ? "Moderate"
           : "Low";
 
-  // While the portfolio/holdings count is still resolving for a logged-in non-demo user,
-  // render only the navbar shell to prevent the main dashboard from flashing before the
-  // empty-onboarding screen appears.
-  if (!!user && !isDemoMode && (portfolioLoading || !portfolio)) {
+  // Show a bare navbar shell only on the very first load (portfolio not yet resolved).
+  // Omit portfolioLoading from this guard so auth token refreshes on tab-focus
+  // do not unmount/remount the dashboard and replay entry animations.
+  if (!!user && !isDemoMode && !portfolio) {
     return (
       <div className="dashboard-shell">
         <div className="dashboard-page">
@@ -1495,6 +1505,11 @@ function Dashboard() {
                               </p>
                             ))}
                           </div>
+                          {import.meta.env.DEV && aiSummarySource && (
+                            <span className="dashboard-ai-source-badge">
+                              AI: {aiSummarySource === "groq" ? `Groq · ${aiSummaryModel ?? ""}` : "Fallback"}
+                            </span>
+                          )}
                           {formattedMarketSummary.contributors.length > 0 && (
                             <div className="dashboard-market-drivers">
                               <span className="dashboard-market-drivers-label">
@@ -1641,6 +1656,11 @@ function Dashboard() {
                               </p>
                             ))}
                           </div>
+                          {import.meta.env.DEV && rebalanceData?.source && (
+                            <span className="dashboard-ai-source-badge">
+                              AI: {rebalanceData.source === "groq" ? `Groq · ${rebalanceData.model ?? ""}` : "Fallback"}
+                            </span>
+                          )}
                         </div>
 
                         <div
@@ -1664,6 +1684,13 @@ function Dashboard() {
                                         : "dashboard-action-buy"
                                     }`}
                                     key={`${trade.action}-${trade.symbol}`}
+                                    onClick={() =>
+                                      navigate("/re-weight", {
+                                        state: {
+                                          openTradeSymbol: trade.symbol,
+                                        },
+                                      })
+                                    }
                                   >
                                     <span className="dashboard-action-badge">
                                       {trade.action === "sell" ? "Sell" : "Buy"}
@@ -1699,6 +1726,11 @@ function Dashboard() {
                                       : "dashboard-action-buy"
                                   }`}
                                   key={`${row.side}-${row.symbol}`}
+                                  onClick={() =>
+                                    navigate("/re-weight", {
+                                      state: { openTradeSymbol: row.symbol },
+                                    })
+                                  }
                                 >
                                   <span className="dashboard-action-badge">
                                     {row.side === "sell" ? "Sell" : "Buy"}
@@ -1790,6 +1822,11 @@ function Dashboard() {
                           <p className="dashboard-risk-summary">
                             {getRiskSummary(riskData)}
                           </p>
+                          {import.meta.env.DEV && riskData?.source && (
+                            <span className="dashboard-ai-source-badge">
+                              AI: {riskData.source === "groq" ? `Groq · ${riskData.model ?? ""}` : "Fallback"}
+                            </span>
+                          )}
                         </div>
 
                         <div className="dashboard-card-middle-block dashboard-risk-middle-block">
@@ -1827,6 +1864,13 @@ function Dashboard() {
                                 <div
                                   className={`dashboard-risk-flag dashboard-risk-flag-${concern.severity}`}
                                   key={`${concern.symbol ?? ""}-${i}`}
+                                  onClick={() =>
+                                    navigate("/risk-manager", {
+                                      state: {
+                                        openConcernKey: `${concern.symbol ?? ""}|${concern.title ?? concern.category ?? ""}`,
+                                      },
+                                    })
+                                  }
                                 >
                                   <span className="dashboard-risk-flag-dot" />
                                   <span className="dashboard-risk-flag-text">

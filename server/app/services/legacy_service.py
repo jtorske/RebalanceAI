@@ -24,7 +24,7 @@ TICKER_METADATA_TTL = 7 * 24 * 3600  # 7 days
 QUOTE_CACHE_TTL = 15 * 60
 YFINANCE_TIMEOUT_SECONDS = 5
 YFINANCE_BATCH_TIMEOUT_SECONDS = 8
-AI_SUMMARY_PROMPT_VERSION = "summary-v6"
+AI_SUMMARY_PROMPT_VERSION = "summary-v7-groq"
 _yfinance_executor = ThreadPoolExecutor(max_workers=8)
 
 app = FastAPI()
@@ -420,6 +420,7 @@ def _compute_portfolio_vs_market(
 ) -> Dict[str, Any]:
     holdings = holdings_override or []
     quote_symbol_to_original: Dict[str, str] = {}
+    benchmark_symbols = [item["symbol"] for item in BENCHMARKS]
 
     for holding in holdings:
         normalized_symbol = _normalize_symbol_for_quote(holding)
@@ -429,7 +430,28 @@ def _compute_portfolio_vs_market(
             holding.get("symbol", "")
         ).strip().upper()
 
-    quotes = _fetch_quotes_for_symbols(list(quote_symbol_to_original.keys()))
+    # Fetch portfolio holdings + benchmark ETFs in a single batch to avoid
+    # double-hitting yfinance and triggering rate limits on the second call.
+    all_fetch_symbols = list(set(list(quote_symbol_to_original.keys()) + benchmark_symbols))
+    logger.debug(
+        "portfolio-vs-market: fetching %d symbols (%d holdings + %d benchmarks)",
+        len(all_fetch_symbols),
+        len(quote_symbol_to_original),
+        len(benchmark_symbols),
+    )
+    all_quotes = _fetch_quotes_for_symbols(all_fetch_symbols)
+
+    # Split results back into portfolio quotes and benchmark quotes
+    quotes = {k: v for k, v in all_quotes.items() if k in quote_symbol_to_original}
+    benchmark_quote_by_symbol = {k: v for k, v in all_quotes.items() if k in benchmark_symbols}
+
+    logger.debug(
+        "portfolio-vs-market: got %d/%d portfolio quotes, %d/%d benchmark quotes",
+        len(quotes),
+        len(quote_symbol_to_original),
+        len(benchmark_quote_by_symbol),
+        len(benchmark_symbols),
+    )
 
     total_current_cad = 0.0
     total_previous_cad = 0.0
@@ -438,6 +460,9 @@ def _compute_portfolio_vs_market(
     per_ticker: List[Dict[str, Any]] = []
 
     for holding in holdings:
+        security_type = str(holding.get("security_type", "")).strip().upper()
+        is_option = "OPTION" in security_type
+
         normalized_symbol = _normalize_symbol_for_quote(holding)
         if not normalized_symbol:
             continue
@@ -462,6 +487,11 @@ def _compute_portfolio_vs_market(
 
         if imported_current_price is not None and quantity > 0:
             fallback_previous_cad += _convert_to_cad(imported_current_price * quantity, currency)
+
+        # Exclude options from per_ticker — option quotes are unreliable for
+        # portfolio-level daily performance attribution.
+        if is_option:
+            continue
 
         quote = quotes.get(normalized_symbol, {})
         current_price = _to_float(quote.get("regularMarketPrice"))
@@ -516,20 +546,43 @@ def _compute_portfolio_vs_market(
     else:
         comparisonSource = "unavailable"
 
-    benchmarks = _fetch_benchmark_quotes()
+    # Build benchmark rows from already-fetched quotes
+    benchmarks: List[Dict[str, Any]] = []
     benchmark_changes: List[float] = []
-    for item in benchmarks:
-        value = _to_float(item.get("changePercent"))
-        if value is not None:
-            benchmark_changes.append(value)
+    for item in BENCHMARKS:
+        quote = benchmark_quote_by_symbol.get(item["symbol"], {})
+        change_pct = _to_float(quote.get("regularMarketChangePercent"))
+        if change_pct is not None:
+            benchmark_changes.append(change_pct)
+        else:
+            logger.warning(
+                "portfolio-vs-market: no quote for benchmark %s (missing or yfinance failure)",
+                item["symbol"],
+            )
+        benchmarks.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "price": _to_float(quote.get("regularMarketPrice")),
+                "changePercent": change_pct,
+            }
+        )
 
     market_daily_percent: Optional[float] = None
     marketSource = "live-benchmarks"
     if benchmark_changes:
         market_daily_percent = sum(benchmark_changes) / len(benchmark_changes)
+        logger.debug(
+            "portfolio-vs-market: benchmark average %.2f%% from %d/%d ETFs",
+            market_daily_percent,
+            len(benchmark_changes),
+            len(BENCHMARKS),
+        )
     else:
-        market_daily_percent = 0.0
-        marketSource = "fallback-zero"
+        # Return null — the frontend will display "--" rather than a fake +0.00%
+        market_daily_percent = None
+        marketSource = "unavailable"
+        logger.warning("portfolio-vs-market: all benchmark quotes failed, returning null marketDailyPercent")
 
     delta_percent: Optional[float] = None
     if portfolio_daily_percent is not None and market_daily_percent is not None:
@@ -781,9 +834,9 @@ def _is_market_summary_usable(text: Optional[str]) -> bool:
     return True
 
 
-def _try_groq_polish(prompt: str, timeout: int = 20) -> Optional[str]:
+def _try_groq_polish(prompt: str, timeout: int = 20, caller: str = "") -> Optional[str]:
     from app.services.groq_client import call_groq
-    text = call_groq(prompt, timeout=timeout, max_tokens=400)
+    text = call_groq(prompt, timeout=timeout, max_tokens=400, caller=caller)
     if not text:
         return None
     return _strip_llm_preamble(_repair_text_encoding(text)) or None
@@ -1052,6 +1105,8 @@ def _get_ai_summary_response(
             "summary": cached.get("summary"),
             "cached": True,
             "source": cached.get("source", "fallback"),
+            "model": cached.get("model"),
+            "generatedAt": cached.get("generatedAt"),
             "date": today,
             "portfolioDrivers": cached.get("portfolioDrivers", {"leaders": [], "laggards": []}),
         }
@@ -1075,21 +1130,28 @@ def _get_ai_summary_response(
         f"Benchmark context for verification:\n{chr(10).join(benchmark_lines)}\n\n"
         f"Summary to polish:\n{fallback_summary}"
     )
-    polished = _try_groq_polish(prompt, timeout=20)
+    polished = _try_groq_polish(prompt, timeout=20, caller="market_summary")
     if not _is_market_summary_usable(polished):
         polished = None
     summary = polished or fallback_summary
     source = "groq" if polished else "fallback"
+    from app.services.groq_client import get_groq_model
+    model = get_groq_model() if source == "groq" else None
+    generated_at = datetime.now(timezone.utc).isoformat()
 
     _ai_summary_cache[cache_key] = {
         "summary": summary,
         "source": source,
+        "model": model,
+        "generatedAt": generated_at,
         "portfolioDrivers": portfolio_drivers,
     }
     return {
         "summary": summary,
         "cached": False,
         "source": source,
+        "model": model,
+        "generatedAt": generated_at,
         "date": today,
         "portfolioDrivers": portfolio_drivers,
     }
@@ -1696,7 +1758,7 @@ def _ai_risk_summary(
         + "\n".join(concern_lines)
     )
 
-    polished = _try_groq_polish(prompt, timeout=20)
+    polished = _try_groq_polish(prompt, timeout=20, caller="risk_summary")
     if _is_risk_summary_usable(polished):
         return polished, "groq"
     return fallback, "fallback"
@@ -1974,10 +2036,12 @@ def _build_risk_analysis(
         ],
     )
 
+    from app.services.groq_client import get_groq_model
     return {
         "summary": summary,
         "dashboardSummary": dashboard_summary,
         "source": summary_source,
+        "model": get_groq_model() if summary_source == "groq" else None,
         "concerns": concerns,
         "dataQuality": data_quality,
         "holdingsAnalyzed": len(positions),
@@ -2063,7 +2127,7 @@ def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> Tuple[str, str]:
         + "\n".join(insight_lines)
     )
 
-    polished = _try_groq_polish(prompt, timeout=20)
+    polished = _try_groq_polish(prompt, timeout=20, caller="key_insights")
     return (polished, "groq") if polished else (fallback, "fallback")
 
 
@@ -2234,10 +2298,12 @@ def _build_key_insights(
         )
 
     summary, summary_source = _ai_key_insights_summary(insights)
+    from app.services.groq_client import get_groq_model
 
     return {
         "summary": summary,
         "source": summary_source,
+        "model": get_groq_model() if summary_source == "groq" else None,
         "insights": insights[:10],
         "topPerformers": top_performers,
         "laggards": laggards,
@@ -2628,6 +2694,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "summary": "Import your holdings first, then the dashboard can suggest a rebalance plan based on your actual portfolio weights.",
             "source": "fallback",
+            "model": None,
             "mode": "capped_market_cap",
             "overweights": [],
             "underweights": [],
@@ -2640,6 +2707,7 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "summary": "Market-cap data is not available right now, so the app is preserving current weights instead of suggesting trades. Try generating the plan again later, or use Equal Weight or Custom Targets on the Reweight page.",
             "source": "fallback",
+            "model": None,
             "mode": plan.get("targetMode", "capped_market_cap"),
             "overweights": [],
             "underweights": [],
@@ -2698,26 +2766,38 @@ def _build_rebalance_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         if buys:
             trade_parts.append(f"add to {buy_text}")
         trade_text = " and ".join(trade_parts)
-        summary = (
+        deterministic_summary = (
             "Using capped market-cap targets, the portfolio could rebalance by "
             f"{trade_text}. The largest overweight positions are {overweight_text or 'not material'}, "
             f"while the main underweights are {underweight_text or 'not material'}; the current plan shows "
             f"{_format_cad(total_buy)} of buys and {_format_cad(total_sell)} of sells after drift and minimum-trade rules."
         )
     elif overweights or underweights:
-        summary = (
+        deterministic_summary = (
             "The portfolio is close to its capped market-cap targets after applying the current drift threshold. "
             f"The biggest positions to watch are {overweight_text or 'no material overweights'} on the overweight side "
             f"and {underweight_text or 'no material underweights'} on the underweight side."
         )
     else:
-        summary = (
+        deterministic_summary = (
             "The portfolio is already close to its capped market-cap rebalance targets, so no major trade is needed under the current threshold."
         )
 
+    groq_prompt = (
+        "Polish this portfolio rebalance summary without changing any facts, numbers, or ticker symbols. "
+        "Return exactly 2 concise professional sentences. Do not add financial advice or recommendations.\n\n"
+        f"Summary to polish:\n{deterministic_summary}"
+    )
+    polished = _try_groq_polish(groq_prompt, timeout=20, caller="rebalance_summary")
+    summary = polished or deterministic_summary
+    source = "groq" if polished else "fallback"
+    from app.services.groq_client import get_groq_model
+    model = get_groq_model() if source == "groq" else None
+
     return {
         "summary": summary,
-        "source": "fallback",
+        "source": source,
+        "model": model,
         "mode": plan.get("targetMode", "capped_market_cap"),
         "trimSymbols": [item.get("symbol", "") for item in sells[:max_top_actions]],
         "addSymbols": [item.get("symbol", "") for item in buys[:max_top_actions]],
@@ -2776,6 +2856,7 @@ def create_rebalance_ai_summary(payload: HoldingsSummaryRequest):
         return {
             "summary": "Rebalance summary is temporarily unavailable.",
             "source": "fallback",
+            "model": None,
             "mode": "capped_market_cap",
             "overweights": [],
             "underweights": [],
@@ -2826,6 +2907,7 @@ def create_risk_analysis(payload: HoldingsSummaryRequest):
             "summary": "Risk analysis is temporarily unavailable.",
             "dashboardSummary": "Risk analysis is temporarily unavailable.",
             "source": "fallback",
+            "model": None,
             "concerns": [],
             "dataQuality": {
                 "metadataIncomplete": True,

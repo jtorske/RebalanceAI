@@ -1,5 +1,7 @@
 import type { ImportedHolding } from "./types";
 
+export const AI_CACHE_VERSION = "groq-v1";
+
 export interface TopTrade {
   symbol: string;
   action: "buy" | "sell" | "hold";
@@ -21,6 +23,8 @@ export interface RebalanceSummaryData {
   totalSellCad: number | null;
   topTrades: TopTrade[];
   tradeCount: number;
+  source?: "groq" | "fallback";
+  model?: string | null;
 }
 
 export interface RiskAlertData {
@@ -28,9 +32,12 @@ export interface RiskAlertData {
   concerns: RiskConcernItem[];
   concernTotal: number;
   severityCounts: { high: number; medium: number; low: number };
+  source?: "groq" | "fallback";
+  model?: string | null;
 }
 
 export interface DashboardSummaryCache {
+  version: string;
   holdingsHash: string;
   rebalance: RebalanceSummaryData | null;
   risk: RiskAlertData | null;
@@ -38,6 +45,11 @@ export interface DashboardSummaryCache {
 }
 
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// v4 key — bumped to orphan all pre-Groq cache entries
+function cacheKey(userId: string | null): string {
+  return `rebalancex:dashboard-cache-v4:${userId ?? "demo"}`;
+}
 
 export function computeHoldingsHash(holdings: ImportedHolding[]): string {
   const fingerprint = holdings
@@ -51,16 +63,14 @@ export function computeHoldingsHash(holdings: ImportedHolding[]): string {
   return hash.toString(36);
 }
 
-function cacheKey(userId: string | null): string {
-  return `rebalancex:dashboard-cache-v3:${userId ?? "demo"}`;
-}
-
 export function loadDashboardCache(userId: string | null): DashboardSummaryCache | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(cacheKey(userId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DashboardSummaryCache;
+    // Reject any entry from before Groq migration
+    if (parsed.version !== AI_CACHE_VERSION) return null;
     if (!parsed.holdingsHash || !parsed.updatedAt) return null;
     if (Date.now() - new Date(parsed.updatedAt).getTime() > CACHE_TTL_MS) return null;
     return parsed;
@@ -79,6 +89,7 @@ export function saveDashboardCache(
     const key = cacheKey(userId);
     const existing = loadDashboardCache(userId);
     const next: DashboardSummaryCache = {
+      version: AI_CACHE_VERSION,
       holdingsHash,
       rebalance: patch.rebalance ?? existing?.rebalance ?? null,
       risk: patch.risk ?? existing?.risk ?? null,
@@ -117,13 +128,15 @@ export interface MarketComparisonCache {
 }
 
 export interface MarketSummaryCache {
+  version: string;
   date: string; // ISO date "YYYY-MM-DD"
   holdingsHash?: string;
   aiSummary: string | null;
   marketComparison: MarketComparisonCache | null;
 }
 
-const MARKET_SUMMARY_KEY = "rebalancex:market-summary-v2";
+// v3 key — bumped to orphan all pre-Groq market summary entries
+const MARKET_SUMMARY_KEY = "rebalancex:market-summary-v3";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -135,6 +148,8 @@ export function loadMarketSummaryCache(): MarketSummaryCache | null {
     const raw = window.localStorage.getItem(MARKET_SUMMARY_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as MarketSummaryCache;
+    // Reject any entry from before Groq migration
+    if (parsed.version !== AI_CACHE_VERSION) return null;
     if (parsed.date !== todayIso()) return null; // stale — new trading day
     return parsed;
   } catch {
@@ -151,6 +166,7 @@ export function saveMarketSummaryCache(patch: Partial<MarketSummaryCache>): void
       !existing?.holdingsHash ||
       patch.holdingsHash === existing.holdingsHash;
     const next: MarketSummaryCache = {
+      version: AI_CACHE_VERSION,
       date: todayIso(),
       holdingsHash: patch.holdingsHash ?? existing?.holdingsHash,
       aiSummary: patch.aiSummary ?? (sameHoldings ? existing?.aiSummary : null) ?? null,

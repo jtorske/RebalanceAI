@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { sessionCacheGet, sessionCacheSet } from "../lib/sessionPageCache";
 import DashboardNavbar from "../components/DashboardNavbar.tsx";
 import "./RoutePage.css";
@@ -158,6 +159,8 @@ function RiskDetailDialog({
 const RISK_CACHE_KEY = "risk-analysis-v4";
 
 function RiskManager() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { portfolio } = useAuth();
   const { isDemoMode } = useDemoMode();
   const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(null);
@@ -165,6 +168,9 @@ function RiskManager() {
   const [error, setError] = useState<string | null>(null);
   const [selectedConcern, setSelectedConcern] = useState<RiskConcern | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const pendingConcernKey = useRef<string | null>(
+    (location.state as { openConcernKey?: string } | null)?.openConcernKey ?? null,
+  );
 
   const loadRiskAnalysis = useCallback(async (force = false) => {
     setIsLoading(true);
@@ -224,6 +230,19 @@ function RiskManager() {
     window.addEventListener("holdings-changed", handler);
     return () => window.removeEventListener("holdings-changed", handler);
   }, [loadRiskAnalysis]);
+
+  useEffect(() => {
+    if (!pendingConcernKey.current || !analysis || isLoading) return;
+    const [symbol, title] = pendingConcernKey.current.split("|");
+    const match = analysis.mainConcerns.find(
+      (c) => c.symbol === symbol && (c.title === title || !title),
+    );
+    if (match) {
+      setSelectedConcern(match);
+      pendingConcernKey.current = null;
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [analysis, isLoading, navigate, location.pathname]);
 
   const concernCounts = {
     high: analysis?.severityCounts.high ?? 0,

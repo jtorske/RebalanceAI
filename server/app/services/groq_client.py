@@ -9,7 +9,7 @@ logger = logging.getLogger("rebalanceai")
 _GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
-def call_groq(prompt: str, timeout: int = 20, max_tokens: int = 400) -> Optional[str]:
+def call_groq(prompt: str, timeout: int = 20, max_tokens: int = 400, caller: str = "") -> Optional[str]:
     """
     Send a prompt to Groq and return the response text.
     Returns None if the key is missing, the call fails, or the response is empty.
@@ -18,10 +18,12 @@ def call_groq(prompt: str, timeout: int = 20, max_tokens: int = 400) -> Optional
     """
     api_key = os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
-        logger.debug("GROQ_API_KEY not set — skipping Groq call")
+        logger.warning("GROQ_API_KEY not set — skipping Groq call%s", f" [{caller}]" if caller else "")
         return None
 
     model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
+    tag = f" [{caller}]" if caller else ""
+    logger.info("Groq call starting%s: model=%s max_tokens=%d", tag, model, max_tokens)
 
     try:
         resp = httpx.post(
@@ -40,10 +42,18 @@ def call_groq(prompt: str, timeout: int = 20, max_tokens: int = 400) -> Optional
         )
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"].strip()
-        return text or None
+        if text:
+            logger.info("Groq call succeeded%s: model=%s chars=%d", tag, model, len(text))
+            return text
+        logger.warning("Groq call returned empty response%s", tag)
+        return None
     except httpx.HTTPStatusError as err:
-        logger.warning("Groq API HTTP error %s: %s", err.response.status_code, err)
+        logger.warning("Groq API HTTP error %s%s: %s", err.response.status_code, tag, err)
         return None
     except Exception as err:
-        logger.warning("Groq API call failed: %s", err)
+        logger.warning("Groq API call failed%s: %s", tag, err)
         return None
+
+
+def get_groq_model() -> str:
+    return os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
