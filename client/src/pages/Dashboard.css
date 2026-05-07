@@ -1456,7 +1456,37 @@
   }
 
   .dashboard-allocation-card {
-    max-width: 400px;
+    max-width: 100%;
     width: 100%;
+  }
+
+  .dashboard-actions-donut-corner {
+    bottom: 8px;
+    right: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-main {
+    padding: 12px;
+  }
+
+  .dashboard-donut-chip {
+    min-width: 72px;
+    height: 34px;
+    font-size: 13px;
+    padding: 3px 8px 3px 4px;
+  }
+
+  .dashboard-donut-chip-right {
+    padding: 3px 4px 3px 8px;
+  }
+
+  .dashboard-card {
+    padding: 12px;
   }
 }

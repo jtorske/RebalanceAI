@@ -604,3 +604,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  .risk-summary-card strong {
+    font-size: clamp(20px, 6vw, 30px);
+  }
+
+  .risk-concern-list {
+    grid-template-columns: 1fr;
+  }
+}

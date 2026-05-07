@@ -11,7 +11,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 40px 56px;
+  padding: clamp(16px, 3vw, 40px) clamp(16px, 4vw, 56px);
 }
 
 .route-page-card {
@@ -23,13 +23,13 @@
 
 .route-page-title {
   margin: 0;
-  font-size: 32px;
+  font-size: clamp(22px, 3vw, 32px);
   color: #181818;
 }
 
 .route-page-copy {
   margin: 12px 0 0;
-  font-size: 16px;
+  font-size: clamp(14px, 1.4vw, 16px);
   color: #444;
 }
 
@@ -708,12 +708,8 @@ label.import-guide-pulse {
 }
 
 @media (max-width: 900px) {
-  .route-page-main {
-    padding: 24px;
-  }
-
   .route-page-title {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .earnings-cal-grid {
@@ -723,5 +719,23 @@ label.import-guide-pulse {
   .earnings-day {
     min-height: 40px;
     padding: 3px 3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .route-page-title {
+    font-size: 20px;
+  }
+
+  .route-page-card {
+    padding: 14px;
+  }
+
+  .import-upload-row {
+    flex-direction: column;
+  }
+
+  .import-metric-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

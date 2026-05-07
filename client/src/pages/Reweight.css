@@ -610,6 +610,12 @@
   .rw-snapshot-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+@media (max-width: 480px) {
+  .rw-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .rw-snapshot-grid { grid-template-columns: repeat(2, 1fr); }
+  .rw-title { font-size: 20px; }
+}
+
 /* ── Clickable rows ───────────────────────────────── */
 
 .rw-row-clickable {

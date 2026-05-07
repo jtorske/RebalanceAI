@@ -398,3 +398,42 @@
   color: var(--app-muted);
   margin-top: 1px;
 }
+
+@media (max-width: 800px) {
+  .goal-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .goal-body {
+    overflow: auto;
+  }
+
+  .goal-sidebar {
+    overflow: visible;
+    min-height: unset;
+  }
+
+  .goal-main {
+    overflow: visible;
+    min-height: unset;
+  }
+
+  .goal-outcomes {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .goal-header {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .goal-outcomes {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .goal-title-row {
+    font-size: 20px;
+  }
+}

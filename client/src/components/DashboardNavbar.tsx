@@ -1,4 +1,4 @@
-import { FiUser, FiX, FiLogOut, FiEdit2, FiLock } from "react-icons/fi";
+import { FiUser, FiX, FiLogOut, FiEdit2, FiLock, FiMenu } from "react-icons/fi";
 import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,6 +14,7 @@ function DashboardNavbar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("login");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
 
@@ -104,7 +105,7 @@ function DashboardNavbar() {
   const renderFeatureNavItem = (to: string, label: string) => {
     if (!isFeatureLocked) {
       return (
-        <NavLink className="dashboard-navbar-link" to={to}>
+        <NavLink className="dashboard-navbar-link" to={to} onClick={() => setMobileMenuOpen(false)}>
           {label}
         </NavLink>
       );
@@ -185,6 +186,61 @@ function DashboardNavbar() {
             </button>
           </div>
         )
+      )}
+
+      {/* Hamburger — visible only on mobile via CSS */}
+      <button
+        className="dashboard-navbar-hamburger"
+        type="button"
+        aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={mobileMenuOpen}
+        onClick={() => setMobileMenuOpen((v) => !v)}
+      >
+        {mobileMenuOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+      </button>
+
+      {/* Mobile nav dropdown — portal so it escapes overflow:hidden parents */}
+      {mobileMenuOpen && createPortal(
+        <div
+          className="dashboard-navbar-mobile-menu"
+          role="navigation"
+          aria-label="Mobile navigation"
+        >
+          {renderFeatureNavItem("/re-weight", "Re-weight")}
+          {renderFeatureNavItem("/risk-manager", "Risk Manager")}
+          {renderFeatureNavItem("/key-insights", "Key Insights")}
+          {renderFeatureNavItem("/goal-planner", "Goals")}
+          <NavLink
+            className={({ isActive }) =>
+              isActive || isFeatureLocked
+                ? "dashboard-navbar-link dashboard-navbar-link-active-start"
+                : "dashboard-navbar-link"
+            }
+            to="/holdings"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Holdings
+          </NavLink>
+          {!loading && !user && (
+            <div className="dashboard-navbar-mobile-auth">
+              <button
+                className="navbar-auth-login"
+                type="button"
+                onClick={() => { openAuthModal("login"); setMobileMenuOpen(false); }}
+              >
+                Log in
+              </button>
+              <button
+                className="navbar-auth-signup"
+                type="button"
+                onClick={() => { openAuthModal("signup"); setMobileMenuOpen(false); }}
+              >
+                Sign up
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body,
       )}
 
       {/* Settings panel (logged-in only) */}

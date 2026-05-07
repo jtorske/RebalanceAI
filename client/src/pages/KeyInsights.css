@@ -655,3 +655,18 @@
     gap: 2px;
   }
 }
+
+@media (max-width: 480px) {
+  .insights-health-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .insights-chips-group {
+    flex-wrap: wrap;
+  }
+
+  .insights-performance-columns {
+    flex-direction: column;
+  }
+}
