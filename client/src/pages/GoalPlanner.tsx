@@ -131,7 +131,7 @@ export default function GoalPlanner() {
     const load = async () => {
       try {
         const holdings = await loadActiveHoldings({
-          portfolioId: portfolio?.id,
+          portfolioId,
           isDemoMode,
         });
         const total = holdings.reduce((sum, h) => {
@@ -145,7 +145,7 @@ export default function GoalPlanner() {
       }
     };
     void load();
-  }, [isDemoMode, portfolio]);
+  }, [isDemoMode, portfolioId]);
 
   const handleRiskChange = (p: RiskProfile) => {
     setRiskProfile(p);

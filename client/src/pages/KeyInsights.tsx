@@ -93,7 +93,7 @@ function KeyInsights() {
     setError(null);
     try {
       const holdings = await loadActiveHoldings({
-        portfolioId: portfolio?.id,
+        portfolioId,
         isDemoMode,
       });
       const cacheKey = `${INSIGHTS_CACHE_KEY}:${computeHoldingsHash(holdings)}`;
@@ -125,7 +125,7 @@ function KeyInsights() {
     } finally {
       setIsLoading(false);
     }
-  }, [isDemoMode, portfolio]);
+  }, [isDemoMode, portfolioId]);
 
   useEffect(() => {
     void loadInsights();
@@ -141,7 +141,7 @@ function KeyInsights() {
     const loadEarnings = async () => {
       try {
         const holdings = await loadActiveHoldings({
-          portfolioId: portfolio?.id,
+          portfolioId,
           isDemoMode,
         });
         const res = await fetch(`${API_BASE_URL}/portfolio/earnings-calendar`, {
@@ -160,7 +160,7 @@ function KeyInsights() {
     void loadEarnings();
     window.addEventListener("holdings-changed", loadEarnings);
     return () => window.removeEventListener("holdings-changed", loadEarnings);
-  }, [isDemoMode, portfolio]);
+  }, [isDemoMode, portfolioId]);
 
   return (
     <div className="route-page">

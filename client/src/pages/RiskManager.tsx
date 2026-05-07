@@ -184,7 +184,7 @@ function RiskManager() {
 
     try {
       holdingsList = await loadActiveHoldings({
-        portfolioId: portfolio?.id,
+        portfolioId,
         isDemoMode,
       });
       holdingsCount = holdingsList.length;
@@ -220,7 +220,7 @@ function RiskManager() {
     } finally {
       setIsLoading(false);
     }
-  }, [isDemoMode, portfolio]);
+  }, [isDemoMode, portfolioId]);
 
   useEffect(() => {
     void loadRiskAnalysis();

@@ -185,7 +185,7 @@ function Reweight() {
   const fetchReweight = async (marketCapOverrides: Record<string, string> = {}, useCache = true) => {
     const marketCapsToSend = { ...manualMarketCaps, ...marketCapOverrides };
     const holdings = await loadActiveHoldings({
-      portfolioId: portfolio?.id,
+      portfolioId,
       isDemoMode,
     });
     const cacheKey = buildReweightCacheKey(marketCapOverrides, computeHoldingsHash(holdings));
@@ -232,7 +232,7 @@ function Reweight() {
 
   useEffect(() => {
     void fetchReweight({}, true);
-  }, [isDemoMode, portfolio]);
+  }, [isDemoMode, portfolioId]);
 
   useEffect(() => {
     if (!pendingTradeSymbol.current || !data || isLoading) return;
