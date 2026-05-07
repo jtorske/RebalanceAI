@@ -162,6 +162,7 @@ function RiskManager() {
   const location = useLocation();
   const navigate = useNavigate();
   const { portfolio } = useAuth();
+  const portfolioId = portfolio?.id ?? null;
   const { isDemoMode } = useDemoMode();
   const [analysis, setAnalysis] = useState<RiskAnalysisResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);

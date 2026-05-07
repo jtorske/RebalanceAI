@@ -115,6 +115,7 @@ const PH = SVG_H - MT - MB;
 export default function GoalPlanner() {
   const { settings } = useUserSettings();
   const { portfolio } = useAuth();
+  const portfolioId = portfolio?.id ?? null;
   const { isDemoMode } = useDemoMode();
 
   const [currentPortfolio, setCurrentPortfolio] = useState(0);

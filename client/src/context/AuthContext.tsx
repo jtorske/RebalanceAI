@@ -91,7 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.session?.user) void syncProfile(data.session.user);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED fires on every tab-focus JWT renewal — only update the
+      // access token; skip user/profile/portfolio sync to prevent cascading
+      // Supabase queries on focus. User data does not change on token refresh.
+      if (event === "TOKEN_REFRESHED") {
+        setSession(session);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);

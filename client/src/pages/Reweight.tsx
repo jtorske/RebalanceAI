@@ -123,6 +123,7 @@ function Reweight() {
   const { settings } = useUserSettings();
   const { requireAuth, gateOpen, setGateOpen } = useRequireAuth();
   const { portfolio } = useAuth();
+  const portfolioId = portfolio?.id ?? null;
   const { isDemoMode } = useDemoMode();
   const pendingTradeSymbol = useRef<string | null>(
     (location.state as { openTradeSymbol?: string } | null)?.openTradeSymbol ?? null,

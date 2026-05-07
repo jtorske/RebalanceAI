@@ -73,6 +73,7 @@ const INSIGHTS_CACHE_KEY = "key-insights-v2";
 function KeyInsights() {
   const { settings } = useUserSettings();
   const { portfolio } = useAuth();
+  const portfolioId = portfolio?.id ?? null;
   const { isDemoMode } = useDemoMode();
   const [data, setData] = useState<KeyInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
