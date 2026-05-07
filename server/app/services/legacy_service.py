@@ -25,7 +25,6 @@ QUOTE_CACHE_TTL = 15 * 60
 YFINANCE_TIMEOUT_SECONDS = 5
 YFINANCE_BATCH_TIMEOUT_SECONDS = 8
 AI_SUMMARY_PROMPT_VERSION = "summary-v6"
-OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 _yfinance_executor = ThreadPoolExecutor(max_workers=8)
 
 app = FastAPI()
@@ -782,40 +781,12 @@ def _is_market_summary_usable(text: Optional[str]) -> bool:
     return True
 
 
-def _is_local_ollama_enabled() -> bool:
-    env_name = (
-        os.getenv("APP_ENV")
-        or os.getenv("ENV")
-        or os.getenv("FASTAPI_ENV")
-        or ""
-    ).strip().lower()
-    if os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"):
-        return False
-    if env_name in {"production", "prod"}:
-        return False
-    if os.getenv("DISABLE_OLLAMA", "").strip().lower() in {"1", "true", "yes"}:
-        return False
-    return True
-
-
-def _try_ollama_polish(prompt: str, timeout: int = 12) -> Optional[str]:
-    if not _is_local_ollama_enabled():
+def _try_groq_polish(prompt: str, timeout: int = 20) -> Optional[str]:
+    from app.services.groq_client import call_groq
+    text = call_groq(prompt, timeout=timeout, max_tokens=400)
+    if not text:
         return None
-
-    try:
-        resp = requests.post(
-            OLLAMA_GENERATE_URL,
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        text = _strip_llm_preamble(
-            _repair_text_encoding(resp.json().get("response", "").strip())
-        )
-        return text or None
-    except Exception as err:
-        logger.debug("Local Ollama polish skipped: %s", err)
-        return None
+    return _strip_llm_preamble(_repair_text_encoding(text)) or None
 
 
 def _format_percent(value: Optional[float]) -> str:
@@ -1104,11 +1075,11 @@ def _get_ai_summary_response(
         f"Benchmark context for verification:\n{chr(10).join(benchmark_lines)}\n\n"
         f"Summary to polish:\n{fallback_summary}"
     )
-    polished = _try_ollama_polish(prompt, timeout=12)
+    polished = _try_groq_polish(prompt, timeout=20)
     if not _is_market_summary_usable(polished):
         polished = None
     summary = polished or fallback_summary
-    source = "ollama" if polished else "fallback"
+    source = "groq" if polished else "fallback"
 
     _ai_summary_cache[cache_key] = {
         "summary": summary,
@@ -1725,9 +1696,9 @@ def _ai_risk_summary(
         + "\n".join(concern_lines)
     )
 
-    polished = _try_ollama_polish(prompt, timeout=12)
+    polished = _try_groq_polish(prompt, timeout=20)
     if _is_risk_summary_usable(polished):
-        return polished, "ollama"
+        return polished, "groq"
     return fallback, "fallback"
 
 
@@ -2092,8 +2063,8 @@ def _ai_key_insights_summary(insights: List[Dict[str, Any]]) -> Tuple[str, str]:
         + "\n".join(insight_lines)
     )
 
-    polished = _try_ollama_polish(prompt, timeout=12)
-    return (polished, "ollama") if polished else (fallback, "fallback")
+    polished = _try_groq_polish(prompt, timeout=20)
+    return (polished, "groq") if polished else (fallback, "fallback")
 
 
 def _build_key_insights(

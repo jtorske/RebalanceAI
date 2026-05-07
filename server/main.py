@@ -1,4 +1,10 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv(Path(__file__).parent / ".env")
 
 from app.core.cors import add_cors
 from app.core.logging import log_registered_routes, logger
