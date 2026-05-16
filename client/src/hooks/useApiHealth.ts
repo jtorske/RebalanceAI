@@ -46,8 +46,12 @@ export function useApiHealth(): HealthResult {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const startedAtRef = useRef<number>(0);
+  // Prevents re-running the check once the backend is confirmed ready.
+  // Cleared on manual retry so retryNow() still works.
+  const isReadyRef = useRef(false);
 
   const retryNow = useCallback(() => {
+    isReadyRef.current = false;
     startedAtRef.current = Date.now();
     setElapsedMs(0);
     setStatus("checking");
@@ -55,25 +59,33 @@ export function useApiHealth(): HealthResult {
   }, []);
 
   useEffect(() => {
+    if (isReadyRef.current) return;
+
     const controller = new AbortController();
     let retryId: number | undefined;
     if (startedAtRef.current === 0) startedAtRef.current = Date.now();
 
     const scheduleRetry = (elapsed: number) => {
       if (elapsed < ERROR_AFTER_MS) {
+        console.log("[API] retrying status check");
         retryId = window.setTimeout(() => setAttempt((v) => v + 1), RETRY_INTERVAL_MS);
       }
     };
 
     const run = async () => {
       // Phase 1: liveness — server must respond at all
-      const alive = await fetchOk(`${API_BASE_URL}/health`, controller.signal);
+      const alive = await fetchOk(`${API_BASE_URL}/api/status`, controller.signal);
       if (controller.signal.aborted) return;
 
       if (!alive) {
-        if (!isHostedApi) { setStatus("ready"); return; }
+        if (!isHostedApi) {
+          isReadyRef.current = true;
+          setStatus("ready");
+          return;
+        }
         const elapsed = Date.now() - startedAtRef.current;
         setElapsedMs(elapsed);
+        if (elapsed < ERROR_AFTER_MS) console.log("[API] backend waking up");
         setStatus(elapsed >= ERROR_AFTER_MS ? "error" : "checking");
         scheduleRetry(elapsed);
         return;
@@ -81,10 +93,15 @@ export function useApiHealth(): HealthResult {
 
       // Phase 2: readiness — server is up and accepting work
       setStatus("warming");
-      const ready = await fetchOk(`${API_BASE_URL}/ready`, controller.signal);
+      const ready = await fetchOk(`${API_BASE_URL}/api/ready`, controller.signal);
       if (controller.signal.aborted) return;
 
-      if (ready || !isHostedApi) { setStatus("ready"); return; }
+      if (ready || !isHostedApi) {
+        isReadyRef.current = true;
+        console.log("[API] backend ready");
+        setStatus("ready");
+        return;
+      }
 
       const elapsed = Date.now() - startedAtRef.current;
       setElapsedMs(elapsed);

@@ -30,13 +30,13 @@ _yfinance_executor = ThreadPoolExecutor(max_workers=8)
 app = FastAPI()
 
 
-@app.get("/health")
-def health():
+@app.get("/api/status")
+def api_status():
     return {"status": "ok"}
 
 
-@app.get("/ready")
-def ready():
+@app.get("/api/ready")
+def api_ready():
     return {"status": "ready", "api": "ok"}
 
 
