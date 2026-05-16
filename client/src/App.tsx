@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import LandingPage from "./pages/LandingPage";
 import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
@@ -87,6 +88,7 @@ function App() {
         <DemoModeProvider>
           <BrowserRouter>
             <AppRoutes />
+            <Analytics />
           </BrowserRouter>
         </DemoModeProvider>
       </UserSettingsProvider>
