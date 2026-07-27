@@ -194,7 +194,7 @@ const getPerformanceHeadline = (portfolioDailyPercent: number | null) => {
     return `Portfolio up ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
   }
   if (portfolioDailyPercent <= -0.5) {
-    return `Portfolio down ${portfolioDailyPercent.toFixed(2)}% today`;
+    return `Portfolio down ${Math.abs(portfolioDailyPercent).toFixed(2)}% today`;
   }
   return `Portfolio roughly flat at ${sign}${portfolioDailyPercent.toFixed(2)}% today`;
 };
@@ -781,7 +781,9 @@ function Dashboard() {
   const [marketComparison, setMarketComparison] =
     useState<MarketComparisonResponse | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiSummarySource, setAiSummarySource] = useState<"groq" | "fallback" | null>(null);
+  const [aiSummarySource, setAiSummarySource] = useState<
+    "groq" | "fallback" | null
+  >(null);
   const [aiSummaryModel, setAiSummaryModel] = useState<string | null>(null);
   const [sectorBreakdown, setSectorBreakdown] = useState<
     SectorBreakdownEntry[]
@@ -953,7 +955,12 @@ function Dashboard() {
         setAiSummarySource(data.source ?? null);
         setAiSummaryModel(data.model ?? null);
         if (import.meta.env.DEV) {
-          console.log("[AI] market summary source=%s model=%s cached=%s", data.source ?? "unknown", data.model ?? "n/a", data.cached);
+          console.log(
+            "[AI] market summary source=%s model=%s cached=%s",
+            data.source ?? "unknown",
+            data.model ?? "n/a",
+            data.cached,
+          );
         }
         if (summary) {
           saveMarketSummaryCache({ holdingsHash, aiSummary: summary });
@@ -1229,6 +1236,14 @@ function Dashboard() {
     marketDailyPercent === null || portfolioDailyPercent === null
       ? null
       : marketDailyPercent - portfolioDailyPercent;
+
+  const getPerformanceToneClass = (value: number | null) => {
+    if (value === null) {
+      return "dashboard-comparison-muted";
+    }
+
+    return value >= 0 ? "dashboard-positive" : "dashboard-negative";
+  };
 
   const formattedMarketSummary = useMemo(
     () =>
@@ -1507,7 +1522,10 @@ function Dashboard() {
                           </div>
                           {import.meta.env.DEV && aiSummarySource && (
                             <span className="dashboard-ai-source-badge">
-                              AI: {aiSummarySource === "groq" ? `Groq · ${aiSummaryModel ?? ""}` : "Fallback"}
+                              AI:{" "}
+                              {aiSummarySource === "groq"
+                                ? `Groq · ${aiSummaryModel ?? ""}`
+                                : "Fallback"}
                             </span>
                           )}
                           {formattedMarketSummary.contributors.length > 0 && (
@@ -1562,24 +1580,18 @@ function Dashboard() {
                       ) : (
                         <>
                           <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
-                            <span>Portfolio</span>
-                            <span className="dashboard-positive">
+                            <span>Your portfolio</span>
+                            <span className={getPerformanceToneClass(portfolioDailyPercent)}>
                               {formatPercent(portfolioDailyPercent)}
                             </span>
                             <span className="dashboard-comparison-muted">
-                              Base
+                              Comparison base
                             </span>
                           </div>
 
                           <div className="dashboard-comparison-row">
                             <span>Benchmark average</span>
-                            <span
-                              className={
-                                marketDailyPercent! >= 0
-                                  ? "dashboard-positive"
-                                  : "dashboard-negative"
-                              }
-                            >
+                            <span className={getPerformanceToneClass(marketDailyPercent)}>
                               {formatPercent(marketDailyPercent)}
                             </span>
                             <span
@@ -1658,7 +1670,10 @@ function Dashboard() {
                           </div>
                           {import.meta.env.DEV && rebalanceData?.source && (
                             <span className="dashboard-ai-source-badge">
-                              AI: {rebalanceData.source === "groq" ? `Groq · ${rebalanceData.model ?? ""}` : "Fallback"}
+                              AI:{" "}
+                              {rebalanceData.source === "groq"
+                                ? `Groq · ${rebalanceData.model ?? ""}`
+                                : "Fallback"}
                             </span>
                           )}
                         </div>
@@ -1824,7 +1839,10 @@ function Dashboard() {
                           </p>
                           {import.meta.env.DEV && riskData?.source && (
                             <span className="dashboard-ai-source-badge">
-                              AI: {riskData.source === "groq" ? `Groq · ${riskData.model ?? ""}` : "Fallback"}
+                              AI:{" "}
+                              {riskData.source === "groq"
+                                ? `Groq · ${riskData.model ?? ""}`
+                                : "Fallback"}
                             </span>
                           )}
                         </div>
