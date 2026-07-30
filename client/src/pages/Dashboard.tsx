@@ -55,6 +55,39 @@ type FormattedMarketSummary = {
   contributors: MarketDriver[];
 };
 
+const EMPTY_MARKET_COMPARISON: MarketComparisonResponse = {
+  portfolioDailyPercent: null,
+  marketDailyPercent: null,
+  deltaPercent: null,
+  benchmarks: [],
+  perTicker: [],
+};
+
+const MARKET_SUMMARY_LOADING_COPY = {
+  headline: "Preparing market summary",
+  body: [
+    "Loading portfolio and benchmark data before rendering today's market summary.",
+  ],
+};
+
+const normalizeFormattedMarketSummary = (
+  summary: FormattedMarketSummary,
+): FormattedMarketSummary => {
+  const body = summary.body.map((line) => line.trim()).filter(Boolean).slice(0, 3);
+  return {
+    headline: summary.headline.trim() || MARKET_SUMMARY_LOADING_COPY.headline,
+    date:
+      summary.date.trim() ||
+      new Date().toLocaleDateString("en-CA", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+    body: body.length > 0 ? body : MARKET_SUMMARY_LOADING_COPY.body,
+    contributors: summary.contributors,
+  };
+};
+
 type SectorBreakdownEntry = {
   sector: string;
   valueCad: number;
@@ -333,7 +366,7 @@ const formatMarketSummary = (
   if (portfolioDailyPercent !== null && marketDailyPercent !== null) {
     const spread = portfolioDailyPercent - marketDailyPercent;
     if (Math.abs(spread) < 0.005) {
-      return {
+      return normalizeFormattedMarketSummary({
         headline: getPerformanceHeadline(portfolioDailyPercent),
         date: new Date().toLocaleDateString("en-CA", {
           month: "short",
@@ -345,7 +378,7 @@ const formatMarketSummary = (
           "Portfolio holdings moved broadly in line with benchmark averages.",
         ],
         contributors,
-      };
+      });
     }
 
     const verb = spread >= 0 ? "Outperformed" : "Underperformed";
@@ -354,7 +387,7 @@ const formatMarketSummary = (
         ? "Stronger relative performance across core holdings widened the lead."
         : "Weaker relative performance across core holdings drove the gap.";
 
-    return {
+    return normalizeFormattedMarketSummary({
       headline: getPerformanceHeadline(portfolioDailyPercent),
       date: new Date().toLocaleDateString("en-CA", {
         month: "short",
@@ -366,10 +399,10 @@ const formatMarketSummary = (
         reason,
       ],
       contributors,
-    };
+    });
   }
 
-  return {
+  return normalizeFormattedMarketSummary({
     headline: getPerformanceHeadline(portfolioDailyPercent),
     date: new Date().toLocaleDateString("en-CA", {
       month: "short",
@@ -382,7 +415,7 @@ const formatMarketSummary = (
         "Market summary will appear once portfolio and benchmark data are available.",
     ],
     contributors,
-  };
+  });
 };
 
 const getFallbackRebalanceSummary = (holdings: ImportedHolding[]): string => {
@@ -904,16 +937,7 @@ function Dashboard() {
         saveMarketSummaryCache({ holdingsHash, marketComparison: data });
       } catch {
         setBenchmarks((currentBenchmarks) => currentBenchmarks);
-        setMarketComparison(
-          (currentComparison) =>
-            currentComparison ?? {
-              portfolioDailyPercent: null,
-              marketDailyPercent: null,
-              deltaPercent: null,
-              benchmarks: [],
-              perTicker: [],
-            },
-        );
+        setMarketComparison((currentComparison) => currentComparison ?? EMPTY_MARKET_COMPARISON);
       } finally {
         window.clearTimeout(loadingWatchdogId);
         setIsLoadingBenchmarks(false);
@@ -1247,11 +1271,13 @@ function Dashboard() {
 
   const formattedMarketSummary = useMemo(
     () =>
-      formatMarketSummary(
-        aiSummary,
-        marketComparison,
-        weightedHoldings,
-        totalMarketValueCad,
+      normalizeFormattedMarketSummary(
+        formatMarketSummary(
+          aiSummary,
+          marketComparison,
+          weightedHoldings,
+          totalMarketValueCad,
+        ),
       ),
     [aiSummary, marketComparison, totalMarketValueCad, weightedHoldings],
   );
@@ -1290,21 +1316,6 @@ function Dashboard() {
       "Suggested rebalance trims concentration and improves diversification.",
     ];
   }, [suggestionCards.add, suggestionCards.trim]);
-
-  const fallbackActionRows = useMemo(
-    () =>
-      [
-        ...suggestionCards.trim.map((symbol) => ({
-          symbol,
-          side: "sell" as const,
-        })),
-        ...suggestionCards.add.map((symbol) => ({
-          symbol,
-          side: "buy" as const,
-        })),
-      ].slice(0, MAX_CARD_ACTION_ROWS),
-    [suggestionCards],
-  );
 
   const riskSeverityCounts = useMemo(() => {
     if (riskData?.severityCounts) return riskData.severityCounts;
@@ -1495,69 +1506,78 @@ function Dashboard() {
 
                   <div className="dashboard-card-content dashboard-market-content">
                     <div className="dashboard-ai-summary">
-                      {isMarketSummaryLoading ? (
-                        <div className="dashboard-ai-summary-loading">
-                          <span className="dashboard-ai-summary-dot" />
-                          <span className="dashboard-ai-summary-dot" />
-                          <span className="dashboard-ai-summary-dot" />
-                          <span>Preparing market summary...</span>
+                      <div>
+                        <p className="dashboard-ai-summary-title">
+                          {isMarketSummaryLoading
+                            ? MARKET_SUMMARY_LOADING_COPY.headline
+                            : formattedMarketSummary.headline}
+                        </p>
+                        <p className="dashboard-market-date">
+                          {formattedMarketSummary.date}
+                        </p>
+                        <div className="dashboard-market-insight-lines">
+                          {(isMarketSummaryLoading
+                            ? MARKET_SUMMARY_LOADING_COPY.body
+                            : formattedMarketSummary.body
+                          ).map((line) => (
+                            <p className="dashboard-ai-summary-text" key={line}>
+                              {line}
+                            </p>
+                          ))}
                         </div>
-                      ) : (
-                        <div>
-                          <p className="dashboard-ai-summary-title">
-                            {formattedMarketSummary.headline}
-                          </p>
-                          <p className="dashboard-market-date">
-                            {formattedMarketSummary.date}
-                          </p>
-                          <div className="dashboard-market-insight-lines">
-                            {formattedMarketSummary.body.map((line) => (
-                              <p
-                                className="dashboard-ai-summary-text"
-                                key={line}
-                              >
-                                {line}
-                              </p>
-                            ))}
+                        {isMarketSummaryLoading ? (
+                          <div className="dashboard-ai-summary-loading">
+                            <span className="dashboard-ai-summary-dot" />
+                            <span className="dashboard-ai-summary-dot" />
+                            <span className="dashboard-ai-summary-dot" />
+                            <span>Preparing market summary...</span>
                           </div>
-                          {import.meta.env.DEV && aiSummarySource && (
-                            <span className="dashboard-ai-source-badge">
-                              AI:{" "}
-                              {aiSummarySource === "groq"
-                                ? `Groq · ${aiSummaryModel ?? ""}`
-                                : "Fallback"}
-                            </span>
-                          )}
-                          {formattedMarketSummary.contributors.length > 0 && (
-                            <div className="dashboard-market-drivers">
-                              <span className="dashboard-market-drivers-label">
-                                Top contributors
+                        ) : (
+                          <>
+                            {import.meta.env.DEV && aiSummarySource && (
+                              <span className="dashboard-ai-source-badge">
+                                AI: {" "}
+                                {aiSummarySource === "groq"
+                                  ? `Groq · ${aiSummaryModel ?? ""}`
+                                  : "Fallback"}
                               </span>
-                              <div className="dashboard-market-driver-chips">
-                                {formattedMarketSummary.contributors.map(
-                                  (driver) => {
-                                    const impact =
-                                      formatMarketDriverImpact(driver);
-                                    const chipTone =
-                                      driver.contributionPercent < 0
-                                        ? "dashboard-market-driver-chip-negative"
-                                        : "dashboard-market-driver-chip-positive";
-                                    return (
-                                      <span
-                                        className={`dashboard-market-driver-chip ${chipTone}`}
-                                        key={driver.symbol}
-                                      >
-                                        <span>{driver.symbol}</span>
-                                        {impact && <strong>{impact}</strong>}
-                                      </span>
-                                    );
-                                  },
-                                )}
+                            )}
+                            {formattedMarketSummary.contributors.length > 0 && (
+                              <div className="dashboard-market-drivers">
+                                <span className="dashboard-market-drivers-label">
+                                  Top contributors
+                                </span>
+                                <div className="dashboard-market-driver-chips">
+                                  {formattedMarketSummary.contributors.map(
+                                    (driver) => {
+                                      const impact =
+                                        formatMarketDriverImpact(driver);
+                                      const chipTone =
+                                        driver.contributionPercent < 0
+                                          ? "dashboard-market-driver-chip-negative"
+                                          : "dashboard-market-driver-chip-positive";
+                                      return (
+                                        <span
+                                          className={`dashboard-market-driver-chip ${chipTone}`}
+                                          key={driver.symbol}
+                                        >
+                                          <TickerLogoBadge
+                                            symbol={driver.symbol}
+                                            className="dashboard-market-driver-chip-logo"
+                                            style={{ width: 14, height: 14, borderRadius: 999 }}
+                                          />
+                                          <strong>{driver.symbol}</strong>
+                                          {impact && <span>{impact}</span>}
+                                        </span>
+                                      );
+                                    },
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="dashboard-comparison-table">
@@ -1581,7 +1601,11 @@ function Dashboard() {
                         <>
                           <div className="dashboard-comparison-row dashboard-comparison-row-portfolio">
                             <span>Your portfolio</span>
-                            <span className={getPerformanceToneClass(portfolioDailyPercent)}>
+                            <span
+                              className={getPerformanceToneClass(
+                                portfolioDailyPercent,
+                              )}
+                            >
                               {formatPercent(portfolioDailyPercent)}
                             </span>
                             <span className="dashboard-comparison-muted">
@@ -1591,7 +1615,11 @@ function Dashboard() {
 
                           <div className="dashboard-comparison-row">
                             <span>Benchmark average</span>
-                            <span className={getPerformanceToneClass(marketDailyPercent)}>
+                            <span
+                              className={getPerformanceToneClass(
+                                marketDailyPercent,
+                              )}
+                            >
                               {formatPercent(marketDailyPercent)}
                             </span>
                             <span
@@ -1698,17 +1726,10 @@ function Dashboard() {
                                         ? "dashboard-action-sell"
                                         : "dashboard-action-buy"
                                     }`}
-                                    key={`${trade.action}-${trade.symbol}`}
-                                    onClick={() =>
-                                      navigate("/re-weight", {
-                                        state: {
-                                          openTradeSymbol: trade.symbol,
-                                        },
-                                      })
-                                    }
+                                    key={trade.symbol}
                                   >
                                     <span className="dashboard-action-badge">
-                                      {trade.action === "sell" ? "Sell" : "Buy"}
+                                      {trade.action}
                                     </span>
                                     <span className="dashboard-action-symbol">
                                       {trade.symbol}
@@ -1720,51 +1741,19 @@ function Dashboard() {
                                     </span>
                                   </div>
                                 ))}
-                              <Link
-                                className="dashboard-inline-link"
-                                to="/re-weight"
-                              >
-                                View all {rebalanceData?.tradeCount ?? 0}{" "}
-                                suggested trades →
-                              </Link>
                             </>
-                          ) : fallbackActionRows.length > 0 ? (
-                            <>
-                              <span className="dashboard-action-label">
-                                Top Actions
+                          ) : (
+                            <div className="dashboard-action-row dashboard-action-row-empty">
+                              <span className="dashboard-action-badge">Info</span>
+                              <span className="dashboard-action-symbol">
+                                No rebalance actions right now
                               </span>
-                              {fallbackActionRows.map((row) => (
-                                <div
-                                  className={`dashboard-action-row ${
-                                    row.side === "sell"
-                                      ? "dashboard-action-sell"
-                                      : "dashboard-action-buy"
-                                  }`}
-                                  key={`${row.side}-${row.symbol}`}
-                                  onClick={() =>
-                                    navigate("/re-weight", {
-                                      state: { openTradeSymbol: row.symbol },
-                                    })
-                                  }
-                                >
-                                  <span className="dashboard-action-badge">
-                                    {row.side === "sell" ? "Sell" : "Buy"}
-                                  </span>
-                                  <span className="dashboard-action-symbol">
-                                    {row.symbol}
-                                  </span>
-                                </div>
-                              ))}
-                              <Link
-                                className="dashboard-inline-link"
-                                to="/re-weight"
-                              >
-                                View full rebalance plan →
-                              </Link>
-                            </>
-                          ) : null}
+                              <span className="dashboard-action-value">
+                                Portfolio is within range
+                              </span>
+                            </div>
+                          )}
                         </div>
-
                         <div className="dashboard-plan-snapshot">
                           <span className="dashboard-bottom-label">
                             Plan Snapshot
